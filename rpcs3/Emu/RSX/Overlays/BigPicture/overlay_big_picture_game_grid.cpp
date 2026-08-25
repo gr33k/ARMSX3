@@ -4,6 +4,9 @@
 #include "Emu/System.h"
 #include "Emu/system_utils.hpp"
 #include "Loader/PSF.h"
+#ifdef RPCS3_IOS
+#include "Emu/ios/GameLibrary.h"
+#endif
 
 #include <algorithm>
 
@@ -89,6 +92,23 @@ namespace rsx
 			m_games.clear();
 			m_tiles.clear();
 
+#ifdef RPCS3_IOS
+			// games.yml does not own the iOS library. Use the same canonical scan as
+			// the SwiftUI Games tab so HDD packages, retained ISOs, and extracted
+			// folders are all visible before they have ever been booted.
+			for (const rpcs3::ios::installed_game& game : rpcs3::ios::installed_games())
+			{
+				GameInfo info{};
+				info.path = game.path;
+				info.icon_path = game.icon_path;
+				info.serial = game.title_id;
+				info.name = game.title;
+				info.category = game.category;
+				info.app_ver = game.version;
+
+				m_games.push_back({ std::move(info) });
+			}
+#else
 			for (const auto& [title_id, raw_path] : Emu.GetGamesConfig().get_games())
 			{
 				std::string path = raw_path;
@@ -117,6 +137,7 @@ namespace rsx
 
 				m_games.push_back({ std::move(info) });
 			}
+#endif
 
 			std::sort(m_games.begin(), m_games.end(), [](const big_picture_game_entry& a, const big_picture_game_entry& b)
 			{

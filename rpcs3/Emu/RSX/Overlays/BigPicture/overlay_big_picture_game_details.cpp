@@ -53,7 +53,8 @@ namespace rsx
 
 			const std::string game_dir = fs::get_parent_dir(info.icon_path);
 
-			if (const std::string pic1_path = game_dir + "/PIC1.PNG"; fs::is_file(pic1_path))
+			if (const std::string pic1_path = game_dir + "/PIC1.PNG";
+				!game_dir.empty() && fs::is_file(pic1_path))
 			{
 				m_pic_data = std::make_unique<image_info>(pic1_path);
 				// The renderer's texture cache is keyed by this object's address, which can be reused by an
@@ -71,7 +72,8 @@ namespace rsx
 
 			m_pic_background.refresh();
 
-			if (const std::string icon1_path = game_dir + "/ICON1.PAM"; fs::is_file(icon1_path))
+			if (const std::string icon1_path = game_dir + "/ICON1.PAM";
+				!game_dir.empty() && fs::is_file(icon1_path))
 			{
 				m_video = std::make_unique<video_view>(icon1_path, "", info.icon_path);
 				m_video->set_pos(m_icon.x, m_icon.y);
