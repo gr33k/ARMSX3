@@ -5,7 +5,7 @@
 #include "Emu/system_utils.hpp"
 #include "Loader/PSF.h"
 #ifdef RPCS3_IOS
-#include "Emu/ios/GameLibrary.h"
+#include "ios/GameLibrary.h"
 #endif
 
 #include <algorithm>
