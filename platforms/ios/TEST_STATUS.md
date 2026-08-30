@@ -327,10 +327,17 @@ V0.8 fullscreen/input/diagnostic candidate:
   `sha256:f23497ba5c34099e65c3a0590f5dfd0ee21c5c66f592a644aafb2d88f3d60e1e`.
   Pulling `shawly/ps3netsrv:latest` confirmed it is current, so no image or
   Compose replacement was performed.
-- FAIL PHYSICAL / GOD OF WAR ASCENSION: V0.7 title `BCES01741` reaches the
-  Duplex screen and loops back to it repeatedly. No connected-device core log
-  was available, so child-SELF handoff, guest failure, and media modification
-  remain open; no fix is claimed in V0.8.
+- MEDIA REPAIR READY / PHYSICAL PENDING: V0.7 title `BCES01741` reached the
+  Duplex screen and looped because its active `EBOOT.BIN` was a modified wrapper
+  containing `6,125` `DUPLEX` markers (SHA-256
+  `f712c86158256a228932a00b544c11e10c477e10f17af2cf3b02d570c548b410`).
+  It is preserved as `EBOOT.BIN_EMUHUB_DUPLEX_BACKUP_20260830_0830UTC`.
+  The title's clean `ORIG/EBOOT.BIN`, which contains no Duplex marker, is now
+  active at `PS3_GAME/USRDIR/EBOOT.BIN` (SHA-256
+  `0ecbc9c0cd0bf4a493611148e7d7d4a3ba48d7948ecb7969c6e735fca9bb0b9f`).
+  A fresh NAS-local VISO probe passed open and ISO PVD random read at
+  `37,665,964,032` bytes. The next physical launch must bypass the Duplex screen
+  and reach the retail executable before this repair is accepted.
 - REQUIRED PHYSICAL GATES: install the exact V0.8 bytes and first tap every
   D-pad cardinal/diagonal plus sweep both analog sticks while confirming `PAD
   OK` and live values. Then verify guest response, edge-to-edge landscape,
