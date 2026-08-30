@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "RPCS3IOSExperimentalPolicy.h"
+#include "IOSSPUSchedulingPolicy.h"
 
 #include "Emu/RSX/Common/BufferUtils.h"
 #include "Emu/system_config.h"
@@ -34,7 +35,7 @@ const experimental_policy& get_experimental_policy() noexcept
 	return s_policy;
 }
 
-void resolve_experimental_policy() noexcept
+void resolve_experimental_policy(std::string_view title_id) noexcept
 {
 #ifdef ARCH_ARM64
 	constexpr bool arm64_default = true;
@@ -46,7 +47,9 @@ void resolve_experimental_policy() noexcept
 	resolved.neon_byte_swap = resolve_mode(g_cfg.ios_experimental.neon_byte_swap, arm64_default);
 	resolved.neon_primitive_restart = resolve_mode(g_cfg.ios_experimental.neon_primitive_restart, arm64_default);
 	resolved.precomputed_indices = resolve_mode(g_cfg.ios_experimental.precomputed_indices, arm64_default);
-	resolved.mobile_spu_scheduling = resolve_mode(g_cfg.ios_experimental.mobile_spu_scheduling, false);
+	resolved.mobile_spu_scheduling = resolve_mode(
+		g_cfg.ios_experimental.mobile_spu_scheduling,
+		automatic_mobile_spu_scheduling_for_title(title_id));
 	resolved.fifo_cache_bytes = g_cfg.ios_experimental.fifo_cache_size == ios_fifo_cache_size::_4_kib ? 4096 : 1024;
 	resolved.fifo_idle_wfe = g_cfg.ios_experimental.fifo_idle_mode == ios_fifo_idle_mode::wait_for_event;
 	resolved.deferred_get_publishing = resolve_mode(g_cfg.ios_experimental.deferred_get_publishing, false);
@@ -57,7 +60,8 @@ void resolve_experimental_policy() noexcept
 	configure_buffer_optimizations(resolved.neon_byte_swap, resolved.neon_primitive_restart, resolved.precomputed_indices);
 
 	ios_experimental_log.notice(
-		"Resolved boot policy: swap=%d restart=%d precomputed=%d mobile_spu=%d fifo=%u wfe=%d deferred_get=%d getllar=%d spu_object_cache=%d",
+		"Resolved boot policy for %s: swap=%d restart=%d precomputed=%d mobile_spu=%d fifo=%u wfe=%d deferred_get=%d getllar=%d spu_object_cache=%d",
+		title_id.empty() ? "<system>" : title_id,
 		resolved.neon_byte_swap, resolved.neon_primitive_restart, resolved.precomputed_indices,
 		resolved.mobile_spu_scheduling, resolved.fifo_cache_bytes, resolved.fifo_idle_wfe,
 		resolved.deferred_get_publishing, resolved.getllar_backoff, resolved.persistent_spu_object_cache);

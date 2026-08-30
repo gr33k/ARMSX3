@@ -1837,7 +1837,7 @@ game_boot_result Emulator::Load(const std::string& title_id, bool is_disc_patch,
 				sys_log.warning("Ignoring 'Use native user interface: false' on iOS until SwiftUI guest-dialog fallbacks are complete");
 			}
 			g_cfg.misc.use_native_interface.set(true);
-			rpcs3::ios::resolve_experimental_policy();
+			rpcs3::ios::resolve_experimental_policy(m_title_id);
 #endif
 
 			// Backup config

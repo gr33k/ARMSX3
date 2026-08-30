@@ -2,6 +2,7 @@
 #include "perf_monitor.hpp"
 
 #include "Emu/System.h"
+#include "Emu/Cell/SPUThread.h"
 #include "Emu/Cell/timers.hpp"
 #include "util/cpu_stats.hpp"
 #include "util/sysinfo.hpp"
@@ -86,6 +87,12 @@ void perf_monitor::operator()()
 			{
 				fmt::append(msg, ", RAM Usage: %dMB (Peak: %dMB)", current_mem_use / (1024 * 1024), max_memory_usage / (1024 * 1024));
 			}
+
+#ifdef RPCS3_IOS
+			const u64 compile_throttle_waits = spu_thread::g_spu_compile_throttle_waits.exchange(0);
+			fmt::append(msg, ", SPU Compilers: %u, SPU Compile-Throttle Waits: %u",
+				+spu_thread::g_spu_work_count, compile_throttle_waits);
+#endif
 
 			perf_log.notice("%s", msg);
 

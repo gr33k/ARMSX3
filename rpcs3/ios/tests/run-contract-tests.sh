@@ -143,3 +143,9 @@ mkdir -p "${OUTPUT_ROOT}"
     "${SCRIPT_DIR}/IOSReservationLockPolicyTests.cpp" \
     -o "${OUTPUT_ROOT}/IOSReservationLockPolicyTests"
 "${OUTPUT_ROOT}/IOSReservationLockPolicyTests"
+
+"${CXX_COMPILER}" -std=c++20 -Wall -Wextra -Werror \
+    -I "${SOURCE_ROOT}" -I "${SOURCE_ROOT}/rpcs3" \
+    "${SCRIPT_DIR}/IOSSPUSchedulingPolicyTests.cpp" \
+    -o "${OUTPUT_ROOT}/IOSSPUSchedulingPolicyTests"
+"${OUTPUT_ROOT}/IOSSPUSchedulingPolicyTests"

@@ -26,6 +26,7 @@
 #include <unordered_set>
 
 #ifdef RPCS3_IOS
+#include "ios/IOSSPUSchedulingPolicy.h"
 #include "ios/RPCS3IOSExperimentalPolicy.h"
 #endif
 
@@ -5877,9 +5878,12 @@ s64 spu_thread::get_ch_value(u32 ch)
 					if (u32 work_count = g_spu_work_count)
 					{
 						const u32 hw_threads = utils::get_thread_count();
-						const u32 true_free = ios_mobile_spu_scheduling && hw_threads <= 10
-							? std::max<u32>(1, hw_threads / 2)
-							: utils::sub_saturate<u32>(hw_threads, 10);
+						const u32 true_free =
+#ifdef RPCS3_IOS
+							rpcs3::ios::spu_compile_free_thread_floor(hw_threads, ios_mobile_spu_scheduling);
+#else
+							utils::sub_saturate<u32>(hw_threads, 10);
+#endif
 
 						if (work_count > true_free)
 						{
@@ -5889,6 +5893,7 @@ s64 spu_thread::get_ch_value(u32 ch)
 							if (thread_count && seed % thread_count < work_count - true_free)
 							{
 								// Make the SPU wait longer for other threads to do the work
+								g_spu_compile_throttle_waits++;
 								thread_ctrl::wait_for(200);
 								continue;
 							}
@@ -7630,4 +7635,5 @@ void fmt_class_string<spu_channel_4_t>::format(std::string& out, u64 arg)
 DECLARE(spu_thread::g_raw_spu_ctr){};
 DECLARE(spu_thread::g_raw_spu_id){};
 DECLARE(spu_thread::g_spu_work_count){};
+DECLARE(spu_thread::g_spu_compile_throttle_waits){};
 DECLARE(spu_thread::g_spu_waiters_by_value){};

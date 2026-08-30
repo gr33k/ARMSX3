@@ -2,6 +2,8 @@
 
 #include "util/types.hpp"
 
+#include <string_view>
+
 namespace rpcs3::ios
 {
 struct experimental_policy
@@ -21,5 +23,5 @@ struct experimental_policy
 // Consumers either snapshot fields in their constructor or configure a hot-path
 // function pointer from resolve_experimental_policy().
 const experimental_policy& get_experimental_policy() noexcept;
-void resolve_experimental_policy() noexcept;
+void resolve_experimental_policy(std::string_view title_id) noexcept;
 }

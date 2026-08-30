@@ -943,6 +943,7 @@ public:
 	static atomic_t<u32> g_raw_spu_ctr;
 	static atomic_t<u32> g_raw_spu_id[5];
 	static atomic_t<u32> g_spu_work_count;
+	static atomic_t<u64> g_spu_compile_throttle_waits;
 
 	static atomic_t<u64, 128> g_spu_waiters_by_value[6];
 
