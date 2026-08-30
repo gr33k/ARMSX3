@@ -28,14 +28,20 @@ app retains ownership across those handoffs and rejects another title until
 `Stop Emulation` completes. This prevents a transient internal `stopped` state
 from mounting a second remote game over a running guest.
 
-The current test overlay intentionally uses plain transparent controls so input
-behavior is easy to isolate. The production standalone controller will reuse
-EmuHub's accepted PS2 visual language, continuous analog sticks, exact artwork
-hit geometry, pressed-state feedback, and an accessible in-game menu overlay.
+Portrait retains the compact transparent test controls. Landscape uses the
+accepted true-alpha EmuHub PlayStation controller rails at their native aspect,
+continuous dual analog sticks, the documented artwork hit geometry, pressed
+state feedback, and an in-game EmuHub menu. The game surface is aspect-fit
+between the rails and is never stretched.
 
 The standalone app remains a maintained iPhone emulator surface. EmuHub will
 consume this same public core ABI after physical feasibility passes; it must not
 fork the emulator, filesystem, or title-boot behavior.
+
+PlayStation 3 is an official EmuHub Beta lane. Native iPhone and desktop clients
+are the supported targets; no browser/WebAssembly runtime is claimed. The iOS
+harness remains fail-closed and must qualify real device gameplay before a title
+or feature is promoted beyond Beta.
 
 ## Reproducible build
 

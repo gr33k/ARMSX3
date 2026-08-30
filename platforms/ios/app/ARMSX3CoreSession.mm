@@ -41,13 +41,14 @@ void core_main_thread_callback(void*, rpcs3_ios_main_thread_task task, void* tas
 @property(atomic, copy, readwrite) NSArray<NSDictionary<NSString*, id>*>* netISOGames;
 
 - (void)emit:(NSString*)line;
+- (void)emitCoreLevel:(int32_t)level message:(NSString*)message;
 
 @end
 
 static void core_log_callback(void* user_context, int32_t level, const char* message)
 {
     ARMSX3CoreSession* session = (__bridge ARMSX3CoreSession*)user_context;
-    [session emit:[NSString stringWithFormat:@"[Core:%d] %@", level, string_from_utf8(message)]];
+    [session emitCoreLevel:level message:string_from_utf8(message)];
 }
 
 static void install_progress_callback(void* user_context, uint32_t completed, uint32_t total, const char* stage)
@@ -101,6 +102,10 @@ static void netiso_game_enumeration_callback(void* user_context, const rpcs3_ios
     dispatch_queue_t _coreQueue;
     dispatch_queue_t _controlQueue;
     ARMSX3CoreLogHandler _logHandler;
+    NSLock* _verboseLogLock;
+    NSString* _latestVerboseLog;
+    NSUInteger _suppressedVerboseLogCount;
+    BOOL _verboseLogFlushScheduled;
     uint64_t _lastNetISOBytes;
     CFAbsoluteTime _lastNetISOSample;
     double _netISOMegabitsPerSecond;
@@ -114,10 +119,76 @@ static void netiso_game_enumeration_callback(void* user_context, const rpcs3_ios
         _coreQueue = dispatch_queue_create("com.thec0de.armsx3ios.core", DISPATCH_QUEUE_SERIAL);
         _controlQueue = dispatch_queue_create("com.thec0de.armsx3ios.control", DISPATCH_QUEUE_SERIAL);
         _logHandler = [logHandler copy];
+        _verboseLogLock = [[NSLock alloc] init];
         _games = @[];
         _netISOGames = @[];
     }
     return self;
+}
+
+- (void)emitCoreLevel:(int32_t)level message:(NSString*)message
+{
+    NSString* line = [NSString stringWithFormat:@"[Core:%d] %@", level, message];
+    if (level < 5)
+    {
+        [self emit:line];
+        return;
+    }
+
+    static NSArray<NSString*>* high_priority_fragments;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        high_priority_fragments = @[
+            @"thread terminated due to fatal error",
+            @"fatal error",
+            @"ppu trap",
+            @"compiled all ppu",
+            @"linking ppu modules",
+        ];
+    });
+    for (NSString* fragment in high_priority_fragments)
+    {
+        if ([message rangeOfString:fragment options:NSCaseInsensitiveSearch].location != NSNotFound)
+        {
+            [self emit:line];
+            return;
+        }
+    }
+
+    // RPCS3 emits thousands of notice/trace lines per second in demanding
+    // titles. Keep diagnostics available without flooding UIKit's main queue.
+    [_verboseLogLock lock];
+    _latestVerboseLog = line;
+    _suppressedVerboseLogCount += 1;
+    const BOOL should_schedule = !_verboseLogFlushScheduled;
+    _verboseLogFlushScheduled = YES;
+    [_verboseLogLock unlock];
+    if (!should_schedule)
+        return;
+
+    __weak ARMSX3CoreSession* weak_self = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 500 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
+        ARMSX3CoreSession* strong_self = weak_self;
+        if (!strong_self)
+            return;
+
+        [strong_self->_verboseLogLock lock];
+        NSString* latest = strong_self->_latestVerboseLog;
+        const NSUInteger count = strong_self->_suppressedVerboseLogCount;
+        strong_self->_latestVerboseLog = nil;
+        strong_self->_suppressedVerboseLogCount = 0;
+        strong_self->_verboseLogFlushScheduled = NO;
+        [strong_self->_verboseLogLock unlock];
+
+        if (!latest.length || !strong_self->_logHandler)
+            return;
+        NSString* summary = count > 1
+            ? [NSString stringWithFormat:@"[Diagnostics] Coalesced %lu verbose core lines | %@",
+                (unsigned long)count, latest]
+            : latest;
+        NSLog(@"[ARMSX3 iOS] %@", summary);
+        strong_self->_logHandler(summary);
+    });
 }
 
 - (void)emit:(NSString*)line

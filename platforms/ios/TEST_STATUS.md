@@ -194,6 +194,67 @@ V0.6 NETISO mount/Uncharted compatibility candidate:
   compile progress, NETISO reconnect count, sustained gameplay, renderer output,
   Stop, and a second cached launch. Package/build proof does not close these gates.
 
+V0.7 scene-watchdog/controller candidate:
+
+- Name: `ARMSX3-iOS-Core-Test-v0.7.ipa`
+- Compressed size: `31,761,065` bytes
+- SHA-256:
+  `cfc1b4df912d1da81ae5b029459e36c7d6f2ac559be32d52f27cd6408b3cc85f`
+- ROOT CAUSE / V0.6 PHYSICAL CRASH: the installed app was independently read
+  back as version `0.6.0` build `5`. Its `2026-08-29 23:56:25` device report is
+  a foreground `scene-update` watchdog termination with exception `0x8badf00d`:
+  the app exceeded iOS's 10-second wall-clock allowance during rotation while
+  still running. This is not evidence that the guest or renderer thread crashed.
+- SYMBOLICATED EVIDENCE: the V0.6 app image UUID in that stackshot matches the
+  packaged executable. Its main thread had accumulated about 164 seconds of CPU,
+  and its app frames resolve exactly to `appendLog:`, `handleCoreLog:`, and the
+  core-log callback block. The frontend was dispatching every RPCS3 notice/trace
+  line to the main queue, rewriting the complete `UITextView`, and scrolling it
+  once per line while demanding titles emitted thousands of lines.
+- SEPARATE HISTORICAL EVENT: the formal `23:47:38` report belongs to V0.5 build
+  `4`, not V0.6. It records an emergency-exit/Stop-watchdog mutex failure and
+  must not be conflated with the V0.6 scene-update watchdog.
+- FIX READY / PHYSICAL PENDING: V0.7 preserves levels 1-4 and explicit fatal/PPU
+  milestones, but coalesces levels 5-6 to at most one diagnostic update per 500
+  ms. The log view now appends through `NSTextStorage` instead of rebuilding its
+  complete string, and it does not force scrolling while hidden in landscape.
+- FIX READY / PHYSICAL PENDING: display attachment is coalesced onto one main-run
+  loop update and skipped when the physical drawable dimensions and refresh rate
+  are unchanged. Rotation still updates the Metal surface, but repeated UIKit
+  layout passes no longer submit identical display surfaces.
+- PASS STATIC: this is an app-only build over the unchanged V0.6 core dylib; the
+  unsigned core remains SHA-256
+  `9710c8ed0fa92e596bf9daf398eb633114b3d861c357463b12f46f27be5f226c`.
+  Serial Xcode compilation, archive integrity, deep strict signing, TrollStore
+  JIT/memory entitlements, arm64/iOS 15.0 binaries, version `0.7.0` build `6`,
+  `@rpath` loading, and private-path/address scans all passed.
+- PASS STATIC / ARTWORK IDENTITY: landscape embeds the accepted true-alpha
+  853x1844 EmuHub PlayStation rails without resampling their source files. Left
+  SHA-256 is `7f90c6627f4cd3752f87c73553dd6e5981973039573f5b26ed1ed2ac214dadf4`;
+  right is `f070d2e7dea0fbef08a8feeef16a4533b186090616c66a26bfdfad84af8bc176`.
+  Each rail is aspect-fit at `853/1844`; the 16:9 game surface is independently
+  aspect-fit between them and is never stretched.
+- FIX READY / PHYSICAL PENDING: landscape uses the accepted normalized hit map
+  for L1/L2, R1/R2, D-pad, Triangle/Square/Circle/Cross, Start, Select, both
+  analog sticks, and the EmuHub menu. The D-pad supports diagonals, both sticks
+  emit continuous normalized axes with a 7% dead zone, triggers emit full analog
+  pressure, and graphical buttons retain the 120 ms minimum guest-visible pulse.
+  Circular and rounded controls also use shape-aware hit tests, so the tiny
+  corners of diagonal bounding rectangles cannot steal an adjacent button.
+  Portrait intentionally retains the compact debug controls.
+- REQUIRED PHYSICAL GATES: install these exact bytes, relaunch Uncharted 3,
+  rotate portrait-landscape-portrait repeatedly during gameplay, and confirm no
+  scene watchdog. Verify both sticks across the full circle, every D-pad diagonal,
+  simultaneous stick plus face-button chords, shoulders/triggers, Start/Select,
+  menu/PS/Stop, visual hit alignment, display centering, compile/load time, FPS,
+  NETISO throughput, renderer glitches, and clean second launch. Reduced main
+  thread and log overhead is expected to improve loading and frame pacing, but
+  no speed or stability pass is claimed until that physical run succeeds.
+- PRODUCT STATUS: PlayStation 3 is now an official EmuHub Beta lane targeting
+  native iPhone and desktop clients. This standalone app remains the iPhone
+  qualification harness; EmuHub must consume the same core ABI. No web runtime
+  is claimed, and Beta does not waive the physical gameplay gates above.
+
 V0.2 artifact:
 
 - Name: `ARMSX3-iOS-Core-Test-v0.2.ipa`

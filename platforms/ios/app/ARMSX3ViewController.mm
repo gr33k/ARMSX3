@@ -7,11 +7,273 @@
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 #include "RPCS3IOS.h"
+#include <cmath>
+
+typedef void (^ARMSX3StickHandler)(float x, float y);
+typedef void (^ARMSX3DPadHandler)(uint64_t directions);
+
+@interface ARMSX3ArtworkButton : UIButton
+
+@property(nonatomic) BOOL circularHitArea;
+
+@end
+
+
+@implementation ARMSX3ArtworkButton
+
+- (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent*)event
+{
+    if (![super pointInside:point withEvent:event])
+        return NO;
+    if (self.circularHitArea)
+    {
+        const CGFloat radius_x = MAX(1.0, self.bounds.size.width * 0.5);
+        const CGFloat radius_y = MAX(1.0, self.bounds.size.height * 0.5);
+        const CGFloat x = (point.x - CGRectGetMidX(self.bounds)) / radius_x;
+        const CGFloat y = (point.y - CGRectGetMidY(self.bounds)) / radius_y;
+        return x * x + y * y <= 1.0;
+    }
+    UIBezierPath* path = [UIBezierPath bezierPathWithRoundedRect:self.bounds
+        cornerRadius:self.layer.cornerRadius];
+    return [path containsPoint:point];
+}
+
+@end
+
+
+@interface ARMSX3VirtualStick : UIControl
+
+@property(nonatomic, copy) ARMSX3StickHandler valueHandler;
+
+@end
+
+
+@implementation ARMSX3VirtualStick
+{
+    UIView* _touchIndicator;
+}
+
+- (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent*)event
+{
+    if (![super pointInside:point withEvent:event])
+        return NO;
+    const CGFloat radius_x = MAX(1.0, self.bounds.size.width * 0.5);
+    const CGFloat radius_y = MAX(1.0, self.bounds.size.height * 0.5);
+    const CGFloat x = (point.x - CGRectGetMidX(self.bounds)) / radius_x;
+    const CGFloat y = (point.y - CGRectGetMidY(self.bounds)) / radius_y;
+    return x * x + y * y <= 1.0;
+}
+
+- (instancetype)init
+{
+    self = [super initWithFrame:CGRectZero];
+    if (self)
+    {
+        self.multipleTouchEnabled = NO;
+        self.exclusiveTouch = NO;
+        _touchIndicator = [[UIView alloc] init];
+        _touchIndicator.userInteractionEnabled = NO;
+        _touchIndicator.hidden = YES;
+        _touchIndicator.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.13];
+        _touchIndicator.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.52].CGColor;
+        _touchIndicator.layer.borderWidth = 1.0;
+        [self addSubview:_touchIndicator];
+    }
+    return self;
+}
+
+- (void)layoutSubviews
+{
+    [super layoutSubviews];
+    const CGFloat size = MIN(38.0, MIN(self.bounds.size.width, self.bounds.size.height) * 0.28);
+    _touchIndicator.bounds = CGRectMake(0, 0, size, size);
+    _touchIndicator.layer.cornerRadius = size * 0.5;
+    if (_touchIndicator.hidden)
+        _touchIndicator.center = CGPointMake(CGRectGetMidX(self.bounds), CGRectGetMidY(self.bounds));
+}
+
+- (void)updateWithTouch:(UITouch*)touch
+{
+    const CGPoint point = [touch locationInView:self];
+    const CGPoint center = CGPointMake(CGRectGetMidX(self.bounds), CGRectGetMidY(self.bounds));
+    const CGFloat radius = MAX(1.0, MIN(self.bounds.size.width, self.bounds.size.height) * 0.46);
+    float x = (float)((point.x - center.x) / radius);
+    float y = (float)((center.y - point.y) / radius);
+    const float magnitude = hypotf(x, y);
+    if (magnitude > 1.0f)
+    {
+        x /= magnitude;
+        y /= magnitude;
+    }
+    else if (magnitude < 0.07f)
+    {
+        x = 0.0f;
+        y = 0.0f;
+    }
+    else
+    {
+        const float scaled = (magnitude - 0.07f) / (0.93f * magnitude);
+        x *= scaled;
+        y *= scaled;
+    }
+
+    _touchIndicator.hidden = NO;
+    _touchIndicator.center = CGPointMake(
+        center.x + x * radius * 0.30,
+        center.y - y * radius * 0.30);
+    self.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.035];
+    if (self.valueHandler)
+        self.valueHandler(x, y);
+}
+
+- (BOOL)beginTracking:(UITouch*)touch withEvent:(UIEvent*)event
+{
+    (void)event;
+    [self updateWithTouch:touch];
+    return YES;
+}
+
+- (BOOL)continueTracking:(UITouch*)touch withEvent:(UIEvent*)event
+{
+    (void)event;
+    [self updateWithTouch:touch];
+    return YES;
+}
+
+- (void)resetTracking
+{
+    _touchIndicator.hidden = YES;
+    self.backgroundColor = UIColor.clearColor;
+    if (self.valueHandler)
+        self.valueHandler(0.0f, 0.0f);
+}
+
+- (void)endTracking:(UITouch*)touch withEvent:(UIEvent*)event
+{
+    (void)touch;
+    (void)event;
+    [self resetTracking];
+}
+
+- (void)cancelTrackingWithEvent:(UIEvent*)event
+{
+    (void)event;
+    [self resetTracking];
+}
+
+@end
+
+
+@interface ARMSX3VirtualDPad : UIControl
+
+@property(nonatomic, copy) ARMSX3DPadHandler valueHandler;
+
+@end
+
+
+@implementation ARMSX3VirtualDPad
+{
+    uint64_t _directions;
+}
+
+- (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent*)event
+{
+    if (![super pointInside:point withEvent:event])
+        return NO;
+    const CGFloat radius_x = MAX(1.0, self.bounds.size.width * 0.5);
+    const CGFloat radius_y = MAX(1.0, self.bounds.size.height * 0.5);
+    const CGFloat x = (point.x - CGRectGetMidX(self.bounds)) / radius_x;
+    const CGFloat y = (point.y - CGRectGetMidY(self.bounds)) / radius_y;
+    return x * x + y * y <= 1.0;
+}
+
+- (void)updateWithTouch:(UITouch*)touch
+{
+    const CGPoint point = [touch locationInView:self];
+    const CGFloat half_width = MAX(1.0, self.bounds.size.width * 0.5);
+    const CGFloat half_height = MAX(1.0, self.bounds.size.height * 0.5);
+    const CGFloat x = (point.x - CGRectGetMidX(self.bounds)) / half_width;
+    const CGFloat y = (point.y - CGRectGetMidY(self.bounds)) / half_height;
+    const CGFloat magnitude = hypot(x, y);
+    uint64_t directions = 0;
+    if (magnitude >= 0.16)
+    {
+        if (y < -0.18 && fabs(y) >= fabs(x) * 0.45)
+            directions |= RPCS3_IOS_PAD_BUTTON_DPAD_UP;
+        if (y > 0.18 && fabs(y) >= fabs(x) * 0.45)
+            directions |= RPCS3_IOS_PAD_BUTTON_DPAD_DOWN;
+        if (x < -0.18 && fabs(x) >= fabs(y) * 0.45)
+            directions |= RPCS3_IOS_PAD_BUTTON_DPAD_LEFT;
+        if (x > 0.18 && fabs(x) >= fabs(y) * 0.45)
+            directions |= RPCS3_IOS_PAD_BUTTON_DPAD_RIGHT;
+    }
+    if (_directions == directions)
+        return;
+    _directions = directions;
+    self.backgroundColor = directions
+        ? [UIColor colorWithWhite:1.0 alpha:0.08]
+        : UIColor.clearColor;
+    if (self.valueHandler)
+        self.valueHandler(directions);
+}
+
+- (BOOL)beginTracking:(UITouch*)touch withEvent:(UIEvent*)event
+{
+    (void)event;
+    [self updateWithTouch:touch];
+    return YES;
+}
+
+- (BOOL)continueTracking:(UITouch*)touch withEvent:(UIEvent*)event
+{
+    (void)event;
+    [self updateWithTouch:touch];
+    return YES;
+}
+
+- (void)resetTracking
+{
+    _directions = 0;
+    self.backgroundColor = UIColor.clearColor;
+    if (self.valueHandler)
+        self.valueHandler(0);
+}
+
+- (void)endTracking:(UITouch*)touch withEvent:(UIEvent*)event
+{
+    (void)touch;
+    (void)event;
+    [self resetTracking];
+}
+
+- (void)cancelTrackingWithEvent:(UIEvent*)event
+{
+    (void)event;
+    [self resetTracking];
+}
+
+@end
+
+
+static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat width, CGFloat height)
+{
+    return CGRectMake(
+        container.origin.x + x * container.size.width,
+        container.origin.y + y * container.size.height,
+        width * container.size.width,
+        height * container.size.height);
+}
 
 @interface ARMSX3ViewController () <UIDocumentPickerDelegate, UITableViewDataSource, UITableViewDelegate>
 
 @property(nonatomic, strong) ARMSX3CoreSession* core;
+@property(nonatomic, strong) UIScrollView* rootScroll;
+@property(nonatomic, strong) UIStackView* contentStack;
+@property(nonatomic, strong) UIView* playerStage;
+@property(nonatomic, strong) NSLayoutConstraint* playerStageHeightConstraint;
 @property(nonatomic, strong) ARMSX3MetalView* metalView;
+@property(nonatomic, strong) UIImageView* leftControllerSkin;
+@property(nonatomic, strong) UIImageView* rightControllerSkin;
 @property(nonatomic, strong) UILabel* stateLabel;
 @property(nonatomic, strong) UIProgressView* progressView;
 @property(nonatomic, strong) UITableView* gameTable;
@@ -23,9 +285,24 @@
 @property(nonatomic) BOOL pickingFirmware;
 @property(nonatomic) uint64_t touchButtons;
 @property(nonatomic, strong) NSMutableArray<UIButton*>* touchControls;
+@property(nonatomic, strong) NSMutableArray<UIControl*>* landscapeControls;
+@property(nonatomic, strong) NSMutableArray<UIButton*>* landscapeButtons;
+@property(nonatomic, strong) ARMSX3VirtualDPad* landscapeDPad;
+@property(nonatomic, strong) ARMSX3VirtualStick* leftVirtualStick;
+@property(nonatomic, strong) ARMSX3VirtualStick* rightVirtualStick;
+@property(nonatomic, strong) UIButton* landscapeMenuButton;
+@property(nonatomic, copy) NSArray<UIView*>* debugChromeViews;
 @property(nonatomic, strong) NSMutableDictionary<NSNumber*, NSNumber*>* touchPressStarted;
 @property(nonatomic, strong) NSMutableDictionary<NSNumber*, NSNumber*>* touchReleaseTokens;
 @property(nonatomic) NSUInteger touchEventSequence;
+@property(nonatomic) float touchLeftX;
+@property(nonatomic) float touchLeftY;
+@property(nonatomic) float touchRightX;
+@property(nonatomic) float touchRightY;
+@property(nonatomic) BOOL landscapeLayout;
+@property(nonatomic) BOOL displayUpdateScheduled;
+@property(nonatomic) CGSize lastDisplaySize;
+@property(nonatomic) float lastDisplayRefreshRate;
 
 @end
 
@@ -37,6 +314,8 @@
     self.view.backgroundColor = [UIColor colorWithRed:0.018 green:0.027 blue:0.045 alpha:1.0];
     self.games = @[];
     self.touchControls = [NSMutableArray array];
+    self.landscapeControls = [NSMutableArray array];
+    self.landscapeButtons = [NSMutableArray array];
     self.touchPressStarted = [NSMutableDictionary dictionary];
     self.touchReleaseTokens = [NSMutableDictionary dictionary];
 
@@ -46,6 +325,7 @@
     }];
 
     UIScrollView* scroll = [[UIScrollView alloc] init];
+    self.rootScroll = scroll;
     scroll.translatesAutoresizingMaskIntoConstraints = NO;
     scroll.alwaysBounceVertical = YES;
     scroll.delaysContentTouches = NO;
@@ -53,13 +333,14 @@
     [self.view addSubview:scroll];
 
     UIStackView* stack = [[UIStackView alloc] init];
+    self.contentStack = stack;
     stack.translatesAutoresizingMaskIntoConstraints = NO;
     stack.axis = UILayoutConstraintAxisVertical;
     stack.spacing = 9.0;
     [scroll addSubview:stack];
 
     UILabel* title = [[UILabel alloc] init];
-    title.text = @"ARMSX3 iOS Core Test v0.6";
+    title.text = @"ARMSX3 iOS Core Test v0.7";
     title.textColor = UIColor.whiteColor;
     title.font = [UIFont systemFontOfSize:24.0 weight:UIFontWeightBlack];
     [stack addArrangedSubview:title];
@@ -71,11 +352,33 @@
     self.stateLabel.font = [UIFont monospacedSystemFontOfSize:13.0 weight:UIFontWeightSemibold];
     [stack addArrangedSubview:self.stateLabel];
 
+    self.playerStage = [[UIView alloc] init];
+    self.playerStage.backgroundColor = UIColor.blackColor;
+    self.playerStage.clipsToBounds = YES;
+    self.playerStage.multipleTouchEnabled = YES;
+    self.playerStage.layer.cornerRadius = 12.0;
+    self.playerStageHeightConstraint = [self.playerStage.heightAnchor constraintEqualToConstant:180.0];
+    self.playerStageHeightConstraint.active = YES;
+    [stack addArrangedSubview:self.playerStage];
+
+    self.leftControllerSkin = [[UIImageView alloc] initWithImage:
+        [UIImage imageNamed:@"controller-ps3-landscape-left"]];
+    self.rightControllerSkin = [[UIImageView alloc] initWithImage:
+        [UIImage imageNamed:@"controller-ps3-landscape-right"]];
+    for (UIImageView* skin in @[self.leftControllerSkin, self.rightControllerSkin])
+    {
+        skin.contentMode = UIViewContentModeScaleAspectFit;
+        skin.userInteractionEnabled = NO;
+        skin.hidden = YES;
+        skin.layer.minificationFilter = kCAFilterTrilinear;
+        skin.layer.magnificationFilter = kCAFilterLinear;
+        [self.playerStage addSubview:skin];
+    }
+
     self.metalView = [[ARMSX3MetalView alloc] initWithFrame:CGRectZero];
-    self.metalView.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.metalView.heightAnchor constraintEqualToAnchor:self.metalView.widthAnchor multiplier:9.0 / 16.0].active = YES;
-    [stack addArrangedSubview:self.metalView];
+    [self.playerStage addSubview:self.metalView];
     [self installTouchControls];
+    [self installLandscapeControls];
 
     self.progressView = [[UIProgressView alloc] initWithProgressViewStyle:UIProgressViewStyleDefault];
     self.progressView.progressTintColor = [UIColor colorWithRed:0.20 green:0.78 blue:0.66 alpha:1.0];
@@ -150,6 +453,20 @@
     self.logView.textContainerInset = UIEdgeInsetsMake(10.0, 8.0, 10.0, 8.0);
     [self.logView.heightAnchor constraintEqualToConstant:150.0].active = YES;
     [stack addArrangedSubview:self.logView];
+
+    self.debugChromeViews = @[
+        title,
+        self.stateLabel,
+        self.progressView,
+        first_row,
+        second_row,
+        third_row,
+        netiso_label,
+        netiso_row,
+        library_label,
+        self.gameTable,
+        self.logView,
+    ];
 
     UILayoutGuide* safe = self.view.safeAreaLayoutGuide;
     [NSLayoutConstraint activateConstraints:@[
@@ -230,11 +547,19 @@
 {
     if (!line.length)
         return;
-    NSString* current = self.logView.text ?: @"";
-    if (current.length > 24000)
-        current = [current substringFromIndex:current.length - 18000];
-    self.logView.text = [current stringByAppendingFormat:@"%@\n", line];
-    [self.logView scrollRangeToVisible:NSMakeRange(self.logView.text.length, 0)];
+    NSTextStorage* storage = self.logView.textStorage;
+    NSDictionary* attributes = @{
+        NSFontAttributeName: self.logView.font,
+        NSForegroundColorAttributeName: self.logView.textColor,
+    };
+    [storage beginEditing];
+    [storage appendAttributedString:[[NSAttributedString alloc]
+        initWithString:[line stringByAppendingString:@"\n"] attributes:attributes]];
+    if (storage.length > 24000)
+        [storage deleteCharactersInRange:NSMakeRange(0, storage.length - 18000)];
+    [storage endEditing];
+    if (!self.logView.hidden && self.logView.window)
+        [self.logView scrollRangeToVisible:NSMakeRange(storage.length, 0)];
 }
 
 - (void)handleCoreLog:(NSString*)line
@@ -251,16 +576,161 @@
 - (void)viewDidLayoutSubviews
 {
     [super viewDidLayoutSubviews];
+    [self updateLayoutMode];
+    [self layoutPlayerStage];
     [self layoutTouchControls];
     [self attachDisplay];
 }
 
 - (void)attachDisplay
 {
-    if (!self.core.isReady || self.metalView.bounds.size.width < 1.0)
+    if (self.displayUpdateScheduled)
         return;
-    const float refresh = (float)(self.view.window.screen.maximumFramesPerSecond ?: 60);
-    [self.core updateDisplayLayer:self.metalView.metalLayer refreshRate:refresh];
+    self.displayUpdateScheduled = YES;
+    __weak ARMSX3ViewController* weak_self = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        ARMSX3ViewController* strong_self = weak_self;
+        if (!strong_self)
+            return;
+        strong_self.displayUpdateScheduled = NO;
+        if (!strong_self.core.isReady || strong_self.metalView.bounds.size.width < 1.0)
+            return;
+        [strong_self.metalView layoutIfNeeded];
+        const CGSize size = strong_self.metalView.metalLayer.drawableSize;
+        const float refresh = (float)(strong_self.view.window.screen.maximumFramesPerSecond ?: 60);
+        if (fabs(size.width - strong_self.lastDisplaySize.width) < 1.0
+            && fabs(size.height - strong_self.lastDisplaySize.height) < 1.0
+            && fabsf(refresh - strong_self.lastDisplayRefreshRate) < 0.1f)
+        {
+            return;
+        }
+        [strong_self.core updateDisplayLayer:strong_self.metalView.metalLayer refreshRate:refresh];
+        strong_self.lastDisplaySize = size;
+        strong_self.lastDisplayRefreshRate = refresh;
+    });
+}
+
+- (void)updateLayoutMode
+{
+    const BOOL landscape = self.view.bounds.size.width > self.view.bounds.size.height;
+    if (self.landscapeLayout != landscape)
+    {
+        self.landscapeLayout = landscape;
+        for (UIView* view in self.debugChromeViews)
+            view.hidden = landscape;
+        for (UIButton* button in self.touchControls)
+            button.hidden = landscape;
+        for (UIControl* control in self.landscapeControls)
+            control.hidden = !landscape;
+        self.leftControllerSkin.hidden = !landscape;
+        self.rightControllerSkin.hidden = !landscape;
+        self.rootScroll.alwaysBounceVertical = !landscape;
+        self.rootScroll.scrollEnabled = !landscape;
+    }
+
+    const CGRect safe_frame = self.view.safeAreaLayoutGuide.layoutFrame;
+    const CGFloat portrait_width = self.contentStack.bounds.size.width > 1.0
+        ? self.contentStack.bounds.size.width
+        : MAX(1.0, safe_frame.size.width - 24.0);
+    const CGFloat target_height = landscape
+        ? MAX(1.0, safe_frame.size.height - 28.0)
+        : floor(portrait_width * 9.0 / 16.0);
+    if (fabs(self.playerStageHeightConstraint.constant - target_height) >= 0.5)
+        self.playerStageHeightConstraint.constant = target_height;
+}
+
+- (UIButton*)landscapeButtonForBit:(uint64_t)bit
+{
+    for (UIButton* button in self.landscapeButtons)
+    {
+        if ((uint64_t)button.tag == bit)
+            return button;
+    }
+    return nil;
+}
+
+- (void)setLandscapeButton:(uint64_t)bit frame:(CGRect)frame circular:(BOOL)circular
+{
+    ARMSX3ArtworkButton* button = (ARMSX3ArtworkButton*)[self landscapeButtonForBit:bit];
+    button.frame = frame;
+    button.circularHitArea = circular;
+    button.layer.cornerRadius = circular
+        ? MIN(button.bounds.size.width, button.bounds.size.height) * 0.5
+        : MIN(12.0, button.bounds.size.height * 0.24);
+}
+
+- (void)layoutPlayerStage
+{
+    const CGRect bounds = self.playerStage.bounds;
+    if (bounds.size.width < 1.0 || bounds.size.height < 1.0)
+        return;
+
+    if (!self.landscapeLayout)
+    {
+        self.metalView.frame = bounds;
+        return;
+    }
+
+    static const CGFloat artwork_aspect = 853.0 / 1844.0;
+    const CGFloat rail_width = bounds.size.height * artwork_aspect;
+    const CGRect left_rail = CGRectMake(0, 0, rail_width, bounds.size.height);
+    const CGRect right_rail = CGRectMake(bounds.size.width - rail_width, 0, rail_width, bounds.size.height);
+    self.leftControllerSkin.frame = left_rail;
+    self.rightControllerSkin.frame = right_rail;
+
+    const CGFloat gap = 8.0;
+    const CGRect display_slot = CGRectInset(
+        CGRectMake(CGRectGetMaxX(left_rail), 0,
+            CGRectGetMinX(right_rail) - CGRectGetMaxX(left_rail), bounds.size.height),
+        gap, 0);
+    CGFloat display_width = display_slot.size.width;
+    CGFloat display_height = display_width * 9.0 / 16.0;
+    if (display_height > display_slot.size.height)
+    {
+        display_height = display_slot.size.height;
+        display_width = display_height * 16.0 / 9.0;
+    }
+    self.metalView.frame = CGRectIntegral(CGRectMake(
+        CGRectGetMidX(display_slot) - display_width * 0.5,
+        CGRectGetMidY(display_slot) - display_height * 0.5,
+        display_width,
+        display_height));
+
+    // These full-canvas normalized frames are the accepted EmuHub PS2 rail
+    // geometry. Keeping them literal prevents artwork/input drift.
+    [self setLandscapeButton:RPCS3_IOS_PAD_BUTTON_L2
+        frame:normalized_rect(left_rail, 0.1010, 0.0520, 0.3970, 0.0990) circular:NO];
+    [self setLandscapeButton:RPCS3_IOS_PAD_BUTTON_L1
+        frame:normalized_rect(left_rail, 0.5050, 0.0520, 0.3970, 0.0990) circular:NO];
+    self.landscapeDPad.frame = normalized_rect(left_rail, 0.2020, 0.2220, 0.5720, 0.2680);
+    self.landscapeDPad.layer.cornerRadius = MIN(self.landscapeDPad.bounds.size.width,
+        self.landscapeDPad.bounds.size.height) * 0.20;
+    self.leftVirtualStick.frame = normalized_rect(left_rail, 0.2210, 0.5520, 0.5410, 0.2520);
+    self.leftVirtualStick.layer.cornerRadius = MIN(self.leftVirtualStick.bounds.size.width,
+        self.leftVirtualStick.bounds.size.height) * 0.5;
+    self.landscapeMenuButton.frame = normalized_rect(left_rail, 0.1470, 0.8260, 0.2040, 0.0960);
+    self.landscapeMenuButton.layer.cornerRadius = MIN(self.landscapeMenuButton.bounds.size.width,
+        self.landscapeMenuButton.bounds.size.height) * 0.5;
+    [self setLandscapeButton:RPCS3_IOS_PAD_BUTTON_SELECT
+        frame:normalized_rect(left_rail, 0.5170, 0.8490, 0.3050, 0.0760) circular:NO];
+
+    [self setLandscapeButton:RPCS3_IOS_PAD_BUTTON_R1
+        frame:normalized_rect(right_rail, 0.1010, 0.0520, 0.3970, 0.0990) circular:NO];
+    [self setLandscapeButton:RPCS3_IOS_PAD_BUTTON_R2
+        frame:normalized_rect(right_rail, 0.5050, 0.0520, 0.3970, 0.0990) circular:NO];
+    [self setLandscapeButton:RPCS3_IOS_PAD_BUTTON_TRIANGLE
+        frame:normalized_rect(right_rail, 0.3940, 0.2070, 0.2140, 0.1030) circular:YES];
+    [self setLandscapeButton:RPCS3_IOS_PAD_BUTTON_SQUARE
+        frame:normalized_rect(right_rail, 0.1780, 0.3080, 0.2210, 0.1030) circular:YES];
+    [self setLandscapeButton:RPCS3_IOS_PAD_BUTTON_CIRCLE
+        frame:normalized_rect(right_rail, 0.6030, 0.3080, 0.2260, 0.1030) circular:YES];
+    [self setLandscapeButton:RPCS3_IOS_PAD_BUTTON_CROSS
+        frame:normalized_rect(right_rail, 0.3940, 0.4080, 0.2160, 0.1040) circular:YES];
+    self.rightVirtualStick.frame = normalized_rect(right_rail, 0.2240, 0.5520, 0.5480, 0.2520);
+    self.rightVirtualStick.layer.cornerRadius = MIN(self.rightVirtualStick.bounds.size.width,
+        self.rightVirtualStick.bounds.size.height) * 0.5;
+    [self setLandscapeButton:RPCS3_IOS_PAD_BUTTON_START
+        frame:normalized_rect(right_rail, 0.1470, 0.8480, 0.2880, 0.0760) circular:NO];
 }
 
 - (void)pickFirmware
@@ -540,14 +1010,108 @@
         [button setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
         [button addTarget:self action:@selector(touchDown:) forControlEvents:UIControlEventTouchDown | UIControlEventTouchDragEnter];
         [button addTarget:self action:@selector(touchUp:) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside | UIControlEventTouchCancel | UIControlEventTouchDragExit];
-        [self.metalView addSubview:button];
+        [self.playerStage addSubview:button];
         [self.touchControls addObject:button];
     }
 }
 
+- (UIButton*)landscapePadButton:(NSString*)label bit:(uint64_t)bit
+{
+    ARMSX3ArtworkButton* button = [ARMSX3ArtworkButton buttonWithType:UIButtonTypeCustom];
+    button.tag = (NSInteger)bit;
+    button.hidden = YES;
+    button.exclusiveTouch = NO;
+    button.multipleTouchEnabled = YES;
+    button.backgroundColor = UIColor.clearColor;
+    button.accessibilityLabel = label;
+    [button addTarget:self action:@selector(touchDown:)
+        forControlEvents:UIControlEventTouchDown | UIControlEventTouchDragEnter];
+    [button addTarget:self action:@selector(touchUp:)
+        forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside
+            | UIControlEventTouchCancel | UIControlEventTouchDragExit];
+    [self.playerStage addSubview:button];
+    [self.landscapeButtons addObject:button];
+    [self.landscapeControls addObject:button];
+    return button;
+}
+
+- (void)installLandscapeControls
+{
+    [self landscapePadButton:@"L2" bit:RPCS3_IOS_PAD_BUTTON_L2];
+    [self landscapePadButton:@"L1" bit:RPCS3_IOS_PAD_BUTTON_L1];
+    [self landscapePadButton:@"R1" bit:RPCS3_IOS_PAD_BUTTON_R1];
+    [self landscapePadButton:@"R2" bit:RPCS3_IOS_PAD_BUTTON_R2];
+    [self landscapePadButton:@"Triangle" bit:RPCS3_IOS_PAD_BUTTON_TRIANGLE];
+    [self landscapePadButton:@"Square" bit:RPCS3_IOS_PAD_BUTTON_SQUARE];
+    [self landscapePadButton:@"Circle" bit:RPCS3_IOS_PAD_BUTTON_CIRCLE];
+    [self landscapePadButton:@"Cross" bit:RPCS3_IOS_PAD_BUTTON_CROSS];
+    [self landscapePadButton:@"Select" bit:RPCS3_IOS_PAD_BUTTON_SELECT];
+    [self landscapePadButton:@"Start" bit:RPCS3_IOS_PAD_BUTTON_START];
+
+    __weak ARMSX3ViewController* weak_self = self;
+    self.landscapeDPad = [[ARMSX3VirtualDPad alloc] initWithFrame:CGRectZero];
+    self.landscapeDPad.hidden = YES;
+    self.landscapeDPad.accessibilityLabel = @"Directional pad";
+    self.landscapeDPad.valueHandler = ^(uint64_t directions) {
+        static const uint64_t mask = RPCS3_IOS_PAD_BUTTON_DPAD_UP
+            | RPCS3_IOS_PAD_BUTTON_DPAD_DOWN
+            | RPCS3_IOS_PAD_BUTTON_DPAD_LEFT
+            | RPCS3_IOS_PAD_BUTTON_DPAD_RIGHT;
+        ARMSX3ViewController* strong_self = weak_self;
+        if (!strong_self)
+            return;
+        strong_self.touchButtons = (strong_self.touchButtons & ~mask) | directions;
+        [strong_self pushTouchPad];
+    };
+    [self.playerStage addSubview:self.landscapeDPad];
+    [self.landscapeControls addObject:self.landscapeDPad];
+
+    self.leftVirtualStick = [[ARMSX3VirtualStick alloc] init];
+    self.leftVirtualStick.hidden = YES;
+    self.leftVirtualStick.accessibilityLabel = @"Left analog stick";
+    self.leftVirtualStick.valueHandler = ^(float x, float y) {
+        ARMSX3ViewController* strong_self = weak_self;
+        if (!strong_self)
+            return;
+        strong_self.touchLeftX = x;
+        strong_self.touchLeftY = y;
+        [strong_self pushTouchPad];
+    };
+    [self.playerStage addSubview:self.leftVirtualStick];
+    [self.landscapeControls addObject:self.leftVirtualStick];
+
+    self.rightVirtualStick = [[ARMSX3VirtualStick alloc] init];
+    self.rightVirtualStick.hidden = YES;
+    self.rightVirtualStick.accessibilityLabel = @"Right analog stick";
+    self.rightVirtualStick.valueHandler = ^(float x, float y) {
+        ARMSX3ViewController* strong_self = weak_self;
+        if (!strong_self)
+            return;
+        strong_self.touchRightX = x;
+        strong_self.touchRightY = y;
+        [strong_self pushTouchPad];
+    };
+    [self.playerStage addSubview:self.rightVirtualStick];
+    [self.landscapeControls addObject:self.rightVirtualStick];
+
+    ARMSX3ArtworkButton* menu_button = [ARMSX3ArtworkButton buttonWithType:UIButtonTypeCustom];
+    menu_button.circularHitArea = YES;
+    self.landscapeMenuButton = menu_button;
+    self.landscapeMenuButton.hidden = YES;
+    self.landscapeMenuButton.accessibilityLabel = @"EmuHub game menu";
+    [self.landscapeMenuButton addTarget:self action:@selector(menuTouchDown:)
+        forControlEvents:UIControlEventTouchDown | UIControlEventTouchDragEnter];
+    [self.landscapeMenuButton addTarget:self action:@selector(showGameMenu:)
+        forControlEvents:UIControlEventTouchUpInside];
+    [self.landscapeMenuButton addTarget:self action:@selector(menuTouchCancelled:)
+        forControlEvents:UIControlEventTouchUpOutside | UIControlEventTouchCancel | UIControlEventTouchDragExit];
+    [self.playerStage addSubview:self.landscapeMenuButton];
+    [self.landscapeControls addObject:self.landscapeMenuButton];
+}
+
 - (void)layoutTouchControls
 {
-    if (self.touchControls.count != 10)
+    if (self.landscapeLayout || self.touchControls.count != 10)
         return;
     const CGFloat width = self.metalView.bounds.size.width;
     const CGFloat height = self.metalView.bounds.size.height;
@@ -572,7 +1136,10 @@
     [self.touchControls enumerateObjectsUsingBlock:^(UIButton* button, NSUInteger index, BOOL*) {
         const CGFloat button_width = index >= 8 ? size * 1.45 : size;
         button.bounds = CGRectMake(0, 0, button_width, size);
-        button.center = centers[index].CGPointValue;
+        CGPoint center = centers[index].CGPointValue;
+        center.x += self.metalView.frame.origin.x;
+        center.y += self.metalView.frame.origin.y;
+        button.center = center;
         button.layer.cornerRadius = size * 0.50;
     }];
 }
@@ -583,7 +1150,12 @@
     self.touchReleaseTokens[key] = @(++self.touchEventSequence);
     self.touchPressStarted[key] = @(CACurrentMediaTime());
     self.touchButtons |= key.unsignedLongLongValue;
-    sender.transform = CGAffineTransformMakeScale(0.90, 0.90);
+    const BOOL landscape_button = [self.landscapeButtons containsObject:sender];
+    sender.backgroundColor = landscape_button
+        ? [UIColor colorWithWhite:1.0 alpha:0.15]
+        : sender.backgroundColor;
+    sender.transform = CGAffineTransformMakeScale(landscape_button ? 0.96 : 0.90,
+        landscape_button ? 0.96 : 0.90);
     [self pushTouchPad];
 }
 
@@ -605,14 +1177,67 @@
         strong_self.touchButtons &= ~key.unsignedLongLongValue;
         [strong_self.touchPressStarted removeObjectForKey:key];
         sender.transform = CGAffineTransformIdentity;
+        if ([strong_self.landscapeButtons containsObject:sender])
+            sender.backgroundColor = UIColor.clearColor;
         [strong_self pushTouchPad];
     });
+}
+
+- (void)menuTouchDown:(UIButton*)sender
+{
+    sender.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.16];
+    sender.transform = CGAffineTransformMakeScale(0.94, 0.94);
+}
+
+- (void)menuTouchCancelled:(UIButton*)sender
+{
+    sender.backgroundColor = UIColor.clearColor;
+    sender.transform = CGAffineTransformIdentity;
+}
+
+- (void)pulsePadButton:(uint64_t)bit
+{
+    NSNumber* key = @(bit);
+    const NSUInteger token = ++self.touchEventSequence;
+    self.touchReleaseTokens[key] = @(token);
+    self.touchButtons |= bit;
+    [self pushTouchPad];
+    __weak ARMSX3ViewController* weak_self = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 150 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
+        ARMSX3ViewController* strong_self = weak_self;
+        if (!strong_self || [strong_self.touchReleaseTokens[key] unsignedIntegerValue] != token)
+            return;
+        strong_self.touchButtons &= ~bit;
+        [strong_self pushTouchPad];
+    });
+}
+
+- (void)showGameMenu:(UIButton*)sender
+{
+    [self menuTouchCancelled:sender];
+    UIAlertController* menu = [UIAlertController alertControllerWithTitle:@"EmuHub"
+        message:@"PS3 session controls" preferredStyle:UIAlertControllerStyleAlert];
+    __weak ARMSX3ViewController* weak_self = self;
+    [menu addAction:[UIAlertAction actionWithTitle:@"Press PS Button"
+        style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction* action) {
+            [weak_self pulsePadButton:RPCS3_IOS_PAD_BUTTON_PS];
+        }]];
+    [menu addAction:[UIAlertAction actionWithTitle:@"Stop Emulation"
+        style:UIAlertActionStyleDestructive handler:^(__unused UIAlertAction* action) {
+            [weak_self stopGame];
+        }]];
+    [menu addAction:[UIAlertAction actionWithTitle:@"Resume"
+        style:UIAlertActionStyleCancel handler:nil]];
+    [self presentViewController:menu animated:YES completion:nil];
 }
 
 - (void)pushTouchPad
 {
     [self.core updatePadConnected:YES buttons:self.touchButtons
-        leftX:0 leftY:0 rightX:0 rightY:0 leftTrigger:0 rightTrigger:0];
+        leftX:self.touchLeftX leftY:self.touchLeftY
+        rightX:self.touchRightX rightY:self.touchRightY
+        leftTrigger:(self.touchButtons & RPCS3_IOS_PAD_BUTTON_L2) ? 1.0f : 0.0f
+        rightTrigger:(self.touchButtons & RPCS3_IOS_PAD_BUTTON_R2) ? 1.0f : 0.0f];
 }
 
 - (void)dealloc
