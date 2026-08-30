@@ -838,6 +838,33 @@ V0.16 physical Uncharted 3 result and V0.17 cache-isolation candidate:
   cached graphics are ruled out and the next isolated delta is MoltenVK shader
   compression; periodic square artifacts remain a separate renderer defect.
 
+V0.16 physical Uncharted 1 follow-up:
+
+- FAIL PHYSICAL: two consecutive U1 attempts terminated back to iOS, including
+  the restarted run after it reached live gameplay. No new title-specific crash
+  report was available after either collection attempt, so renderer fatal versus
+  external memory-pressure termination remains unresolved.
+- FAIL PERFORMANCE: restarting the app reached live U1 gameplay. A direct
+  device screenshot captured a momentary `14.0 FPS`, `3268 MiB`, `NET 0.0 Mbps`,
+  and only `536 MiB` reported process headroom. The user confirmed gameplay FPS
+  was otherwise materially unchanged, so this is not an improvement claim.
+
+V0.17 signed graphics-cache-isolation artifact:
+
+- Name: `ARMSX3-iOS-Core-Test-v0.17.ipa`
+- Source commit: `216cea564e8b57063758ebbe8298600591718022`
+- SHA-256:
+  `d41d7232bf5399f09ddede3f19e1184bc4e51abff6cf0efb759e069c0515ea05`
+- PASS STATIC: archive integrity, version `0.17.0` build `16`, strict deep
+  signing, required TrollStore JIT/memory entitlements, arm64/iOS 15.0
+  metadata, generation-2 shader/pipeline-cache strings, bounded contracts, and
+  the two-worker real-core build passed.
+- PASS TRANSFER: repository artifact, Desktop copy, and iCloud Drive copy have
+  the exact SHA-256 above. V0.16 remains the immediate rollback.
+- PENDING PHYSICAL: install these exact bytes, launch U3 only to its menu, and
+  confirm the generation-2 graphics rebuild plus green/pink/block result before
+  spending time on gameplay.
+
 V0.2 artifact:
 
 - Name: `ARMSX3-iOS-Core-Test-v0.2.ipa`
