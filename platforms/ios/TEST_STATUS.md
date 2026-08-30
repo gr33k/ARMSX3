@@ -435,12 +435,64 @@ V0.10 Jetsam-resistance candidate:
   `ARMSX3-iOS-Core-Test-v0.10.ipa`; destination SHA-256 readback is identical to
   the package hash above. TrollStore installation and launch remain physical
   gates rather than consequences of this file transfer.
-- REQUIRED PHYSICAL GATE: install these exact V0.10 bytes and replay the same
-  Uncharted 1 live-3D scene for at least five minutes with USB syslog attached.
-  Acceptance requires no Jetsam/crash, no sustained fatal-reclaim loop, bounded
-  resident memory after streaming settles, responsive controls, and usable FPS.
-  Then Stop and relaunch once to verify cleanup and cache reuse. Build/package
-  evidence does not close this gate.
+- PASS PARTIAL PHYSICAL / STABILITY IMPROVED: the exact V0.10 package reached
+  Uncharted 1 live 3D and the user completed the first gameplay section despite
+  very low FPS. Unlike both V0.9 attempts, the observed run remained alive
+  through two UIKit memory warnings. This is positive Jetsam resistance, not a
+  complete stability pass.
+- FAIL PHYSICAL / PERFORMANCE: a USB sample from `09:53:10` through `09:56:40`
+  captured 66 first-use Metal shader compiles, 22 SPU block compiles, 119
+  fatal-style texture eviction warnings, and two UIKit memory warnings. Seven
+  CPU samples ranged from `46.7%` to `69.0%`; NETISO was idle. Physical overlay
+  screenshots measured `2.6 FPS` at `3192 MiB` resident and later `0.0 FPS` at
+  `3211 MiB`. The allocator reported severe pressure at `146%`, `665 MiB`
+  internal allocations, and `1141 MiB` process headroom. V0.10 therefore trades
+  the prior Jetsam for excessive cache churn and is not a performance pass.
+- REQUIRED PHYSICAL GATE: a revised candidate must remove the sustained
+  eviction loop, approach the title's approximately 30 FPS target after shader
+  warmup, retain responsive controls, and remain below Jetsam pressure. Stop and
+  relaunch must also prove pipeline/SPU cache persistence rather than judging
+  only the first-use compilation path.
+
+V0.11 cache-thrash correction candidate:
+
+- Source revision: `3d289b765c778424da9c8a98bbb309baeb9e70cf`
+- Name: `ARMSX3-iOS-Core-Test-v0.11.ipa`
+- Compressed size: `31,769,379` bytes
+- SHA-256:
+  `afee2be8447abd8cd6273ec520eaa9a3dbf778d0ae88c9471e0c848256108568`
+- FIX READY / PHYSICAL PENDING: soft Vulkan-budget overshoot can now reach
+  only severe pressure; fatal recovery remains reserved for `<=768 MiB` process
+  headroom, UIKit memory warnings, and direct allocation failure. This removes
+  the exact 150% threshold that produced 119 destructive texture evictions in
+  the V0.10 physical sample without removing its successful Jetsam safeguards.
+- FIX READY / PHYSICAL PENDING: nonfatal frame-boundary reclaim is paced at
+  two seconds for severe pressure and five seconds for moderate pressure;
+  genuine fatal recovery remains at 250 ms. Focused policy assertions lock all
+  four intervals and the nonfatal soft-budget behavior.
+- FIX READY / PHYSICAL PENDING: exact title `BCES00065` retains 50% internal
+  resolution and now uses two asynchronous shader compiler workers instead of
+  the six-thread device's automatic single worker. This is intentionally capped
+  at two to reduce first-use stalls without multiplying compiler memory enough
+  to undo V0.10's stability gain.
+- FIX READY / PHYSICAL PENDING: the diagnostic status no longer displays
+  completed boot-module progress after the emulator reaches running state.
+- PASS STATIC/PACKAGE: the complete lightweight iOS contract suite, focused
+  reclaim-policy assertions, incremental two-worker arm64 core build, serial app
+  build, ZIP readback, strict deep signing, iOS 15.0 load commands, TrollStore
+  JIT/unsigned-memory/extended-address/increased-memory entitlements, version
+  `0.11.0` build `10`, and private path scans passed. The unsigned checkpoint
+  core SHA-256 is
+  `29dacb9ab81ffe15f44b4ca52481cd123e6f4a375e9d84faaf4d6f8b4ee4a7df`;
+  the packaged ad-hoc signed core SHA-256 is
+  `dc1c8bb1818ca0833b2ecba3cacdf82ac21f860dfc6fec4784ec40c91c8b6aea`.
+- PASS DISTRIBUTION: the audited IPA was copied to iCloud Drive as
+  `ARMSX3-iOS-Core-Test-v0.11.ipa`; Desktop and destination SHA-256 readback are
+  identical. Installation, launch, and gameplay remain physical gates.
+- REQUIRED PHYSICAL GATE: compare the same Uncharted 1 gameplay scene on first
+  launch and after a clean Stop/relaunch. Record FPS, resident memory, shader
+  compiles, texture-eviction count, memory warnings, and any crash/Jetsam. This
+  candidate is not accepted until the phone proves the result.
 
 V0.2 artifact:
 
