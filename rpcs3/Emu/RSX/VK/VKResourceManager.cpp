@@ -353,6 +353,7 @@ namespace vk
 			// One fatal frame-boundary pass is safer than waiting for Jetsam to
 			// reduce the process-local allowance below its emergency threshold.
 			load_severity = rsx::problem_severity::fatal;
+			g_ios_process_memory_pressure.next_reclaim = {};
 		}
 
 		const auto previous_severity = std::exchange(g_ios_process_memory_pressure.combined_severity, load_severity);
@@ -411,12 +412,6 @@ namespace vk
 		const auto now = std::chrono::steady_clock::now();
 		const bool severity_escalated =
 			load_severity > g_ios_process_memory_pressure.last_reclaim_severity;
-		if (!severity_escalated && now < g_ios_process_memory_pressure.next_reclaim)
-		{
-			return;
-		}
-
-		vmm_handle_memory_pressure(load_severity);
 		if (load_severity >= rsx::problem_severity::fatal &&
 			now >= g_ios_process_memory_pressure.next_heap_relief)
 		{
@@ -429,6 +424,12 @@ namespace vk
 					released / rpcs3::ios::process_memory_mib);
 			}
 		}
+		if (!severity_escalated && now < g_ios_process_memory_pressure.next_reclaim)
+		{
+			return;
+		}
+
+		vmm_handle_memory_pressure(load_severity);
 		g_ios_process_memory_pressure.last_reclaim_severity = load_severity;
 		const auto interval = std::chrono::milliseconds(
 			rpcs3::ios::get_memory_reclaim_interval_ms(

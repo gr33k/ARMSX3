@@ -1324,11 +1324,21 @@ void VKGSRender::end()
 		}
 
 		// Handle OOM
+#ifdef RPCS3_IOS
+		// Temporary texture allocations are nullable and already perform one
+		// severe recovery attempt in the allocator. Escalating that miss to an
+		// unbounded fatal retry loop drained the Metal queue several times per
+		// second on physical iOS hardware. Keep the null bindings prepared above
+		// and let the frame advance; non-nullable allocation failures retain the
+		// renderer's immediate fatal recovery path.
+		break;
+#else
 		if (!on_vram_exhausted(rsx::problem_severity::fatal))
 		{
 			// It is not possible to free memory. Just use placeholder textures. Can cause graphics glitches but shouldn't crash otherwise
 			break;
 		}
+#endif
 	}
 
 	m_texture_cache.release_uncached_temporary_subresources();

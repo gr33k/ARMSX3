@@ -34,7 +34,7 @@ int main()
 	static_assert(get_memory_reclaim_interval_ms(process_memory_pressure::low) == 0);
 	static_assert(get_memory_reclaim_interval_ms(process_memory_pressure::moderate) == 5000);
 	static_assert(get_memory_reclaim_interval_ms(process_memory_pressure::severe) == 2000);
-	static_assert(get_memory_reclaim_interval_ms(process_memory_pressure::fatal) == 250);
+	static_assert(get_memory_reclaim_interval_ms(process_memory_pressure::fatal) == 5000);
 
 	static_assert(get_process_memory_pressure(2'000 * process_memory_mib) == process_memory_pressure::low);
 	static_assert(get_process_memory_pressure(1536 * process_memory_mib) == process_memory_pressure::moderate);

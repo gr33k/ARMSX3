@@ -75,8 +75,9 @@ namespace rpcs3::ios
 		return process_memory_pressure::low;
 	}
 
-	// Reclaim is a frame-boundary synchronization point. Keep emergency recovery
-	// responsive while allowing useful caches to settle under nonfatal pressure.
+	// Reclaim is a frame-boundary synchronization point. Severity transitions and
+	// UIKit warnings run immediately; persistent fatal pressure is paced so a
+	// hard queue drain cannot consume every frame while heap relief continues.
 	constexpr std::uint32_t get_memory_reclaim_interval_ms(process_memory_pressure pressure)
 	{
 		switch (pressure)
@@ -84,10 +85,10 @@ namespace rpcs3::ios
 		case process_memory_pressure::low: return 0;
 		case process_memory_pressure::moderate: return 5000;
 		case process_memory_pressure::severe: return 2000;
-		case process_memory_pressure::fatal: return 250;
+		case process_memory_pressure::fatal: return 5000;
 		}
 
-		return 250;
+		return 5000;
 	}
 
 	constexpr process_memory_pressure get_process_memory_pressure(
