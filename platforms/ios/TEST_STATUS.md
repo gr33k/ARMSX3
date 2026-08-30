@@ -964,6 +964,26 @@ V0.18 physical Uncharted 3 result:
   Do not enter gameplay until color and memory headroom pass because V0.18
   already emitted memory warnings at `3571 MiB` under the lower 50% scale.
 
+V0.19 signed Uncharted 3 accuracy artifact:
+
+- Name: `ARMSX3-iOS-Core-Test-v0.19.ipa`
+- Source commit: `c95830636955c8ab13d69e9bd991751f5dea6c18`
+- Compressed size: `31,845,374` bytes
+- SHA-256:
+  `d64a344951bbf2499d297f5def925015a7900d11266125b68b63340454726d3e`
+- PASS STATIC: archive integrity, version `0.19.0` build `18`, strict deep
+  signing, TrollStore JIT/memory entitlements, arm64/iOS 15.0 metadata, ABI 32
+  graphics-cache control, generation-4 shader/driver cache strings, prepared
+  and effective U3 profile diagnostics, private-path scan, bounded contracts,
+  two-worker core build, and serial Xcode build passed against the packaged
+  bytes.
+- PASS TRANSFER: repository artifact, Desktop copy, and iCloud Drive copy have
+  the exact SHA-256 above. V0.18 remains the immediate rollback.
+- PENDING PHYSICAL: install only the exact hash above. Attach USB diagnostics
+  before launch, boot U3 only to the first menu frame, verify every effective
+  profile value and generation 4, and capture color/artifacts/FPS/memory before
+  deciding whether gameplay is safe.
+
 V0.2 artifact:
 
 - Name: `ARMSX3-iOS-Core-Test-v0.2.ipa`
