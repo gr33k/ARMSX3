@@ -164,3 +164,9 @@ android/**/cpp/libadrenotools/
 
 # Kotlin incremental-compile scratch dir
 android/armsx3-ui/.kotlin/
+
+# iOS feasibility build products and downloaded SDK dependencies.
+/.deps/
+/build-ios*/
+/artifacts/
+*.ipa

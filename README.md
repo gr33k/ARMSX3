@@ -3,9 +3,19 @@ ARMSX3
 
 Uses the latest RPCS3 upstream code (the recent ARM64 improvements included). 
 
+iOS feasibility
+---------------
 
-Building
---------
+An experimental, device-first iOS port now lives under
+[`platforms/ios`](platforms/ios/README.md). The current small IPA tests the two
+hard platform prerequisites, executable AArch64 JIT memory and Vulkan through
+MoltenVK/Metal, before the full RPCS3 core is linked. It is not yet a PS3
+gameplay build. See [`platforms/ios/TEST_STATUS.md`](platforms/ios/TEST_STATUS.md)
+for verified gates and open work.
+
+
+Android building
+----------------
 
  arm64-v8a and armv8.2 is supported. You need the Android SDK with NDK r27 or newer,
 CMake 3.30 or newer, and a JDK 17. Android Studio ships all of these.

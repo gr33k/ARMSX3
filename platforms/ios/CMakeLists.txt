@@ -1,0 +1,78 @@
+cmake_minimum_required(VERSION 3.28)
+
+project(ARMSX3iOS LANGUAGES C CXX OBJC OBJCXX)
+
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    message(FATAL_ERROR "ARMSX3iOS must be configured with -DCMAKE_SYSTEM_NAME=iOS")
+endif()
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_OBJCXX_STANDARD 20)
+set(CMAKE_OBJCXX_STANDARD_REQUIRED ON)
+
+set(ARMSX3_MOLTENVK_ROOT "" CACHE PATH "Path to the extracted MoltenVK iOS package root")
+if(NOT ARMSX3_MOLTENVK_ROOT)
+    message(FATAL_ERROR "Set ARMSX3_MOLTENVK_ROOT to the extracted MoltenVK package root")
+endif()
+
+set(MOLTENVK_INCLUDE_DIR "${ARMSX3_MOLTENVK_ROOT}/MoltenVK/include")
+set(MOLTENVK_LIBRARY "${ARMSX3_MOLTENVK_ROOT}/MoltenVK/static/MoltenVK.xcframework/ios-arm64/libMoltenVK.a")
+
+if(NOT EXISTS "${MOLTENVK_INCLUDE_DIR}/vulkan/vulkan.h")
+    message(FATAL_ERROR "MoltenVK Vulkan headers are missing under ${MOLTENVK_INCLUDE_DIR}")
+endif()
+if(NOT EXISTS "${MOLTENVK_LIBRARY}")
+    message(FATAL_ERROR "MoltenVK iOS arm64 static library is missing: ${MOLTENVK_LIBRARY}")
+endif()
+
+add_executable(ARMSX3iOS MACOSX_BUNDLE
+    app/main.mm
+    app/ARMSX3AppDelegate.mm
+    app/ARMSX3ViewController.mm
+    app/ARMSX3FeasibilityProbe.mm
+)
+
+target_include_directories(ARMSX3iOS PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/app"
+    "${MOLTENVK_INCLUDE_DIR}"
+)
+
+target_compile_definitions(ARMSX3iOS PRIVATE
+    VK_USE_PLATFORM_METAL_EXT=1
+)
+
+target_compile_options(ARMSX3iOS PRIVATE
+    $<$<COMPILE_LANGUAGE:C,CXX,OBJC,OBJCXX>:-fvisibility=hidden>
+)
+
+target_link_libraries(ARMSX3iOS PRIVATE
+    "${MOLTENVK_LIBRARY}"
+    "-framework CoreGraphics"
+    "-framework Foundation"
+    "-framework IOSurface"
+    "-framework Metal"
+    "-framework QuartzCore"
+    "-framework UIKit"
+)
+
+set_target_properties(ARMSX3iOS PROPERTIES
+    MACOSX_BUNDLE TRUE
+    MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/app/Info.plist.in"
+    XCODE_ATTRIBUTE_CLANG_ENABLE_OBJC_ARC YES
+    XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED NO
+    XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED NO
+    XCODE_ATTRIBUTE_COMPILER_INDEX_STORE_ENABLE NO
+    XCODE_ATTRIBUTE_CURRENT_PROJECT_VERSION 1
+    XCODE_ATTRIBUTE_DEBUG_INFORMATION_FORMAT dwarf
+    XCODE_ATTRIBUTE_ENABLE_BITCODE NO
+    XCODE_ATTRIBUTE_GENERATE_INFOPLIST_FILE NO
+    XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "${CMAKE_OSX_DEPLOYMENT_TARGET}"
+    XCODE_ATTRIBUTE_MARKETING_VERSION "0.1.0"
+    XCODE_ATTRIBUTE_ONLY_ACTIVE_ARCH YES
+    XCODE_ATTRIBUTE_OTHER_LDFLAGS "-ObjC"
+    XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "com.thec0de.armsx3ios"
+    XCODE_ATTRIBUTE_SUPPORTED_PLATFORMS iphoneos
+    XCODE_ATTRIBUTE_SUPPORTS_MACCATALYST NO
+    XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY 1
+)
