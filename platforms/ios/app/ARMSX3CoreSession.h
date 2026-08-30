@@ -9,6 +9,7 @@ typedef void (^ARMSX3CoreCompletion)(BOOL succeeded, NSString* message);
 @interface ARMSX3CoreSession : NSObject
 
 @property(atomic, readonly, getter=isReady) BOOL ready;
+@property(atomic, readonly, getter=hasFatalError) BOOL fatalError;
 @property(atomic, copy, readonly) NSArray<NSDictionary<NSString*, id>*>* games;
 @property(atomic, copy, readonly) NSArray<NSDictionary<NSString*, id>*>* netISOGames;
 
@@ -28,6 +29,8 @@ typedef void (^ARMSX3CoreCompletion)(BOOL succeeded, NSString* message);
 - (void)bootXMBWithCompletion:(ARMSX3CoreCompletion)completion;
 - (void)bootTitleID:(NSString*)titleID completion:(ARMSX3CoreCompletion)completion;
 - (void)stopWithCompletion:(ARMSX3CoreCompletion)completion;
+- (BOOL)pauseForBackground;
+- (void)resumeFromBackground;
 - (BOOL)updatePadConnected:(BOOL)connected
                    buttons:(uint64_t)buttons
                      leftX:(float)leftX

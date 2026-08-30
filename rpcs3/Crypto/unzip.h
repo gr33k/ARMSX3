@@ -1,5 +1,10 @@
 #pragma once
 
+#include "Utilities/File.h"
+#include "util/types.hpp"
+
+#include <vector>
+
 std::vector<u8> unzip(const void* src, usz size);
 
 template <typename T>
@@ -9,6 +14,10 @@ inline std::vector<u8> unzip(const T& src)
 }
 
 bool unzip(const void* src, usz size, fs::file& out);
+
+// Inflate a zlib stream directly from a file range without first duplicating
+// the complete compressed payload in memory.
+bool unzip(const fs::file& src, u64 offset, fs::file& out);
 
 template <typename T>
 inline bool unzip(const std::vector<u8>& src, fs::file& out)

@@ -107,6 +107,7 @@ namespace vk
 		// Declare MVK variables here to ensure the lifetime within the entire scope
 		const VkBool32 setting_true = VK_TRUE;
 		const int32_t setting_fast_math = g_cfg.video.disable_msl_fast_math.get() ? MVK_CONFIG_FAST_MATH_NEVER : MVK_CONFIG_FAST_MATH_ON_DEMAND;
+		const int32_t setting_shader_compression = MVK_CONFIG_COMPRESSION_ALGORITHM_LZFSE;
 		bool portability_enumeration_enabled = false;
 
 		std::vector<VkLayerSettingEXT> mvk_settings;
@@ -139,6 +140,7 @@ namespace vk
 
 				mvk_settings.push_back(VkLayerSettingEXT{ kMVKMoltenVKDriverLayerName, "MVK_CONFIG_RESUME_LOST_DEVICE", VK_LAYER_SETTING_TYPE_BOOL32_EXT, 1, &setting_true });
 				mvk_settings.push_back(VkLayerSettingEXT{ kMVKMoltenVKDriverLayerName, "MVK_CONFIG_FAST_MATH_ENABLED", VK_LAYER_SETTING_TYPE_INT32_EXT, 1, &setting_fast_math });
+				mvk_settings.push_back(VkLayerSettingEXT{ kMVKMoltenVKDriverLayerName, "MVK_CONFIG_SHADER_COMPRESSION_ALGORITHM", VK_LAYER_SETTING_TYPE_INT32_EXT, 1, &setting_shader_compression });
 
 				mvk_layer_settings_create_info.sType = VK_STRUCTURE_TYPE_LAYER_SETTINGS_CREATE_INFO_EXT;
 				mvk_layer_settings_create_info.pNext = next_info;

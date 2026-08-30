@@ -264,21 +264,34 @@ namespace vk
 
 			create_pipeline_layout();
 			ensure(m_pipeline_layout);
-			const VkPipelineCache pipeline_cache = g_render_device && static_cast<VkDevice>(*g_render_device) == m_device
-				? g_render_device->get_pipeline_cache()
-				: VK_NULL_HANDLE;
+			const bool use_render_device_cache = g_render_device &&
+				static_cast<VkDevice>(*g_render_device) == m_device;
 
 			if (is_graphics_pipe)
 			{
 				VkGraphicsPipelineCreateInfo create_info = *p_graphics_info;
 				create_info.layout = m_pipeline_layout;
-				CHECK_RESULT(vkCreateGraphicsPipelines(m_device, pipeline_cache, 1, &create_info, nullptr, &m_pipeline));
+				if (use_render_device_cache)
+				{
+					CHECK_RESULT(g_render_device->create_graphics_pipeline(create_info, &m_pipeline));
+				}
+				else
+				{
+					CHECK_RESULT(vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, &create_info, nullptr, &m_pipeline));
+				}
 			}
 			else
 			{
 				VkComputePipelineCreateInfo create_info = *p_compute_info;
 				create_info.layout = m_pipeline_layout;
-				CHECK_RESULT(vkCreateComputePipelines(m_device, pipeline_cache, 1, &create_info, nullptr, &m_pipeline));
+				if (use_render_device_cache)
+				{
+					CHECK_RESULT(g_render_device->create_compute_pipeline(create_info, &m_pipeline));
+				}
+				else
+				{
+					CHECK_RESULT(vkCreateComputePipelines(m_device, VK_NULL_HANDLE, 1, &create_info, nullptr, &m_pipeline));
+				}
 			}
 
 			m_linked = true;

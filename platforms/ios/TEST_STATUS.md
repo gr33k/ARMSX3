@@ -579,6 +579,102 @@ V0.13 Uncharted SPU-scheduling candidate:
   fewer or shorter zero-FPS stalls; a package or a momentary FPS spike is not
   qualification.
 
+V0.13 Red Dead / lifecycle / NETISO physical evidence:
+
+- PASS PHYSICAL / TRANSPORT: the exact V0.13 package streamed the 9.52 GiB Red
+  Dead Redemption GOTY ISO through NETISO without copying it to the phone,
+  completed the title installer, reached the Rockstar logo, title menu, and
+  real 3D gameplay. This proves the ISO transport and title handoff; it does not
+  prove playable performance.
+- FAIL PHYSICAL / FIRST STOP: the first Red Dead boot stalled after preparing
+  title modules. Stop exceeded the bounded wait, and force-close crashed while
+  destroying Vulkan UI-overlay memory. The report was `EXC_BAD_ACCESS` through
+  `vk::ui_overlay_renderer::~ui_overlay_renderer`, `vk::image::~image`, and
+  `vk::mem_allocator_vma::free`.
+- FAIL PHYSICAL / MEMORY: the second boot reused the partial cache and reached
+  the game, then iOS killed PID 17217 for `per-process-limit` at 262,539 16-KiB
+  pages, approximately 4102 MiB. This is direct jetsam evidence, not an inferred
+  out-of-memory result.
+- FAIL PHYSICAL / PERFORMANCE: the third warm-cache boot rendered its boot
+  screen at 30 FPS and 1827 MiB, then real 3D at approximately 2 FPS and 3031
+  MiB. Live logs showed hundreds of Metal and RSX pipeline compilations,
+  repeated hard ZCULL synchronization, Vulkan allocator usage up to 142%, and
+  process headroom falling to 296-426 MiB. CPU was only about 24% in one sample,
+  supporting renderer/cache and scheduling work instead of an interpreter
+  fallback.
+- FAIL PHYSICAL / BACKGROUND: switching from ARMSX3 to Discord did not pause the
+  guest. UIKit deactivation was followed by a memory warning, aborted Metal
+  command buffers, and an RSX fatal `VK_ERROR_DEVICE_LOST`. V0.13 has no app
+  lifecycle pause/resume handler.
+- FAIL PHYSICAL / POST-FATAL STOP: pressing Stop after that device loss produced
+  `EXC_CRASH`/`SIGABRT` on the main thread while destroying
+  `rsx::reports::ZCULL_control` through the `VKGSRender` typemap teardown. A
+  fatal renderer must not enter this known unsafe cleanup path.
+- PASS PHYSICAL / 2D CONTROL TITLE: NETISO DuckTales Remastered (`BLUS31368`)
+  decrypted, compiled, reached its menu, and ran well enough to serve as a
+  transport/input/rendering regression control. It is not demanding-3D proof.
+- FAIL PHYSICAL / CFW FAKE-SELF: The Amazing Spider-Man 2 (`BLUS41044`) and
+  Teenage Mutant Ninja Turtles: Danger of the Ooze (`BLUS31435`) mounted valid
+  NETISO virtual images but failed on `PS3_GAME/USRDIR/EBOOT.BIN` as an invalid
+  format. NAS byte inspection proved both are fake-signed debug SELF files with
+  a declared `0x900` payload that is zlib-compressed; inflating either payload
+  yields a valid 64-bit ELF. DuckTales uses a normal encrypted retail SELF.
+
+V0.14 implementation candidate (physical qualification pending):
+
+- FIX READY: compressed CFW fake-SELF payloads are now inflated directly from
+  their file range with bounded buffers and accepted only when the result has a
+  valid ELF header. The original raw debug-SELF and encrypted retail-SELF paths
+  remain intact.
+- FIX READY: MoltenVK retains pipeline-export MSL as LZFSE instead of raw text.
+  Final graphics/compute pipeline-cache use is externally synchronized, and
+  iOS atomically checkpoints after 64 new pipelines and 15 seconds when at
+  least 1 GiB of process headroom remains. A successful pause requests a forced
+  safe-headroom checkpoint, so a later crash cannot discard the entire run.
+- FIX READY: Red Dead (US/EU base and GOTY), GTA V (US/EU), and Uncharted 1-3
+  (known US/EU IDs) receive the database-layer mobile profile: 50% internal
+  resolution, two shader compiler workers, and multithreaded RSX. Uncharted 2
+  retains its one-instruction PPU-trap compatibility setting. User per-title
+  configuration continues to override this database layer.
+- FIX READY: the same demanding-title set enables mobile SPU scheduling so
+  compilation cannot consume every useful A15 worker while the game is live.
+- FIX READY: UIKit deactivation synchronously releases player-one input and
+  pauses a running guest before Metal is backgrounded. Foreground activation
+  resumes only a session paused by that lifecycle path. A detected fatal core
+  error blocks the physically proven unsafe renderer teardown instead of
+  re-entering the ZCULL double-free path.
+- RESEARCH FALLBACK ONLY: a no-runtime-JIT route remains documented as static
+  ahead-of-time recompilation with interpreter fallback, similar in concept to
+  RecompCore. It is not a drop-in PS3 solution and is intentionally deferred
+  while native ARM64 PPU/SPU recompilers work. Full interpretation is excluded
+  from the performance path.
+- REQUIRED: build/sign/install exact V0.14 bytes and physically run cold/warm
+  Red Dead, GTA V, Uncharted 1/2/3, DuckTales, Spider-Man 2, and TMNT. Record
+  FPS, memory/headroom, cache load/save, graphics, app-switch resume, normal
+  Stop/relaunch, and every title's final boot line. Nothing above is physical
+  qualification until that matrix is observed on the phone.
+
+V0.14 signed candidate artifact:
+
+- Name: `ARMSX3-iOS-Core-Test-v0.14.ipa`
+- SHA-256:
+  `f2b062635e67ee37fc1b79711e3903a794bfd698e699f95b5115131842070313`
+- PASS STATIC: bounded contract tests, incremental two-worker core build, and
+  serial UIKit app build completed. The package contains arm64 app/core Mach-O
+  binaries targeting iOS 15.0 and exports the expected core ABI.
+- PASS STATIC: strict deep signature verification and all required TrollStore
+  JIT, unsigned-executable-memory, extended-address-space, and increased-memory
+  entitlements passed. Archive integrity and private-path scans also passed.
+- PASS STATIC: bundle readback reports `0.14.0` build `13`; both explicit PS3
+  icon PNGs are present at 120x120 and 180x180 without alpha or an accidental
+  TIFF/checkerboard asset.
+- PASS TRANSFER: repository artifact, Desktop copy, and iCloud Drive copy have
+  the exact SHA-256 above. V0.13 is retained as the single rollback candidate;
+  obsolete V0.1-V0.12 standalone ARMSX3 IPAs were removed from Desktop.
+- PENDING PHYSICAL: these exact V0.14 bytes have not yet been installed or run.
+  Static/package success does not close any gameplay, lifecycle, performance,
+  memory, renderer-correctness, or title-compatibility gate.
+
 V0.2 artifact:
 
 - Name: `ARMSX3-iOS-Core-Test-v0.2.ipa`

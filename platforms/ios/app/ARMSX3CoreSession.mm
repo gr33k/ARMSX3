@@ -37,6 +37,7 @@ void core_main_thread_callback(void*, rpcs3_ios_main_thread_task task, void* tas
 @interface ARMSX3CoreSession ()
 
 @property(atomic, readwrite, getter=isReady) BOOL ready;
+@property(atomic, readwrite, getter=hasFatalError) BOOL fatalError;
 @property(atomic, copy, readwrite) NSArray<NSDictionary<NSString*, id>*>* games;
 @property(atomic, copy, readwrite) NSArray<NSDictionary<NSString*, id>*>* netISOGames;
 
@@ -111,6 +112,7 @@ static void netiso_game_enumeration_callback(void* user_context, const rpcs3_ios
     uint64_t _lastNetISOBytes;
     CFAbsoluteTime _lastNetISOSample;
     double _netISOMegabitsPerSecond;
+    BOOL _pausedForBackground;
 }
 
 - (instancetype)initWithLogHandler:(ARMSX3CoreLogHandler)logHandler
@@ -159,6 +161,11 @@ static void netiso_game_enumeration_callback(void* user_context, const rpcs3_ios
 - (void)emitCoreLevel:(int32_t)level message:(NSString*)message
 {
     NSString* line = [NSString stringWithFormat:@"[Core:%d] %@", level, message];
+    if ([message rangeOfString:@"thread terminated due to fatal error"
+        options:NSCaseInsensitiveSearch].location != NSNotFound)
+    {
+        self.fatalError = YES;
+    }
     if (level < 5)
     {
         [self emit:line];
@@ -174,6 +181,11 @@ static void netiso_game_enumeration_callback(void* user_context, const rpcs3_ios
             @"ppu trap",
             @"compiled all ppu",
             @"linking ppu modules",
+            @"invalid or unsupported file format",
+            @"failed to decrypt self",
+            @"failed to load self",
+            @"debug self",
+            @"eboot.bin",
         ];
     });
     for (NSString* fragment in high_priority_fragments)
@@ -440,6 +452,8 @@ static void netiso_game_enumeration_callback(void* user_context, const rpcs3_ios
 
 - (void)bootTitleID:(NSString*)titleID completion:(ARMSX3CoreCompletion)completion
 {
+    self.fatalError = NO;
+    _pausedForBackground = NO;
     dispatch_async(_coreQueue, ^{
         const rpcs3_ios_status status = rpcs3_ios_boot_game(titleID.UTF8String);
         [self finish:completion succeeded:status == RPCS3_IOS_OK
@@ -449,6 +463,8 @@ static void netiso_game_enumeration_callback(void* user_context, const rpcs3_ios
 
 - (void)bootNetISOPath:(NSString*)remotePath completion:(ARMSX3CoreCompletion)completion
 {
+    self.fatalError = NO;
+    _pausedForBackground = NO;
     dispatch_async(_coreQueue, ^{
         const rpcs3_ios_status status = rpcs3_ios_boot_netiso_game(remotePath.UTF8String);
         [self finish:completion succeeded:status == RPCS3_IOS_OK
@@ -460,6 +476,8 @@ static void netiso_game_enumeration_callback(void* user_context, const rpcs3_ios
 
 - (void)bootXMBWithCompletion:(ARMSX3CoreCompletion)completion
 {
+    self.fatalError = NO;
+    _pausedForBackground = NO;
     dispatch_async(_coreQueue, ^{
         const rpcs3_ios_status status = rpcs3_ios_boot_vsh();
         [self finish:completion succeeded:status == RPCS3_IOS_OK
@@ -472,10 +490,54 @@ static void netiso_game_enumeration_callback(void* user_context, const rpcs3_ios
     // Stop cannot share the boot queue: BootGame remains synchronous while PPU
     // modules are prepared, which previously made cancellation unreachable.
     dispatch_async(_controlQueue, ^{
+        if (self.hasFatalError)
+        {
+            [self finish:completion succeeded:NO
+                message:@"Unsafe renderer teardown blocked after a fatal core error; relaunch ARMSX3 to reset this session"];
+            return;
+        }
         const rpcs3_ios_status status = rpcs3_ios_stop_emulation();
         [self finish:completion succeeded:status == RPCS3_IOS_OK
             message:status == RPCS3_IOS_OK ? @"Stop requested; core cleanup continues in the background" : last_core_error(status)];
     });
+}
+
+- (BOOL)pauseForBackground
+{
+    if (!self.isReady || self.hasFatalError ||
+        rpcs3_ios_get_emulation_state() != RPCS3_IOS_EMULATION_STATE_RUNNING)
+    {
+        return NO;
+    }
+
+    rpcs3_ios_pad_state released{};
+    released.struct_size = sizeof(released);
+    released.connected = 1;
+    rpcs3_ios_set_pad_state(0, &released);
+
+    const rpcs3_ios_status status = rpcs3_ios_pause_emulation();
+    _pausedForBackground = status == RPCS3_IOS_OK;
+    [self emit:_pausedForBackground
+        ? @"[Lifecycle] Paused emulation before app deactivation"
+        : [NSString stringWithFormat:@"[Lifecycle] Background pause failed: %@", last_core_error(status)]];
+    return _pausedForBackground;
+}
+
+- (void)resumeFromBackground
+{
+    if (!_pausedForBackground)
+        return;
+    _pausedForBackground = NO;
+    if (self.hasFatalError ||
+        rpcs3_ios_get_emulation_state() != RPCS3_IOS_EMULATION_STATE_PAUSED)
+    {
+        return;
+    }
+
+    const rpcs3_ios_status status = rpcs3_ios_resume_emulation();
+    [self emit:status == RPCS3_IOS_OK
+        ? @"[Lifecycle] Resumed emulation after app activation"
+        : [NSString stringWithFormat:@"[Lifecycle] Foreground resume failed: %@", last_core_error(status)]];
 }
 
 - (BOOL)updatePadConnected:(BOOL)connected

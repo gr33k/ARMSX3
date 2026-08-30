@@ -132,6 +132,69 @@ bool unzip(const void* src, usz size, fs::file& out)
 	return is_valid;
 }
 
+bool unzip(const fs::file& src, u64 offset, fs::file& out)
+{
+	if (!src || !out || offset >= src.size())
+	{
+		return false;
+	}
+
+	constexpr usz buffer_size = 64 * 1024;
+	std::vector<u8> input(buffer_size);
+	std::vector<u8> output(buffer_size);
+	z_stream stream{};
+#ifndef _MSC_VER
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wold-style-cast"
+#endif
+	if (inflateInit(&stream) != Z_OK)
+	{
+		return false;
+	}
+#ifndef _MSC_VER
+#pragma GCC diagnostic pop
+#endif
+
+	bool complete = false;
+	u64 read_offset = offset;
+	while (!complete && read_offset < src.size())
+	{
+		const usz requested = static_cast<usz>(std::min<u64>(input.size(), src.size() - read_offset));
+		const usz read = src.read_at(read_offset, input.data(), requested);
+		if (!read)
+		{
+			break;
+		}
+		read_offset += read;
+		stream.next_in = input.data();
+		stream.avail_in = ::narrow<uInt>(read);
+
+		do
+		{
+			stream.next_out = output.data();
+			stream.avail_out = ::narrow<uInt>(output.size());
+			const int result = inflate(&stream, Z_NO_FLUSH);
+			if (result != Z_OK && result != Z_STREAM_END)
+			{
+				inflateEnd(&stream);
+				return false;
+			}
+
+			const usz produced = output.size() - stream.avail_out;
+			if (produced && out.write(output.data(), produced) != produced)
+			{
+				inflateEnd(&stream);
+				return false;
+			}
+			complete = result == Z_STREAM_END;
+		}
+		while (!complete && (stream.avail_in || stream.avail_out == 0));
+	}
+
+	inflateEnd(&stream);
+	return complete;
+}
+
 bool zip(const void* src, usz size, fs::file& out, bool multi_thread_it)
 {
 	if (!src || !size || !out)

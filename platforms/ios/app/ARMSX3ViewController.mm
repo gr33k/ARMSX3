@@ -257,6 +257,8 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
 @property(nonatomic, copy) NSString* lastCoreLog;
 @property(nonatomic, copy) NSString* lastOperationMessage;
 @property(nonatomic) NSUInteger telemetryHideToken;
+@property(nonatomic) BOOL appInactive;
+@property(nonatomic) BOOL fatalCoreError;
 
 @end
 
@@ -295,7 +297,7 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
     [scroll addSubview:stack];
 
     UILabel* title = [[UILabel alloc] init];
-    title.text = @"ARMSX3 iOS Core Test v0.12";
+    title.text = @"ARMSX3 iOS Core Test v0.14";
     title.textColor = UIColor.whiteColor;
     title.font = [UIFont systemFontOfSize:24.0 weight:UIFontWeightBlack];
     [stack addArrangedSubview:title];
@@ -551,6 +553,7 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
     [self appendLog:line];
     if ([line containsString:@"Thread terminated due to fatal error"])
     {
+        self.fatalCoreError = YES;
         self.lastOperationMessage = line;
         self.stateLabel.text = @"Game stopped: fatal guest error. See the final log line.";
         self.stateLabel.textColor = [UIColor colorWithRed:1.0 green:0.30 blue:0.28 alpha:1.0];
@@ -853,6 +856,7 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
 
 - (void)openXMB
 {
+    self.fatalCoreError = NO;
     self.stateLabel.text = @"Booting the PS3 XMB...";
     [self attachDisplay];
     __weak ARMSX3ViewController* weak_self = self;
@@ -865,6 +869,15 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
 
 - (void)stopGame
 {
+    if (self.fatalCoreError || self.core.hasFatalError)
+    {
+        NSString* message = @"Core renderer failed; unsafe teardown was blocked. Relaunch ARMSX3 to reset without triggering the known stop crash.";
+        self.lastOperationMessage = message;
+        self.stateLabel.text = message;
+        self.stateLabel.textColor = [UIColor colorWithRed:1.0 green:0.48 blue:0.20 alpha:1.0];
+        [self appendLog:message];
+        return;
+    }
     __weak ARMSX3ViewController* weak_self = self;
     self.stateLabel.text = @"Stopping emulation...";
     [self.core stopWithCompletion:^(BOOL succeeded, NSString* message) {
@@ -909,6 +922,7 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
 {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
     NSDictionary* game = self.games[(NSUInteger)indexPath.row];
+    self.fatalCoreError = NO;
     NSString* title_id = game[@"titleID"];
     self.stateLabel.text = [NSString stringWithFormat:@"Booting %@...", game[@"title"]];
     [self attachDisplay];
@@ -987,6 +1001,8 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
     [self appendLog:[NSString stringWithFormat:@"External controller: %@", controller.vendorName ?: @"MFi gamepad"]];
     __weak ARMSX3ViewController* weak_self = self;
     pad.valueChangedHandler = ^(GCExtendedGamepad* gamepad, GCControllerElement*) {
+        if (weak_self.appInactive)
+            return;
         uint64_t buttons = 0;
         if (gamepad.dpad.up.pressed) buttons |= RPCS3_IOS_PAD_BUTTON_DPAD_UP;
         if (gamepad.dpad.down.pressed) buttons |= RPCS3_IOS_PAD_BUTTON_DPAD_DOWN;
@@ -1300,6 +1316,8 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
 
 - (void)pushTouchPad
 {
+    if (self.appInactive)
+        return;
     const BOOL accepted = [self.core updatePadConnected:YES buttons:self.touchButtons
         leftX:self.touchLeftX leftY:self.touchLeftY
         rightX:self.touchRightX rightY:self.touchRightY
@@ -1328,6 +1346,29 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
         if (strong_self && strong_self.telemetryHideToken == token)
             strong_self.inputTelemetryLabel.hidden = YES;
     });
+}
+
+- (void)applicationWillResignActive
+{
+    if (self.appInactive)
+        return;
+    self.appInactive = YES;
+    self.touchButtons = 0;
+    self.touchLeftX = 0.0f;
+    self.touchLeftY = 0.0f;
+    self.touchRightX = 0.0f;
+    self.touchRightY = 0.0f;
+    [self.leftVirtualStick resetTracking];
+    [self.rightVirtualStick resetTracking];
+    [self.core pauseForBackground];
+}
+
+- (void)applicationDidBecomeActive
+{
+    if (!self.appInactive)
+        return;
+    self.appInactive = NO;
+    [self.core resumeFromBackground];
 }
 
 - (void)didReceiveMemoryWarning

@@ -5,6 +5,7 @@
 #include "Emu/System.h"
 #include "Emu/system_utils.hpp"
 #include "Crypto/unzip.h"
+#include "Crypto/DebugSelfPayloadPolicy.h"
 
 inline u8 Read8(const fs::file& f)
 {
@@ -1397,6 +1398,37 @@ static fs::file CheckDebugSelf(const fs::file& s)
 
 		// Read the real elf offset.
 		usz read_pos = key_version == 0x80 ? +s.read<be_t<u64>>() : +s.read<le_t<u64>>();
+
+		std::array<u8, 4> payload_header{};
+		if (s.read_at(read_pos, payload_header.data(), payload_header.size()) != payload_header.size())
+		{
+			self_log.error("Debug SELF payload offset 0x%llx is outside the file.", static_cast<u64>(read_pos));
+			return {};
+		}
+
+		// Some CFW tools create fake-signed SELF files whose declared payload is
+		// one zlib-compressed ELF. A real CFW console accepts these, while copying
+		// the payload verbatim leaves RPCS3 looking at 0x78 0x9c instead of ELF.
+		if (ps3::crypto::has_zlib_header(payload_header[0], payload_header[1]))
+		{
+			fs::file decompressed = fs::make_stream<std::vector<u8>>();
+			if (!unzip(s, read_pos, decompressed))
+			{
+				self_log.error("Failed to inflate compressed debug SELF payload.");
+				return {};
+			}
+
+			std::array<u8, 4> elf_header{};
+			if (decompressed.read_at(0, elf_header.data(), elf_header.size()) != elf_header.size() ||
+				!ps3::crypto::has_elf_magic(elf_header[0], elf_header[1], elf_header[2], elf_header[3]))
+			{
+				self_log.error("Inflated debug SELF payload is not an ELF file.");
+				return {};
+			}
+
+			self_log.notice("Inflated compressed debug SELF payload to %llu bytes.", decompressed.size());
+			return decompressed;
+		}
 
 		// Write the real ELF file back.
 		fs::file e = fs::make_stream<std::vector<u8>>();

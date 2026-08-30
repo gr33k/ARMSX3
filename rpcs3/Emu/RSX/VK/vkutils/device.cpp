@@ -2,8 +2,13 @@
 #include "instance.h"
 #include "VRAMBudgetPolicy.h"
 #include "util/logs.hpp"
+#include "Emu/Cell/timers.hpp"
 #include "Emu/system_config.h"
 #include "Utilities/File.h"
+#ifdef RPCS3_IOS
+#include "ios/IOSPipelineCachePolicy.h"
+#include "ios/RPCS3IOSPerformance.h"
+#endif
 #include <vulkan/vulkan_core.h>
 #ifdef __APPLE__
 #include <vulkan/vulkan_beta.h>
@@ -116,13 +121,16 @@ namespace vk
 				"Vulkan driver pipeline cache initialized from %llu bytes of persisted data.",
 				static_cast<u64>(initial_data.size()));
 		}
+
+		m_pipeline_cache_dirty_pipelines = 0;
+		m_pipeline_cache_last_checkpoint_us = get_system_time();
 	}
 
-	void render_device::save_pipeline_cache() const
+	bool render_device::save_pipeline_cache_locked() const
 	{
 		if (!dev || !m_pipeline_cache)
 		{
-			return;
+			return false;
 		}
 
 		std::vector<u8> data;
@@ -133,7 +141,7 @@ namespace vk
 			if (result != VK_SUCCESS)
 			{
 				rsx_log.warning("Vulkan driver pipeline cache size query failed (VkResult %d).", static_cast<s32>(result));
-				return;
+				return false;
 			}
 
 			if (!data_size || data_size > maximum_pipeline_cache_data_size)
@@ -141,7 +149,7 @@ namespace vk
 				rsx_log.warning(
 					"Vulkan driver pipeline cache size %llu is outside the persisted limit; cache was not saved.",
 					static_cast<u64>(data_size));
-				return;
+				return false;
 			}
 
 			data.resize(data_size);
@@ -156,7 +164,7 @@ namespace vk
 			if (result != VK_INCOMPLETE || attempt == 1)
 			{
 				rsx_log.warning("Vulkan driver pipeline cache readback failed (VkResult %d).", static_cast<s32>(result));
-				return;
+				return false;
 			}
 		}
 
@@ -173,7 +181,7 @@ namespace vk
 		if (!fs::create_path(fs::get_cache_dir()))
 		{
 			rsx_log.warning("Vulkan driver pipeline cache directory could not be created.");
-			return;
+			return false;
 		}
 
 		fs::pending_file pending{path};
@@ -183,22 +191,92 @@ namespace vk
 			!pending.commit())
 		{
 			rsx_log.warning("Vulkan driver pipeline cache could not be saved atomically.");
-			return;
+			return false;
 		}
 
 		rsx_log.notice("Vulkan driver pipeline cache saved (%llu bytes).", static_cast<u64>(data.size()));
+		return true;
+	}
+
+	void render_device::checkpoint_pipeline_cache_locked(bool force) const
+	{
+		if (!m_pipeline_cache || !m_pipeline_cache_dirty_pipelines)
+		{
+			return;
+		}
+
+#ifdef RPCS3_IOS
+		const u64 now_us = get_system_time();
+		const u64 elapsed_ms = m_pipeline_cache_last_checkpoint_us && now_us > m_pipeline_cache_last_checkpoint_us
+			? (now_us - m_pipeline_cache_last_checkpoint_us) / 1000
+			: umax;
+		const u64 process_headroom = rpcs3::ios::available_process_memory_headroom();
+		if (!rpcs3::ios::should_checkpoint_pipeline_cache(
+			m_pipeline_cache_dirty_pipelines, elapsed_ms, process_headroom, force))
+		{
+			return;
+		}
+#else
+		if (!force)
+		{
+			return;
+		}
+		const u64 now_us = get_system_time();
+#endif
+
+		if (save_pipeline_cache_locked())
+		{
+			m_pipeline_cache_dirty_pipelines = 0;
+			m_pipeline_cache_last_checkpoint_us = now_us;
+		}
+	}
+
+	VkResult render_device::create_graphics_pipeline(
+		const VkGraphicsPipelineCreateInfo& create_info,
+		VkPipeline* pipeline) const
+	{
+		std::lock_guard lock(m_pipeline_cache_mutex);
+		const VkResult result = vkCreateGraphicsPipelines(dev, m_pipeline_cache, 1, &create_info, nullptr, pipeline);
+		if (result == VK_SUCCESS && m_pipeline_cache)
+		{
+			++m_pipeline_cache_dirty_pipelines;
+			checkpoint_pipeline_cache_locked(false);
+		}
+		return result;
+	}
+
+	VkResult render_device::create_compute_pipeline(
+		const VkComputePipelineCreateInfo& create_info,
+		VkPipeline* pipeline) const
+	{
+		std::lock_guard lock(m_pipeline_cache_mutex);
+		const VkResult result = vkCreateComputePipelines(dev, m_pipeline_cache, 1, &create_info, nullptr, pipeline);
+		if (result == VK_SUCCESS && m_pipeline_cache)
+		{
+			++m_pipeline_cache_dirty_pipelines;
+			checkpoint_pipeline_cache_locked(false);
+		}
+		return result;
+	}
+
+	void render_device::checkpoint_pipeline_cache(bool force) const
+	{
+		std::lock_guard lock(m_pipeline_cache_mutex);
+		checkpoint_pipeline_cache_locked(force);
 	}
 
 	void render_device::save_and_destroy_pipeline_cache()
 	{
+		std::lock_guard lock(m_pipeline_cache_mutex);
 		if (!m_pipeline_cache)
 		{
 			return;
 		}
 
-		save_pipeline_cache();
+		save_pipeline_cache_locked();
 		vkDestroyPipelineCache(dev, m_pipeline_cache, nullptr);
 		m_pipeline_cache = VK_NULL_HANDLE;
+		m_pipeline_cache_dirty_pipelines = 0;
 	}
 
 	void physical_device::get_physical_device_features(bool allow_extensions)

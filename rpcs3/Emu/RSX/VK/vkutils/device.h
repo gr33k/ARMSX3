@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <mutex>
 
 #define DESCRIPTOR_MAX_DRAW_CALLS 32768
 
@@ -147,6 +148,9 @@ namespace vk
 		std::unique_ptr<mem_allocator_base> m_allocator;
 		VkDevice dev = VK_NULL_HANDLE;
 		VkPipelineCache m_pipeline_cache = VK_NULL_HANDLE;
+		mutable std::mutex m_pipeline_cache_mutex;
+		mutable u32 m_pipeline_cache_dirty_pipelines = 0;
+		mutable u64 m_pipeline_cache_last_checkpoint_us = 0;
 
 		VkQueue m_graphics_queue = VK_NULL_HANDLE;
 		VkQueue m_present_queue = VK_NULL_HANDLE;
@@ -160,7 +164,8 @@ namespace vk
 			const std::vector<const char*>& requested_extensions,
 			const VkPhysicalDeviceFeatures& requested_features) const;
 		void create_pipeline_cache();
-		void save_pipeline_cache() const;
+		bool save_pipeline_cache_locked() const;
+		void checkpoint_pipeline_cache_locked(bool force) const;
 		void save_and_destroy_pipeline_cache();
 
 	public:
@@ -212,6 +217,9 @@ namespace vk
 
 		mem_allocator_base* get_allocator() const { return m_allocator.get(); }
 		VkPipelineCache get_pipeline_cache() const { return m_pipeline_cache; }
+		VkResult create_graphics_pipeline(const VkGraphicsPipelineCreateInfo& create_info, VkPipeline* pipeline) const;
+		VkResult create_compute_pipeline(const VkComputePipelineCreateInfo& create_info, VkPipeline* pipeline) const;
+		void checkpoint_pipeline_cache(bool force = false) const;
 
 		operator VkDevice() const { return dev; }
 	};

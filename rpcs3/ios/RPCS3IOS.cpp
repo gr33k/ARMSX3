@@ -19,6 +19,7 @@
 #include "GameLibrary.h"
 #include "GameUpdateManifest.h"
 #include "IOSGSFrame.h"
+#include "IOSGameProfilePolicy.h"
 #include "NetISODevice.h"
 #include "TrophyLibrary.h"
 #include "Emu/Io/IOS/IOSPadHandler.h"
@@ -42,6 +43,7 @@
 #include "Emu/NP/rpcn_config.h"
 #ifdef HAVE_VULKAN
 #include "Emu/RSX/VK/VKGSRender.h"
+#include "Emu/RSX/VK/vkutils/device.h"
 #endif
 #include "Emu/system_config.h"
 #include "Emu/system_progress.hpp"
@@ -357,9 +359,8 @@ bool apply_database_settings_for_api(std::string_view title_id)
 std::string database_config_for_guest_boot(const std::string& title_id)
 {
 	std::string database_config = rpcs3::ios::shared_config_database().config_for(title_id);
-	const bool is_uncharted_1 = title_id == "BCES00065";
-	const bool is_uncharted_2 = title_id == "BCUS98123";
-	if (!is_uncharted_1 && !is_uncharted_2)
+	const auto profile = rpcs3::ios::mobile_profile_for_title(title_id);
+	if (!profile)
 	{
 		return database_config;
 	}
@@ -370,23 +371,25 @@ std::string database_config_for_guest_boot(const std::string& title_id)
 	if (!merged.from_string(g_cfg.to_string()) ||
 		(!database_config.empty() && !merged.from_string(database_config)))
 	{
-		emit_log(2, "Unable to compose the iOS Uncharted compatibility profile");
+		emit_log(2, "Unable to compose the iOS mobile title profile");
 		return database_config;
 	}
 
-	if (is_uncharted_1)
+	merged.video.resolution_scale_percent.set(profile.resolution_scale_percent);
+	merged.video.shader_compiler_threads_count.set(profile.shader_compiler_threads);
+	merged.video.multithreaded_rsx.set(profile.multithreaded_rsx);
+	if (profile.stub_ppu_traps)
 	{
-		merged.video.resolution_scale_percent.set(50);
-		merged.video.shader_compiler_threads_count.set(2);
-		emit_log(4, "Applying iOS Uncharted 1 profile: Resolution Scale = 50%, Shader Compiler Threads = 2");
+		merged.core.stub_ppu_traps.set(profile.stub_ppu_traps);
 	}
-	else
-	{
-		// The physical iOS run reached Uncharted 2's main thread and trapped at
-		// 0x00068be4. RPCS3's own first-line workaround is one skipped instruction.
-		merged.core.stub_ppu_traps.set(1);
-		emit_log(4, "Applying iOS Uncharted 2 compatibility profile: Stub PPU Traps = 1");
-	}
+
+	emit_log(4, fmt::format(
+		"Applying iOS title profile for {}: Resolution Scale = {}%, Shader Compiler Threads = {}, Multithreaded RSX = {}, Stub PPU Traps = {}",
+		title_id,
+		profile.resolution_scale_percent,
+		profile.shader_compiler_threads,
+		profile.multithreaded_rsx,
+		profile.stub_ppu_traps));
 	return merged.to_string();
 }
 
@@ -4502,6 +4505,12 @@ extern "C" rpcs3_ios_status rpcs3_ios_pause_emulation(void) noexcept
 		}
 
 		rpcs3::ios::shared_pad_feedback().clear();
+#ifdef HAVE_VULKAN
+		if (vk::g_render_device)
+		{
+			vk::g_render_device->checkpoint_pipeline_cache(true);
+		}
+#endif
 		emit_log(4, "PlayStation 3 emulation paused");
 		return RPCS3_IOS_OK;
 	}
