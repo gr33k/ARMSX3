@@ -30,9 +30,16 @@ from mounting a second remote game over a running guest.
 
 Portrait retains the compact transparent test controls. Landscape uses the
 accepted true-alpha EmuHub PlayStation controller rails at their native aspect,
-continuous dual analog sticks, the documented artwork hit geometry, pressed
-state feedback, and an in-game EmuHub menu. The game surface is aspect-fit
-between the rails and is never stretched.
+eight exact D-pad sectors, continuous dual analog sticks, the documented
+artwork hit geometry, pressed-state feedback, and an in-game EmuHub menu. The
+landscape stage is edge-to-edge; the game surface is aspect-fit in the complete
+center slot and neither video nor controller artwork is stretched.
+
+Landscape displays transient `PAD OK`/`PAD REJECT` telemetry with digital and
+analog values, plus compact runtime/last-operation state. The EmuHub menu can
+show the complete current diagnostic summary. Each run also writes
+`ARMSX3-last-session.log` to the app's file-sharing Documents directory so a
+launch failure remains inspectable after disconnecting the device.
 
 The standalone app remains a maintained iPhone emulator surface. EmuHub will
 consume this same public core ABI after physical feasibility passes; it must not

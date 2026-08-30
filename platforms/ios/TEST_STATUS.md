@@ -255,6 +255,72 @@ V0.7 scene-watchdog/controller candidate:
   qualification harness; EmuHub must consume the same core ABI. No web runtime
   is claimed, and Beta does not waive the physical gameplay gates above.
 
+V0.8 fullscreen/input/diagnostic candidate:
+
+- Source revision: `f0c0448539aef2b336d85bac57404f6346b4b9f3`
+- Name: `ARMSX3-iOS-Core-Test-v0.8.ipa`
+- Compressed size: `31,767,416` bytes
+- SHA-256:
+  `c2f6722c0c0e10c6194499503a5048237f03a8a76020eda359e35a18f10b4fb1`
+- PASS STATIC: this remains an app-only build over the unchanged V0.6/V0.7 core
+  dylib, SHA-256
+  `9710c8ed0fa92e596bf9daf398eb633114b3d861c357463b12f46f27be5f226c`.
+  Serial Xcode compilation, ZIP readback, deep strict signing, TrollStore JIT
+  and memory entitlements, arm64/iOS 15.0, version `0.8.0` build `7`, required
+  NETISO/input exports, and private-path/address scans passed.
+- PASS STATIC / ARTWORK PRESERVED: the exact accepted PlayStation rail bytes are
+  unchanged. Left remains
+  `7f90c6627f4cd3752f87c73553dd6e5981973039573f5b26ed1ed2ac214dadf4`;
+  right remains
+  `f070d2e7dea0fbef08a8feeef16a4533b186090616c66a26bfdfad84af8bc176`.
+- FIX READY / PHYSICAL PENDING: landscape now removes the safe-area wrapper,
+  stack margins, vertical gap, stage corner clipping, and the 28-point height
+  subtraction. The controller rails occupy the complete device height at native
+  `853/1844` aspect, and the independent 16:9 game surface consumes the complete
+  center slot without stretching either artwork or video.
+- ROOT CAUSE / V0.7 INPUT: face buttons and Start used ordinary `UIButton`
+  target/action events and worked physically, while the D-pad and both sticks
+  used custom `UIControl` tracking overrides and emitted no usable input. V0.8
+  replaces the D-pad with eight non-overlapping circular sectors carried by the
+  proven button event path. Cardinal sectors emit one bit and diagonal sectors
+  emit the exact two-bit chord; the center 18% remains a dead zone. Both analog
+  sticks now use direct `UIView` touch begin/move/end/cancel handling while
+  retaining continuous normalized axes and the 7% analog dead zone.
+- FIX READY / PHYSICAL PENDING: every touch update displays a temporary `PAD OK`
+  or `PAD REJECT` readout with D-pad and both-stick values. Landscape also keeps
+  runtime state plus the last operation visible, the EmuHub menu exposes full
+  current/last-line diagnostics, and each run writes the coalesced event
+  stream to the file-sharing document `ARMSX3-last-session.log`. This is
+  diagnostic evidence, not proof that the guest consumed the input.
+- PASS: the complete lightweight iOS contract suite passes. Its stale ABI 29
+  expectations now match shipped ABI 30, and the GPU-default assertion now
+  matches the existing `async_recompiler` source default; runtime behavior was
+  not changed by those test corrections.
+- MEDIA REPAIR READY / PHYSICAL PENDING: the extracted Uncharted 1 `BCES00065`
+  folder was using a modified debug/FSELF `EBOOT.BIN` (SHA-256
+  `1d97d8e3ab6ff860df418dc664876dd54b6fb98f6fa8e2a4b5e0f0721d0a6355`).
+  It is preserved as `EBOOT.BIN_EMUHUB_BACKUP_20260830_0800`; the folder's
+  preserved retail `EBOOT.BIN_CEX` is now active as `EBOOT.BIN` (SHA-256
+  `bcbd125bc0614fb5994d30f2e82c6510aaaf2fc6c51f917c4953d4a210b32bd4`).
+  After restarting only `ps3netsrv`, a NAS-local protocol probe enumerated 60
+  extracted titles and passed an ISO PVD random read on the rebuilt Uncharted
+  virtual image at `22,654,615,552` bytes. Real gameplay remains unverified.
+- PASS SERVER / NO UPDATE AVAILABLE: the running container already uses
+  `ps3netsrv` build `20250501`, current image digest
+  `sha256:f23497ba5c34099e65c3a0590f5dfd0ee21c5c66f592a644aafb2d88f3d60e1e`.
+  Pulling `shawly/ps3netsrv:latest` confirmed it is current, so no image or
+  Compose replacement was performed.
+- FAIL PHYSICAL / GOD OF WAR ASCENSION: V0.7 title `BCES01741` reaches the
+  Duplex screen and loops back to it repeatedly. No connected-device core log
+  was available, so child-SELF handoff, guest failure, and media modification
+  remain open; no fix is claimed in V0.8.
+- REQUIRED PHYSICAL GATES: install the exact V0.8 bytes and first tap every
+  D-pad cardinal/diagonal plus sweep both analog sticks while confirming `PAD
+  OK` and live values. Then verify guest response, edge-to-edge landscape,
+  simultaneous stick/face input, Stop/relaunch, repaired Uncharted 1 boot,
+  Uncharted 2, and the God of War loop. Preserve `ARMSX3-last-session.log` after
+  any failure. Package/static checks do not close these gates.
+
 V0.2 artifact:
 
 - Name: `ARMSX3-iOS-Core-Test-v0.2.ipa`
