@@ -305,6 +305,23 @@ V0.8 fullscreen/input/diagnostic candidate:
   After restarting only `ps3netsrv`, a NAS-local protocol probe enumerated 60
   extracted titles and passed an ISO PVD random read on the rebuilt Uncharted
   virtual image at `22,654,615,552` bytes. Real gameplay remains unverified.
+- MEDIA REPAIR READY / PHYSICAL PENDING: Uncharted 2 `BCUS98123` had no runtime
+  `pak22.psarc`; its `5,596,444,529` bytes were split across `.part00` through
+  `.part02`, while an identical complete copy was hidden as
+  `ORIGINALpak22.psarcbak`. The three fragments and hidden complete copy are
+  preserved outside `/GAMES` at
+  `EMUHUB_MEDIA_BACKUPS/BCUS98123-Uncharted_2-20260830`; the byte-identical
+  reconstructed `pak22.psarc` is now active with SHA-256
+  `68a2e164225c1f80a760443476bc6f39d025ff6d8a31ec46ab7aedb8f27fe9a9`.
+  A fresh NAS-local `/***PS3***/GAMES/...` VISO probe passed open and ISO PVD
+  random read at `21,920,808,960` bytes. A launch started before this repair
+  must be stopped and relaunched to rebuild the VISO; gameplay remains unverified.
+- SOURCE READY / NEXT CORE BUILD: invalid read-length errors now include both
+  the server-returned and requested byte counts, and the independent probe
+  reports the opened remote image size before its random read. The contract
+  suite passes, but this post-V0.8 core-source diagnostic is not in the V0.8
+  IPA. Folder probes must include the standard `/***PS3***/` marker; plain
+  `/GAMES/...` opens the directory itself and is not a VISO transport test.
 - PASS SERVER / NO UPDATE AVAILABLE: the running container already uses
   `ps3netsrv` build `20250501`, current image digest
   `sha256:f23497ba5c34099e65c3a0590f5dfd0ee21c5c66f592a644aafb2d88f3d60e1e`.

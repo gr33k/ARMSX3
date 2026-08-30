@@ -434,7 +434,8 @@ bool connection::read_at(std::uint64_t offset, void* buffer, std::size_t size,
 		const std::int32_t received = static_cast<std::int32_t>(big_endian(result.bytes_read));
 		if (received < 0 || static_cast<std::size_t>(received) > request)
 		{
-			error = "NETISO server returned an invalid read length";
+			error = "NETISO server returned an invalid read length (received=" +
+				std::to_string(received) + ", requested=" + std::to_string(request) + ")";
 			return false;
 		}
 		if (received && !receive_all(buffer, static_cast<std::size_t>(received), error))

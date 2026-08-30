@@ -64,6 +64,7 @@ int main(int argc, char** argv)
 		std::cerr << error << '\n';
 		return 1;
 	}
+	std::cout << "open PASS size=" << info.size << " mtime=" << info.mtime << '\n';
 	char magic[5]{};
 	std::size_t bytes_read = 0;
 	if (!file.read_at(32769, magic, sizeof(magic), bytes_read, error) ||
