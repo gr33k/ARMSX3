@@ -688,6 +688,13 @@ V0.14 signed candidate artifact:
   fatal renderer/device-loss line, and the same app process started the next
   title. Teardown still emitted private Metal warnings and a sub-second hang
   trace, so lifecycle cleanup remains under observation.
+- PASS PHYSICAL / TOY STORY MANIA: the NETISO title compiled, entered its
+  free-play mode, and held its 30 FPS cap; DuckTales had held 60 FPS. The user
+  reported normal operation after graphics appeared. The first free-play
+  transition produced audio over a temporarily black screen while a dense burst
+  of Metal/RSX shaders compiled, so shader warm-up presentation remains open.
+  The tested mode was not genuine interactive 3D and is excluded from the
+  moderate-3D baseline.
 - FAIL PHYSICAL / GTA V CHILD LOADER: the GTA V NETISO reached the Duplex intro,
   wrote and exit-spawned `/dev_hdd1/duplex.self`, then remained on a black
   `Loading` screen. The child process requested
@@ -717,6 +724,22 @@ V0.15 focused compatibility candidate:
   log contains the redirect diagnostic and GTA advances beyond the prior black
   `Loading` screen. Also verify a normal NETISO title and a local installed
   title to prove the compatibility path does not bleed into other sessions.
+
+V0.15 signed candidate artifact:
+
+- Name: `ARMSX3-iOS-Core-Test-v0.15.ipa`
+- Source commit: `b9dad4243b18719e0a44f8b161681fbf8e800fc8`
+- SHA-256:
+  `9b916cf174fda22b46c446b12f0e5f040e0148abf14a503a007b5ee9f858fa8a`
+- PASS STATIC: archive integrity, strict deep signing, required TrollStore
+  JIT/unsigned-memory/extended-address/increased-memory entitlements, arm64
+  app/core binaries, iOS 15.0 minimum, core ABI export, version `0.15.0` build
+  `14`, exact opaque 120/180 px PS3 icons, and private-path scans passed.
+- PASS TRANSFER: repository artifact, Desktop copy, and iCloud Drive copy have
+  the exact SHA-256 above. V0.14 remains available as the immediate rollback.
+- PENDING PHYSICAL: install these exact bytes and verify the GTA child-loader
+  redirect plus normal NETISO/local-title isolation. Package success is not
+  gameplay qualification.
 
 V0.2 artifact:
 
