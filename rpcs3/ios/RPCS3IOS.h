@@ -747,6 +747,9 @@ RPCS3_IOS_EXPORT rpcs3_ios_status rpcs3_ios_get_performance_metrics(
 // Pause is accepted only from running; resume is accepted only from paused.
 RPCS3_IOS_EXPORT rpcs3_ios_status rpcs3_ios_pause_emulation(void) RPCS3_IOS_NOEXCEPT;
 RPCS3_IOS_EXPORT rpcs3_ios_status rpcs3_ios_resume_emulation(void) RPCS3_IOS_NOEXCEPT;
+// Cancellation stays callable while boot owns the serialized lifecycle lock.
+// Success means the stop request was accepted; poll emulation state for full
+// cleanup completion before starting another session or shutting down.
 RPCS3_IOS_EXPORT rpcs3_ios_status rpcs3_ios_stop_emulation(void) RPCS3_IOS_NOEXCEPT;
 RPCS3_IOS_EXPORT rpcs3_ios_state rpcs3_ios_get_state(void) RPCS3_IOS_NOEXCEPT;
 RPCS3_IOS_EXPORT rpcs3_ios_status rpcs3_ios_shutdown(void) RPCS3_IOS_NOEXCEPT;

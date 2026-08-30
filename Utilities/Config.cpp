@@ -4,6 +4,7 @@
 #include "util/yaml.hpp"
 
 #include <charconv>
+#include <limits>
 
 LOG_CHANNEL(cfg_log, "CFG");
 
@@ -253,6 +254,13 @@ bool try_to_float(f64* out, std::string_view value, f64 min, f64 max, std::strin
 
 bool try_to_string(std::string* out, f64 value, std::string_view name)
 {
+#ifdef RPCS3_IOS
+	// Floating-point std::to_chars is unavailable before iOS 16.3. yaml-cpp's
+	// bundled Dragonbox formatter preserves enough digits for a safe round trip.
+	(void)name;
+	if (out) *out = YAML::FpToString(value, std::numeric_limits<f64>::max_digits10);
+	return true;
+#else
 	std::array<char, 32> str{};
 
 	if (auto [ptr, ec] = std::to_chars(str.data(), str.data() + str.size(), value, std::chars_format::fixed); ec == std::errc())
@@ -265,6 +273,7 @@ bool try_to_string(std::string* out, f64 value, std::string_view name)
 		if (out) cfg_log.error("cfg::try_to_string('%s'): could not convert value '%f' to string. error='%s'", name, value, std::make_error_code(ec).message());
 		return false;
 	}
+#endif
 }
 
 bool cfg::try_to_enum_value(u64* out, decltype(&fmt_class_string<int>::format) func, std::string_view value, std::string_view name)

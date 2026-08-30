@@ -17,7 +17,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 #include <fcntl.h>
-#elif __APPLE__
+#elif __APPLE__ && !defined(RPCS3_IOS)
 #include <os/os_sync_wait_on_address.h>
 #endif
 
@@ -78,7 +78,7 @@ inline int futex(volatile void* uaddr, int futex_op, uint val, const timespec* t
 {
 #ifdef __linux__
 	return syscall(SYS_futex, uaddr, futex_op, static_cast<int>(val), timeout, nullptr, static_cast<int>(mask));
-#elif __APPLE__
+#elif __APPLE__ && !defined(RPCS3_IOS)
 	switch (futex_op)
 	{
 	case FUTEX_WAIT_PRIVATE:

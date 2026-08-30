@@ -129,3 +129,9 @@ CMakeUserPresets.json
 
 # claude
 CLAUDE.md
+
+# Local iOS feasibility dependencies and build products
+/.deps/
+/build-ios*/
+/artifacts/
+*.ipa

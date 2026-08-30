@@ -5271,10 +5271,17 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 
 		*progress_dialog = get_localized_string(localized_string_id::PROGRESS_DIALOG_COMPILING_PPU_MODULES);
 
+#ifdef RPCS3_IOS
+		// The physical iOS 15 run stalled after every worker reported completion
+		// but before linking. Use a deterministic boot-thread path while the
+		// named-thread completion wait is isolated independently.
+		const u32 thread_count = 0;
+#else
 		const u32 thread_count = std::max<u32>(std::min<u32>(::size32(workload), rpcs3::utils::get_max_threads()), 1) - 1;
+#endif
 
 #ifdef RPCS3_IOS
-		ppu_log.notice("iOS LLVM compilation: %u module(s), %u concurrent thread(s)", ::size32(workload), thread_count + 1);
+		ppu_log.notice("iOS LLVM compilation: %u module(s), serial boot-thread mode", ::size32(workload));
 #endif
 
 		struct thread_index_allocator
@@ -5398,13 +5405,16 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 			cur_op();
 		}
 
+#ifdef RPCS3_IOS
+		ppu_log.notice("iOS serial PPU compilation complete; bypassing named-thread wait");
+#endif
 		threads.join();
 
 #ifdef RPCS3_IOS
-		if (const u64 released = rpcs3::ios::relieve_process_memory_pressure())
-		{
-			ppu_log.notice("iOS released %llu MiB of transient PPU compilation memory", released / rpcs3::ios::process_memory_mib);
-		}
+		// Avoid a second synchronous finalization operation before linking while
+		// this physical-device stall is isolated. Normal iOS memory-pressure
+		// handling remains active during emulation.
+		ppu_log.notice("iOS PPU compile finalization complete; continuing directly to module linking");
 #endif
 
 		thread_ctrl::set_name(old_name);

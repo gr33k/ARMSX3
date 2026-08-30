@@ -762,7 +762,9 @@ target_link_libraries(rpcs3_emu
 if(RPCS3_FRONTEND STREQUAL "IOS")
     target_link_libraries(rpcs3_emu PUBLIC
         "-framework Foundation"
-        "-framework MetalFX"
+        # MetalFX is unavailable on iOS 15. Weak-link it so the same core can
+        # fall back to RPCS3's Vulkan scalers on older TrollStore devices.
+        "-Wl,-weak_framework,MetalFX"
         iconv
     )
 endif()

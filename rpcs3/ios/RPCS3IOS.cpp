@@ -97,6 +97,7 @@
 namespace
 {
 std::mutex g_api_mutex;
+std::mutex g_stop_mutex;
 std::mutex g_progress_mutex;
 rpcs3::ios::lifecycle g_lifecycle;
 rpcs3::ios::error_store g_last_error;
@@ -4181,8 +4182,12 @@ extern "C" rpcs3_ios_status rpcs3_ios_resume_emulation(void) noexcept
 
 extern "C" rpcs3_ios_status rpcs3_ios_stop_emulation(void) noexcept
 {
-	std::lock_guard lock(g_api_mutex);
-	if (g_lifecycle.state() != RPCS3_IOS_STATE_READY)
+	// Boot deliberately owns g_api_mutex while RPCS3 prepares guest code. Stop
+	// must remain reachable during that interval or a stalled boot cannot be
+	// cancelled. Emulator::GracefulShutdown carries its own emulation-state
+	// guard; this mutex only serializes concurrent wrapper stop requests.
+	std::lock_guard stop_lock(g_stop_mutex);
+	if (!g_accept_pad_state.load(std::memory_order_acquire))
 	{
 		set_error("RPCS3Core must be ready before stopping emulation");
 		return RPCS3_IOS_INVALID_STATE;
@@ -4200,15 +4205,9 @@ extern "C" rpcs3_ios_status rpcs3_ios_stop_emulation(void) noexcept
 		}
 
 		emit_log(4, "Stopping the current PlayStation 3 emulation session");
-		Emu.GracefulShutdown(false, false);
-		if (!wait_for_emulation_stop())
-		{
-			set_error("RPCS3 did not reach the stopped state");
-			return RPCS3_IOS_STOP_FAILED;
-		}
-
+		Emu.GracefulShutdown(false, true);
 		rpcs3::ios::shared_pad_feedback().clear();
-		emit_log(4, "PlayStation 3 emulation stopped; RPCS3Core remains initialized");
+		emit_log(4, "PlayStation 3 stop request accepted; cleanup is continuing asynchronously");
 		return RPCS3_IOS_OK;
 	}
 	catch (const std::exception& error)
