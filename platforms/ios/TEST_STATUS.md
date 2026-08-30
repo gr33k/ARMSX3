@@ -777,6 +777,24 @@ Post-V0.15 structured debug SELF repair candidate:
   `RPCS3Core` build pass. Physical Spider-Man 2 and TMNT boot/gameplay remain
   required before this compatibility repair can be promoted.
 
+V0.16 focused compatibility/render-isolation candidate:
+
+- FIX READY / GTA: includes V0.15's narrowly scoped exitspawn
+  `/dev_hdd0/game/PS3_GAME` to `/dev_bdvd/PS3_GAME` redirect for streamed-disc
+  wrappers such as GTA V's `duplex.self`.
+- FIX READY / STRUCTURED DEBUG SELF: includes the complete two-segment
+  Spider-Man 2/TMNT reconstruction described above.
+- EXPERIMENT READY / UNCHARTED 3: `BCES01175` and `BCUS98233` retain the `50%`
+  internal-resolution and two-shader-worker mobile limits but no longer force
+  Multithreaded RSX. V0.14 introduced that forced offload at the same time the
+  clean physical run gained its severe green/pink corruption. This is an
+  isolated A/B candidate, not a claimed renderer fix; RDR, GTA, and Uncharted
+  1/2 keep their existing profiles.
+- PASS STATIC: the complete bounded iOS contract suite and incremental
+  two-worker `RPCS3Core` build pass. Package/sign/install and physical
+  Uncharted 3 menu/gameplay, GTA post-Duplex, Spider-Man 2, and TMNT gates remain
+  required.
+
 V0.2 artifact:
 
 - Name: `ARMSX3-iOS-Core-Test-v0.2.ipa`

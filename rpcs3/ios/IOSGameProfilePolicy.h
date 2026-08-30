@@ -10,6 +10,7 @@ enum class mobile_title_profile_kind : std::uint8_t
 	none,
 	uncharted_1,
 	uncharted_2,
+	uncharted_3,
 	demanding_3d,
 };
 
@@ -50,8 +51,15 @@ constexpr mobile_title_profile mobile_profile_for_title(std::string_view title_i
 		return {mobile_title_profile_kind::uncharted_2, 50, 2, true, 1};
 	}
 
-	if (title_id == "BCES01175" || title_id == "BCUS98233" ||
-		is_red_dead_redemption_title(title_id) ||
+	if (title_id == "BCES01175" || title_id == "BCUS98233")
+	{
+		// V0.14's forced RSX offload produced deterministic fragment-program
+		// corruption on the physical A15. Keep the other mobile limits while
+		// the underlying offload synchronization defect is isolated.
+		return {mobile_title_profile_kind::uncharted_3, 50, 2, false, 0};
+	}
+
+	if (is_red_dead_redemption_title(title_id) ||
 		is_grand_theft_auto_v_title(title_id))
 	{
 		return {mobile_title_profile_kind::demanding_3d, 50, 2, true, 0};
