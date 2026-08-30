@@ -64,15 +64,21 @@ extracted `GAMES/<title>` trees. The device provides:
 
 - persistent TCP connections with reconnect and request serialization;
 - big-endian packed NETISO command encoding with strict response bounds;
-- 1 MiB aligned read-ahead and a bounded 64 MiB LRU cache by default;
+- 1 MiB aligned per-file read-ahead with one bounded buffer per open file;
 - cancellation and finite connect/read deadlines;
 - immutable file identity checks across reconnects;
-- transport metrics for latency, throughput, cache hits, and retries;
+- monotonic byte/read/cache-hit/reconnect counters from which the wrapper
+  calculates live throughput;
 - fail-closed behavior on short reads or changed remote file identity.
 
 The existing ISO parser and game-folder boot code read through this device.
 Title discovery still derives the title ID and metadata through the normal PS3
 content path, so patch selection is not bypassed.
+
+V0.4 intentionally does not add the proposed cross-file 64 MiB LRU or latency
+histograms. Physical major-3D testing must first show whether network reads are
+the limiting factor; expanding cache memory before that evidence would compete
+with LLVM, SPU, and RSX allocations on constrained iPhones.
 
 ## Launch surfaces
 

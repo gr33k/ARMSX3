@@ -63,6 +63,7 @@
 #include <span>
 #include <optional>
 #include <charconv>
+#include <thread>
 
 #include "util/asm.hpp"
 #include "util/vm.hpp"
@@ -5272,16 +5273,28 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 		*progress_dialog = get_localized_string(localized_string_id::PROGRESS_DIALOG_COMPILING_PPU_MODULES);
 
 #ifdef RPCS3_IOS
-		// The physical iOS 15 run stalled after every worker reported completion
-		// but before linking. Use a deterministic boot-thread path while the
-		// named-thread completion wait is isolated independently.
-		const u32 thread_count = 0;
+		// The generic named-thread wait stalled on physical iOS 15 even after all
+		// workers completed. Use short-lived std::threads with pthread joins, and
+		// reduce parallelism when LLVM's transient allocations consume headroom.
+		u32 ios_compile_limit = rpcs3::ios::get_llvm_compile_thread_limit(
+			rpcs3::utils::get_max_threads(), g_cfg.core.llvm_threads);
+		const u64 ios_headroom = rpcs3::ios::available_process_memory_headroom();
+		if (ios_headroom <= rpcs3::ios::process_headroom_severe_exit)
+		{
+			ios_compile_limit = 1;
+		}
+		else if (ios_headroom <= rpcs3::ios::process_headroom_moderate_exit)
+		{
+			ios_compile_limit = std::min<u32>(ios_compile_limit, 2);
+		}
+		const u32 thread_count = std::min<u32>(::size32(workload), ios_compile_limit) - 1;
 #else
 		const u32 thread_count = std::max<u32>(std::min<u32>(::size32(workload), rpcs3::utils::get_max_threads()), 1) - 1;
 #endif
 
 #ifdef RPCS3_IOS
-		ppu_log.notice("iOS LLVM compilation: %u module(s), serial boot-thread mode", ::size32(workload));
+		ppu_log.notice("iOS LLVM compilation: %u module(s), %u direct worker(s), %u MiB headroom",
+			::size32(workload), thread_count + 1, ios_headroom / rpcs3::ios::process_memory_mib);
 #endif
 
 		struct thread_index_allocator
@@ -5390,9 +5403,25 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 			return true;
 		};
 
+#ifdef RPCS3_IOS
+		std::vector<std::thread> ios_workers;
+		ios_workers.reserve(thread_count);
+		for (u32 thread_index = 0; thread_index < thread_count; thread_index++)
+		{
+			thread_op worker_op(&work_cv, &work_done, workload, cpu, info, cache_path, g_fxo->get<jit_core_allocator>().sem);
+			if (try_lock_thread(thread_index, worker_op))
+			{
+				ios_workers.emplace_back([op = std::move(worker_op)]() mutable
+				{
+					op();
+				});
+			}
+		}
+#else
 		named_thread_group threads(worker_group_name, thread_count
 			, thread_op(&work_cv, &work_done, workload, cpu, info, cache_path, g_fxo->get<jit_core_allocator>().sem)
 			, try_lock_thread);
+#endif
 
 		const auto old_name = thread_ctrl::get_name();
 		thread_ctrl::set_name(worker_group_name + std::to_string(thread_count + 1));
@@ -5406,9 +5435,14 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 		}
 
 #ifdef RPCS3_IOS
-		ppu_log.notice("iOS serial PPU compilation complete; bypassing named-thread wait");
-#endif
+		for (std::thread& worker : ios_workers)
+		{
+			worker.join();
+		}
+		ppu_log.notice("iOS parallel PPU compilation complete; direct workers joined");
+#else
 		threads.join();
+#endif
 
 #ifdef RPCS3_IOS
 		// Avoid a second synchronous finalization operation before linking while

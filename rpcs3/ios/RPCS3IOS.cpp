@@ -19,6 +19,7 @@
 #include "GameLibrary.h"
 #include "GameUpdateManifest.h"
 #include "IOSGSFrame.h"
+#include "NetISODevice.h"
 #include "TrophyLibrary.h"
 #include "Emu/Io/IOS/IOSPadHandler.h"
 
@@ -108,9 +109,11 @@ std::string g_preferred_language = "en";
 bool g_emu_started = false;
 std::atomic_bool g_accept_display_surfaces = false;
 std::atomic_bool g_accept_pad_state = false;
+std::atomic_bool g_guest_session_claimed = false;
 rpcs3::ios::display_surface_registry g_display_surface;
 std::shared_ptr<rpcn::rpcn_client> g_rpcn_client;
 bool g_rpcn_config_loaded = false;
+stx::shared_ptr<rpcs3::ios::netiso_device> g_netiso_device;
 
 struct boot_progress_snapshot
 {
@@ -157,6 +160,13 @@ rpcs3_ios_emulation_state current_emulation_state() noexcept
 	switch (Emu.GetStatus(false))
 	{
 	case system_state::stopped:
+		// A PS3 title can briefly stop while exitspawn hands execution to a
+		// child SELF. Keep that externally launched session non-idle until the
+		// host explicitly stops it, or a second title can race the handoff.
+		if (g_guest_session_claimed.load(std::memory_order_acquire))
+		{
+			return RPCS3_IOS_EMULATION_STATE_LOADING;
+		}
 		return RPCS3_IOS_EMULATION_STATE_STOPPED;
 	case system_state::loading:
 		return RPCS3_IOS_EMULATION_STATE_LOADING;
@@ -194,6 +204,69 @@ bool wait_for_emulation_stop() noexcept
 void set_error(std::string message)
 {
 	g_last_error.set(std::move(message));
+}
+
+class guest_session_claim
+{
+	bool m_rollback = false;
+
+public:
+	bool acquire() noexcept
+	{
+		bool expected = false;
+		m_rollback = g_guest_session_claimed.compare_exchange_strong(
+			expected, true, std::memory_order_acq_rel);
+		return m_rollback;
+	}
+
+	void retain() noexcept
+	{
+		m_rollback = false;
+	}
+
+	~guest_session_claim()
+	{
+		if (m_rollback)
+		{
+			g_guest_session_claimed.store(false, std::memory_order_release);
+		}
+	}
+};
+
+bool acquire_guest_session(guest_session_claim& claim)
+{
+	if (claim.acquire())
+	{
+		return true;
+	}
+
+	set_error("A guest session is active or switching executables; use Stop Emulation before booting another title");
+	return false;
+}
+
+bool valid_netiso_host(std::string_view host)
+{
+	return !host.empty() && host.size() <= 253 &&
+		std::all_of(host.begin(), host.end(), [](unsigned char character)
+		{
+			return character > 0x20 && character < 0x7f &&
+				character != '/' && character != '\\';
+		});
+}
+
+bool remove_netiso_device()
+{
+	if (!g_netiso_device)
+	{
+		return true;
+	}
+	if (!fs::set_virtual_device(std::string{rpcs3::ios::netiso_device::registry_name},
+		stx::shared_ptr<fs::device_base>{}))
+	{
+		return false;
+	}
+	g_netiso_device = stx::null_ptr;
+	return true;
 }
 
 void emit_log(int32_t level, std::string_view message)
@@ -1056,7 +1129,7 @@ extern "C" uint32_t rpcs3_ios_abi_version(void) noexcept
 
 extern "C" const char* rpcs3_ios_build_info(void) noexcept
 {
-	return "{\"abi\":29,\"frontend\":\"ios\",\"upstream\":\"fdcfded8dfd3060af66bda0a3ac4635458980038\",\"llvm\":\"ca7933e47d3a3451d81e72ac174dcb5aa28b59d1\",\"jit\":\"sealed-arena\",\"renderer\":\"vulkan-moltenvk\",\"moltenvk\":\"1.4.2\",\"ffmpeg\":\"8.1.1\",\"audio\":\"remoteio\",\"input\":\"gamecontroller-multiplayer-rumble\",\"games\":\"pkg-rap-iso-zip-folder-updates-runtime-patches-library-delete-cache-management-trophies-big-picture\",\"settings\":\"global-and-per-game-cfg-root-catalog-title-database-recommendations-presets\",\"rpcn\":\"servers-account-social-online\",\"performance\":\"fps-cpu-rsx-memory\",\"lifecycle\":\"pause-resume-stop-big-picture\",\"media_codecs\":true}";
+	return "{\"abi\":30,\"frontend\":\"ios\",\"upstream\":\"fdcfded8dfd3060af66bda0a3ac4635458980038\",\"llvm\":\"ca7933e47d3a3451d81e72ac174dcb5aa28b59d1\",\"jit\":\"sealed-arena\",\"renderer\":\"vulkan-moltenvk\",\"moltenvk\":\"1.4.2\",\"ffmpeg\":\"8.1.1\",\"audio\":\"remoteio\",\"input\":\"gamecontroller-multiplayer-rumble\",\"games\":\"pkg-rap-iso-zip-folder-netiso-updates-runtime-patches-library-delete-cache-management-trophies-big-picture\",\"settings\":\"global-and-per-game-cfg-root-catalog-title-database-recommendations-presets\",\"rpcn\":\"servers-account-social-online\",\"performance\":\"fps-cpu-rsx-memory-netiso\",\"lifecycle\":\"pause-resume-stop-big-picture\",\"media_codecs\":true}";
 }
 
 extern "C" rpcs3_ios_status rpcs3_ios_initialize(const rpcs3_ios_config* config) noexcept
@@ -2033,6 +2106,176 @@ extern "C" rpcs3_ios_status rpcs3_ios_enumerate_games(
 		set_error("Unknown exception while enumerating installed games");
 	}
 	return RPCS3_IOS_INTERNAL_ERROR;
+}
+
+extern "C" rpcs3_ios_status rpcs3_ios_netiso_connect(
+	const char* host,
+	uint16_t port) noexcept
+{
+	std::lock_guard lock(g_api_mutex);
+	const std::string requested_host = host ? host : "";
+	if (!valid_netiso_host(requested_host))
+	{
+		set_error("NETISO requires a valid hostname or numeric address");
+		return RPCS3_IOS_INVALID_ARGUMENT;
+	}
+	if (const auto result = rpcs3::ios::validate_idle_operation_contract(
+		g_lifecycle.state(), current_emulation_state()); result != RPCS3_IOS_OK)
+	{
+		set_error("Stop emulation before connecting or changing a NETISO server");
+		return result;
+	}
+
+	try
+	{
+		rpcs3::ios::netiso::endpoint endpoint{
+			requested_host,
+			port ? port : rpcs3::ios::netiso::default_port,
+		};
+		auto candidate = stx::make_shared<rpcs3::ios::netiso_device>(endpoint);
+		std::vector<rpcs3::ios::netiso::directory_entry> root_entries;
+		std::string error;
+		if (!candidate->list_remote("/", root_entries, error))
+		{
+			set_error(std::move(error));
+			return RPCS3_IOS_NETISO_CONNECTION_FAILED;
+		}
+
+		stx::shared_ptr<fs::device_base> previous;
+		if (g_netiso_device)
+		{
+			previous = fs::set_virtual_device(
+				std::string{rpcs3::ios::netiso_device::registry_name},
+				stx::shared_ptr<fs::device_base>{});
+			if (!previous)
+			{
+				set_error("Unable to replace the active NETISO virtual filesystem");
+				return RPCS3_IOS_INTERNAL_ERROR;
+			}
+		}
+
+		if (!fs::set_virtual_device(
+			std::string{rpcs3::ios::netiso_device::registry_name}, candidate))
+		{
+			if (previous)
+			{
+				fs::set_virtual_device(
+					std::string{rpcs3::ios::netiso_device::registry_name},
+					std::move(previous));
+			}
+			set_error("Unable to register the NETISO virtual filesystem");
+			return RPCS3_IOS_INTERNAL_ERROR;
+		}
+
+		g_netiso_device = std::move(candidate);
+		rpcs3::ios::reset_netiso_statistics();
+		emit_log(4, fmt::format("Connected NETISO server %s:%u with %u root entries",
+			requested_host, endpoint.port, root_entries.size()));
+		return RPCS3_IOS_OK;
+	}
+	catch (const std::exception& error)
+	{
+		set_error(error.what());
+	}
+	catch (...)
+	{
+		set_error("Unknown exception while connecting the NETISO server");
+	}
+	return RPCS3_IOS_NETISO_CONNECTION_FAILED;
+}
+
+extern "C" rpcs3_ios_status rpcs3_ios_netiso_disconnect(void) noexcept
+{
+	std::lock_guard lock(g_api_mutex);
+	if (const auto result = rpcs3::ios::validate_idle_operation_contract(
+		g_lifecycle.state(), current_emulation_state()); result != RPCS3_IOS_OK)
+	{
+		set_error("Stop emulation before disconnecting the NETISO server");
+		return result;
+	}
+	if (!remove_netiso_device())
+	{
+		set_error("Unable to remove the NETISO virtual filesystem");
+		return RPCS3_IOS_INTERNAL_ERROR;
+	}
+	emit_log(4, "Disconnected NETISO server");
+	return RPCS3_IOS_OK;
+}
+
+extern "C" rpcs3_ios_status rpcs3_ios_enumerate_netiso_games(
+	rpcs3_ios_netiso_game_callback callback,
+	void* user_context) noexcept
+{
+	std::lock_guard lock(g_api_mutex);
+	if (!callback)
+	{
+		set_error("NETISO game enumeration requires a callback");
+		return RPCS3_IOS_INVALID_ARGUMENT;
+	}
+	if (g_lifecycle.state() != RPCS3_IOS_STATE_READY)
+	{
+		set_error("RPCS3Core must be ready before enumerating NETISO games");
+		return RPCS3_IOS_INVALID_STATE;
+	}
+	if (!g_netiso_device)
+	{
+		set_error("Connect a NETISO server before enumerating remote games");
+		return RPCS3_IOS_NETISO_NOT_CONFIGURED;
+	}
+
+	try
+	{
+		std::string error;
+		const auto games = rpcs3::ios::enumerate_netiso_games(*g_netiso_device, error);
+		if (!error.empty())
+		{
+			set_error(std::move(error));
+			return RPCS3_IOS_NETISO_CONNECTION_FAILED;
+		}
+		for (const auto& game : games)
+		{
+			const rpcs3_ios_netiso_game_info info{
+				sizeof(rpcs3_ios_netiso_game_info),
+				static_cast<uint32_t>(game.kind),
+				game.size,
+				game.remote_path.c_str(),
+				game.display_name.c_str(),
+			};
+			callback(user_context, &info);
+		}
+		return RPCS3_IOS_OK;
+	}
+	catch (const std::exception& error)
+	{
+		set_error(error.what());
+	}
+	catch (...)
+	{
+		set_error("Unknown exception while enumerating NETISO games");
+	}
+	return RPCS3_IOS_NETISO_CONNECTION_FAILED;
+}
+
+extern "C" rpcs3_ios_status rpcs3_ios_get_netiso_metrics(
+	rpcs3_ios_netiso_metrics* metrics) noexcept
+{
+	if (!metrics || metrics->struct_size < sizeof(rpcs3_ios_netiso_metrics))
+	{
+		set_error("NETISO metrics require a current-sized output structure");
+		return RPCS3_IOS_INVALID_ARGUMENT;
+	}
+	const auto snapshot = rpcs3::ios::capture_netiso_statistics();
+	*metrics = {
+		sizeof(rpcs3_ios_netiso_metrics),
+		0,
+		snapshot.remote_bytes,
+		snapshot.logical_bytes,
+		snapshot.cached_bytes,
+		snapshot.remote_reads,
+		snapshot.cache_hits,
+		snapshot.reconnects,
+	};
+	return RPCS3_IOS_OK;
 }
 
 extern "C" rpcs3_ios_status rpcs3_ios_enumerate_trophies(
@@ -3860,6 +4103,11 @@ extern "C" rpcs3_ios_status rpcs3_ios_boot_big_picture_mode(void) noexcept
 		set_error("Attach a valid iOS Metal display surface before booting Big Picture Mode");
 		return RPCS3_IOS_INVALID_STATE;
 	}
+	guest_session_claim session_claim;
+	if (!acquire_guest_session(session_claim))
+	{
+		return RPCS3_IOS_INVALID_STATE;
+	}
 
 	try
 	{
@@ -3872,6 +4120,7 @@ extern "C" rpcs3_ios_status rpcs3_ios_boot_big_picture_mode(void) noexcept
 			return RPCS3_IOS_BOOT_FAILED;
 		}
 
+		session_claim.retain();
 		emit_log(4, "Big Picture Mode boot request completed");
 		return RPCS3_IOS_OK;
 	}
@@ -3912,6 +4161,11 @@ extern "C" rpcs3_ios_status rpcs3_ios_boot_vsh(void) noexcept
 			set_error("PlayStation 3 firmware is missing vsh/module/vsh.self");
 			return RPCS3_IOS_BOOT_FAILED;
 		}
+		guest_session_claim session_claim;
+		if (!acquire_guest_session(session_claim))
+		{
+			return RPCS3_IOS_INVALID_STATE;
+		}
 
 		emit_log(4, "Booting the PlayStation 3 XMB from installed firmware");
 		prepare_rpcn_for_guest_boot();
@@ -3925,6 +4179,7 @@ extern "C" rpcs3_ios_status rpcs3_ios_boot_vsh(void) noexcept
 			return RPCS3_IOS_BOOT_FAILED;
 		}
 
+		session_claim.retain();
 		emit_log(4, "PlayStation 3 XMB boot request completed");
 		return RPCS3_IOS_OK;
 	}
@@ -3979,6 +4234,11 @@ extern "C" rpcs3_ios_status rpcs3_ios_boot_game(const char* title_id) noexcept
 			set_error(fmt::format("Installed game not found: %s", requested_title_id));
 			return RPCS3_IOS_GAME_NOT_FOUND;
 		}
+		guest_session_claim session_claim;
+		if (!acquire_guest_session(session_claim))
+		{
+			return RPCS3_IOS_INVALID_STATE;
+		}
 
 		emit_log(4, fmt::format("Booting installed game %s (%s)", game->title, game->title_id));
 		prepare_rpcn_for_guest_boot();
@@ -3992,6 +4252,7 @@ extern "C" rpcs3_ios_status rpcs3_ios_boot_game(const char* title_id) noexcept
 			return RPCS3_IOS_BOOT_FAILED;
 		}
 
+		session_claim.retain();
 		emit_log(4, fmt::format("Installed game boot request completed: %s", game->title_id));
 		return RPCS3_IOS_OK;
 	}
@@ -4002,6 +4263,77 @@ extern "C" rpcs3_ios_status rpcs3_ios_boot_game(const char* title_id) noexcept
 	catch (...)
 	{
 		set_error("Unknown exception while booting the installed game");
+	}
+
+	Emu.SetForceBoot(false);
+	return RPCS3_IOS_BOOT_FAILED;
+}
+
+extern "C" rpcs3_ios_status rpcs3_ios_boot_netiso_game(const char* remote_path) noexcept
+{
+	std::lock_guard lock(g_api_mutex);
+	if (!remote_path || !remote_path[0])
+	{
+		set_error("A NETISO remote game path is required");
+		return RPCS3_IOS_INVALID_ARGUMENT;
+	}
+	if (const auto result = rpcs3::ios::validate_idle_operation_contract(
+		g_lifecycle.state(), current_emulation_state()); result != RPCS3_IOS_OK)
+	{
+		set_error("RPCS3Core must be ready and emulation stopped before booting a NETISO game");
+		return result;
+	}
+	if (!g_display_surface.snapshot().valid())
+	{
+		set_error("Attach a valid iOS Metal display surface before booting a NETISO game");
+		return RPCS3_IOS_INVALID_STATE;
+	}
+	if (!g_netiso_device)
+	{
+		set_error("Connect a NETISO server before booting a remote game");
+		return RPCS3_IOS_NETISO_NOT_CONFIGURED;
+	}
+
+	try
+	{
+		rpcs3::ios::netiso_game_metadata metadata;
+		std::string error;
+		if (!rpcs3::ios::inspect_netiso_game(*g_netiso_device, remote_path, metadata, error))
+		{
+			set_error(std::move(error));
+			return RPCS3_IOS_NETISO_GAME_INVALID;
+		}
+		guest_session_claim session_claim;
+		if (!acquire_guest_session(session_claim))
+		{
+			return RPCS3_IOS_INVALID_STATE;
+		}
+
+		emit_log(4, fmt::format("Booting NETISO game %s (%s), virtual image %llu bytes",
+			metadata.title, metadata.title_id,
+			static_cast<unsigned long long>(metadata.size)));
+		prepare_rpcn_for_guest_boot();
+		Emu.DeactivateBigPictureMode();
+		Emu.SetForceBoot(true);
+		const game_boot_result result = Emu.BootGame(metadata.virtual_path, metadata.title_id);
+		if (result != game_boot_result::no_errors)
+		{
+			Emu.SetForceBoot(false);
+			set_error(fmt::format("NETISO game boot failed: %s", result));
+			return RPCS3_IOS_BOOT_FAILED;
+		}
+
+		session_claim.retain();
+		emit_log(4, fmt::format("NETISO game boot request completed: %s", metadata.title_id));
+		return RPCS3_IOS_OK;
+	}
+	catch (const std::exception& error)
+	{
+		set_error(error.what());
+	}
+	catch (...)
+	{
+		set_error("Unknown exception while booting a NETISO game");
 	}
 
 	Emu.SetForceBoot(false);
@@ -4197,6 +4529,7 @@ extern "C" rpcs3_ios_status rpcs3_ios_stop_emulation(void) noexcept
 	{
 		// An explicit wrapper stop leaves the full-screen session. It must not
 		// trigger upstream's automatic game-to-Big-Picture return callback.
+		g_guest_session_claimed.store(false, std::memory_order_release);
 		Emu.DeactivateBigPictureMode();
 		Emu.SetForceBoot(false);
 		if (Emu.GetStatus(false) == system_state::stopped)
@@ -4243,6 +4576,7 @@ extern "C" rpcs3_ios_status rpcs3_ios_shutdown(void) noexcept
 	}
 	g_accept_display_surfaces = false;
 	g_accept_pad_state = false;
+	g_guest_session_claimed = false;
 	rpcs3::ios::shared_pad_states().clear();
 	rpcs3::ios::shared_pad_feedback().clear();
 	try
@@ -4265,6 +4599,10 @@ extern "C" rpcs3_ios_status rpcs3_ios_shutdown(void) noexcept
 			g_emu_started = false;
 		}
 		g_rpcn_client.reset();
+		if (!remove_netiso_device())
+		{
+			emit_log(3, "Unable to remove NETISO virtual filesystem during shutdown");
+		}
 		g_cfg_rpcn.clear_runtime_credentials();
 		g_display_surface.clear();
 		const auto jit_stats = rpcs3::ios::jit::get_statistics();

@@ -38,6 +38,7 @@ void core_main_thread_callback(void*, rpcs3_ios_main_thread_task task, void* tas
 
 @property(atomic, readwrite, getter=isReady) BOOL ready;
 @property(atomic, copy, readwrite) NSArray<NSDictionary<NSString*, id>*>* games;
+@property(atomic, copy, readwrite) NSArray<NSDictionary<NSString*, id>*>* netISOGames;
 
 - (void)emit:(NSString*)line;
 
@@ -74,6 +75,24 @@ static void game_enumeration_callback(void* user_context, const rpcs3_ios_game_i
         @"path": string_from_utf8(game->path),
         @"bootable": @(game->bootable != 0),
         @"size": @(game->size_on_disk),
+        @"remote": @NO,
+    }];
+}
+
+static void netiso_game_enumeration_callback(void* user_context, const rpcs3_ios_netiso_game_info* game)
+{
+    if (!game)
+        return;
+    NSMutableArray* games = (__bridge NSMutableArray*)user_context;
+    const BOOL folder = game->kind == RPCS3_IOS_NETISO_GAME_EXTRACTED_FOLDER;
+    [games addObject:@{
+        @"titleID": @"NETISO",
+        @"title": string_from_utf8(game->display_name),
+        @"version": folder ? @"NAS folder" : @"NAS ISO",
+        @"path": string_from_utf8(game->remote_path),
+        @"bootable": @YES,
+        @"size": @(game->size),
+        @"remote": @YES,
     }];
 }
 
@@ -82,6 +101,9 @@ static void game_enumeration_callback(void* user_context, const rpcs3_ios_game_i
     dispatch_queue_t _coreQueue;
     dispatch_queue_t _controlQueue;
     ARMSX3CoreLogHandler _logHandler;
+    uint64_t _lastNetISOBytes;
+    CFAbsoluteTime _lastNetISOSample;
+    double _netISOMegabitsPerSecond;
 }
 
 - (instancetype)initWithLogHandler:(ARMSX3CoreLogHandler)logHandler
@@ -93,6 +115,7 @@ static void game_enumeration_callback(void* user_context, const rpcs3_ios_game_i
         _controlQueue = dispatch_queue_create("com.thec0de.armsx3ios.control", DISPATCH_QUEUE_SERIAL);
         _logHandler = [logHandler copy];
         _games = @[];
+        _netISOGames = @[];
     }
     return self;
 }
@@ -264,6 +287,42 @@ static void game_enumeration_callback(void* user_context, const rpcs3_ios_game_i
     });
 }
 
+- (void)connectNetISOHost:(NSString*)host
+                     port:(uint16_t)port
+               completion:(ARMSX3CoreCompletion)completion
+{
+    dispatch_async(_coreQueue, ^{
+        @autoreleasepool
+        {
+            const rpcs3_ios_status connect_status = rpcs3_ios_netiso_connect(host.UTF8String, port);
+            if (connect_status != RPCS3_IOS_OK)
+            {
+                [self finish:completion succeeded:NO message:last_core_error(connect_status)];
+                return;
+            }
+
+            NSMutableArray* games = [NSMutableArray array];
+            const rpcs3_ios_status enumerate_status = rpcs3_ios_enumerate_netiso_games(
+                netiso_game_enumeration_callback, (__bridge void*)games);
+            if (enumerate_status != RPCS3_IOS_OK)
+            {
+                [self finish:completion succeeded:NO message:last_core_error(enumerate_status)];
+                return;
+            }
+            [games sortUsingComparator:^NSComparisonResult(NSDictionary* left, NSDictionary* right) {
+                return [left[@"title"] localizedCaseInsensitiveCompare:right[@"title"]];
+            }];
+            self.netISOGames = games;
+            self->_lastNetISOBytes = 0;
+            self->_lastNetISOSample = CFAbsoluteTimeGetCurrent();
+            self->_netISOMegabitsPerSecond = 0.0;
+            [self finish:completion succeeded:YES
+                message:[NSString stringWithFormat:@"NETISO connected | %lu streamed title%@",
+                    (unsigned long)games.count, games.count == 1 ? @"" : @"s"]];
+        }
+    });
+}
+
 - (void)runJITSelfTestWithCompletion:(ARMSX3CoreCompletion)completion
 {
     dispatch_async(_coreQueue, ^{
@@ -281,6 +340,17 @@ static void game_enumeration_callback(void* user_context, const rpcs3_ios_game_i
         const rpcs3_ios_status status = rpcs3_ios_boot_game(titleID.UTF8String);
         [self finish:completion succeeded:status == RPCS3_IOS_OK
             message:status == RPCS3_IOS_OK ? [NSString stringWithFormat:@"Boot request completed: %@", titleID] : last_core_error(status)];
+    });
+}
+
+- (void)bootNetISOPath:(NSString*)remotePath completion:(ARMSX3CoreCompletion)completion
+{
+    dispatch_async(_coreQueue, ^{
+        const rpcs3_ios_status status = rpcs3_ios_boot_netiso_game(remotePath.UTF8String);
+        [self finish:completion succeeded:status == RPCS3_IOS_OK
+            message:status == RPCS3_IOS_OK
+                ? [NSString stringWithFormat:@"NETISO boot request completed: %@", remotePath.lastPathComponent]
+                : last_core_error(status)];
     });
 }
 
@@ -367,6 +437,24 @@ static void game_enumeration_callback(void* user_context, const rpcs3_ios_game_i
         [result appendFormat:@" | %.1f FPS", metrics.frames_per_second];
     if (metrics.valid_fields & RPCS3_IOS_PERFORMANCE_MEMORY_VALID)
         [result appendFormat:@" | %.0f MiB", metrics.memory_used_bytes / (1024.0 * 1024.0)];
+
+    rpcs3_ios_netiso_metrics netiso{};
+    netiso.struct_size = sizeof(netiso);
+    if (rpcs3_ios_get_netiso_metrics(&netiso) == RPCS3_IOS_OK && netiso.remote_bytes)
+    {
+        const CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
+        const CFAbsoluteTime elapsed = now - _lastNetISOSample;
+        if (_lastNetISOSample > 0.0 && elapsed > 0.20 && netiso.remote_bytes >= _lastNetISOBytes)
+        {
+            _netISOMegabitsPerSecond = ((netiso.remote_bytes - _lastNetISOBytes) * 8.0) / (elapsed * 1000000.0);
+            _lastNetISOBytes = netiso.remote_bytes;
+            _lastNetISOSample = now;
+        }
+        [result appendFormat:@" | NET %.1f Mbps %.0f MiB R%llu",
+            _netISOMegabitsPerSecond,
+            netiso.remote_bytes / (1024.0 * 1024.0),
+            (unsigned long long)netiso.reconnects];
+    }
     return result;
 }
 

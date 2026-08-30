@@ -16,11 +16,16 @@
 @property(nonatomic, strong) UIProgressView* progressView;
 @property(nonatomic, strong) UITableView* gameTable;
 @property(nonatomic, strong) UITextView* logView;
+@property(nonatomic, strong) UITextField* netISOHostField;
+@property(nonatomic, strong) UITextField* netISOPortField;
 @property(nonatomic, strong) NSTimer* statusTimer;
 @property(nonatomic, copy) NSArray<NSDictionary<NSString*, id>*>* games;
 @property(nonatomic) BOOL pickingFirmware;
 @property(nonatomic) uint64_t touchButtons;
 @property(nonatomic, strong) NSMutableArray<UIButton*>* touchControls;
+@property(nonatomic, strong) NSMutableDictionary<NSNumber*, NSNumber*>* touchPressStarted;
+@property(nonatomic, strong) NSMutableDictionary<NSNumber*, NSNumber*>* touchReleaseTokens;
+@property(nonatomic) NSUInteger touchEventSequence;
 
 @end
 
@@ -32,6 +37,8 @@
     self.view.backgroundColor = [UIColor colorWithRed:0.018 green:0.027 blue:0.045 alpha:1.0];
     self.games = @[];
     self.touchControls = [NSMutableArray array];
+    self.touchPressStarted = [NSMutableDictionary dictionary];
+    self.touchReleaseTokens = [NSMutableDictionary dictionary];
 
     __weak ARMSX3ViewController* weak_self = self;
     self.core = [[ARMSX3CoreSession alloc] initWithLogHandler:^(NSString* line) {
@@ -52,7 +59,7 @@
     [scroll addSubview:stack];
 
     UILabel* title = [[UILabel alloc] init];
-    title.text = @"ARMSX3 iOS Core Test";
+    title.text = @"ARMSX3 iOS Core Test v0.5";
     title.textColor = UIColor.whiteColor;
     title.font = [UIFont systemFontOfSize:24.0 weight:UIFontWeightBlack];
     [stack addArrangedSubview:title];
@@ -77,7 +84,7 @@
 
     UIStackView* first_row = [self buttonRow:@[
         [self button:@"Install Firmware" action:@selector(pickFirmware)],
-        [self button:@"Import Game" action:@selector(pickGame)],
+        [self button:@"Import Local Copy" action:@selector(pickGame)],
     ]];
     [stack addArrangedSubview:first_row];
 
@@ -93,8 +100,32 @@
     ]];
     [stack addArrangedSubview:third_row];
 
+    UILabel* netiso_label = [[UILabel alloc] init];
+    netiso_label.text = @"NETISO streaming (standard ps3netsrv)";
+    netiso_label.textColor = [UIColor colorWithWhite:0.82 alpha:1.0];
+    netiso_label.font = [UIFont systemFontOfSize:13.0 weight:UIFontWeightBold];
+    [stack addArrangedSubview:netiso_label];
+
+    NSUserDefaults* defaults = NSUserDefaults.standardUserDefaults;
+    self.netISOHostField = [self textFieldWithPlaceholder:@"Server host or IP"];
+    self.netISOHostField.text = [defaults stringForKey:@"ARMSX3NetISOHost"] ?: @"";
+    self.netISOHostField.keyboardType = UIKeyboardTypeNumbersAndPunctuation;
+    self.netISOPortField = [self textFieldWithPlaceholder:@"Port"];
+    NSInteger saved_port = [defaults integerForKey:@"ARMSX3NetISOPort"];
+    self.netISOPortField.text = [NSString stringWithFormat:@"%ld", (long)(saved_port ?: 38008)];
+    self.netISOPortField.keyboardType = UIKeyboardTypeNumberPad;
+    UIButton* connect_netiso = [self button:@"Connect + Scan NAS" action:@selector(connectNetISO)];
+    UIStackView* netiso_row = [[UIStackView alloc] initWithArrangedSubviews:@[
+        self.netISOHostField, self.netISOPortField, connect_netiso,
+    ]];
+    netiso_row.axis = UILayoutConstraintAxisHorizontal;
+    netiso_row.spacing = 8.0;
+    [self.netISOPortField.widthAnchor constraintEqualToConstant:74.0].active = YES;
+    [connect_netiso.widthAnchor constraintEqualToConstant:142.0].active = YES;
+    [stack addArrangedSubview:netiso_row];
+
     UILabel* library_label = [[UILabel alloc] init];
-    library_label.text = @"Installed titles (tap to boot)";
+    library_label.text = @"[NAS] titles stream directly; Import Local Copy uses iPhone storage";
     library_label.textColor = [UIColor colorWithWhite:0.82 alpha:1.0];
     library_label.font = [UIFont systemFontOfSize:13.0 weight:UIFontWeightBold];
     [stack addArrangedSubview:library_label];
@@ -164,6 +195,26 @@
     [button addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];
     [button.heightAnchor constraintEqualToConstant:42.0].active = YES;
     return button;
+}
+
+- (UITextField*)textFieldWithPlaceholder:(NSString*)placeholder
+{
+    UITextField* field = [[UITextField alloc] init];
+    field.backgroundColor = [UIColor colorWithRed:0.055 green:0.085 blue:0.13 alpha:1.0];
+    field.textColor = UIColor.whiteColor;
+    field.tintColor = [UIColor colorWithRed:0.20 green:0.78 blue:0.66 alpha:1.0];
+    field.attributedPlaceholder = [[NSAttributedString alloc] initWithString:placeholder
+        attributes:@{ NSForegroundColorAttributeName: [UIColor colorWithWhite:0.52 alpha:1.0] }];
+    field.font = [UIFont monospacedSystemFontOfSize:12.0 weight:UIFontWeightMedium];
+    field.layer.cornerRadius = 9.0;
+    field.autocapitalizationType = UITextAutocapitalizationTypeNone;
+    field.autocorrectionType = UITextAutocorrectionTypeNo;
+    field.spellCheckingType = UITextSpellCheckingTypeNo;
+    field.clearButtonMode = UITextFieldViewModeWhileEditing;
+    field.leftView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 10, 1)];
+    field.leftViewMode = UITextFieldViewModeAlways;
+    [field.heightAnchor constraintEqualToConstant:42.0].active = YES;
+    return field;
 }
 
 - (UIStackView*)buttonRow:(NSArray<UIButton*>*)buttons
@@ -256,9 +307,46 @@
         [weak_self appendLog:message];
         if (!succeeded)
             return;
-        weak_self.games = weak_self.core.games;
-        [weak_self.gameTable reloadData];
+        [weak_self reloadDisplayedGames];
     }];
+}
+
+- (void)connectNetISO
+{
+    [self.view endEditing:YES];
+    NSString* host = [self.netISOHostField.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    NSInteger port = self.netISOPortField.text.integerValue;
+    if (!host.length || port < 1 || port > 65535)
+    {
+        self.stateLabel.text = @"Enter a NETISO host and valid port";
+        return;
+    }
+
+    NSUserDefaults* defaults = NSUserDefaults.standardUserDefaults;
+    [defaults setObject:host forKey:@"ARMSX3NetISOHost"];
+    [defaults setInteger:port forKey:@"ARMSX3NetISOPort"];
+    self.stateLabel.text = [NSString stringWithFormat:@"Connecting to NETISO %@:%ld...", host, (long)port];
+    __weak ARMSX3ViewController* weak_self = self;
+    [self.core connectNetISOHost:host port:(uint16_t)port completion:^(BOOL succeeded, NSString* message) {
+        weak_self.stateLabel.text = message;
+        weak_self.stateLabel.textColor = succeeded
+            ? [UIColor colorWithRed:0.25 green:0.88 blue:0.68 alpha:1.0]
+            : [UIColor colorWithRed:1.0 green:0.30 blue:0.28 alpha:1.0];
+        [weak_self appendLog:message];
+        if (succeeded)
+            [weak_self reloadDisplayedGames];
+    }];
+}
+
+- (void)reloadDisplayedGames
+{
+    NSMutableArray<NSDictionary<NSString*, id>*>* games = [NSMutableArray arrayWithArray:self.core.games];
+    [games addObjectsFromArray:self.core.netISOGames];
+    [games sortUsingComparator:^NSComparisonResult(NSDictionary* left, NSDictionary* right) {
+        return [left[@"title"] localizedCaseInsensitiveCompare:right[@"title"]];
+    }];
+    self.games = games;
+    [self.gameTable reloadData];
 }
 
 - (void)runJITTest
@@ -306,7 +394,16 @@
         cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:identifier];
     NSDictionary* game = self.games[(NSUInteger)indexPath.row];
     cell.textLabel.text = game[@"title"];
-    cell.detailTextLabel.text = [NSString stringWithFormat:@"%@ | %@", game[@"titleID"], game[@"version"]];
+    NSNumber* size = game[@"size"];
+    if ([game[@"remote"] boolValue] && size.unsignedLongLongValue)
+    {
+        cell.detailTextLabel.text = [NSString stringWithFormat:@"[NAS] %@ | %.2f GiB",
+            game[@"version"], size.unsignedLongLongValue / (1024.0 * 1024.0 * 1024.0)];
+    }
+    else
+    {
+        cell.detailTextLabel.text = [NSString stringWithFormat:@"%@ | %@", game[@"titleID"], game[@"version"]];
+    }
     cell.textLabel.textColor = UIColor.whiteColor;
     cell.detailTextLabel.textColor = [UIColor colorWithWhite:0.62 alpha:1.0];
     cell.backgroundColor = UIColor.clearColor;
@@ -321,10 +418,26 @@
     self.stateLabel.text = [NSString stringWithFormat:@"Booting %@...", game[@"title"]];
     [self attachDisplay];
     __weak ARMSX3ViewController* weak_self = self;
-    [self.core bootTitleID:title_id completion:^(BOOL succeeded, NSString* message) {
-        weak_self.stateLabel.text = message;
-        [weak_self appendLog:message];
-    }];
+    if ([game[@"remote"] boolValue])
+    {
+        [self.core bootNetISOPath:game[@"path"] completion:^(BOOL succeeded, NSString* message) {
+            weak_self.stateLabel.text = message;
+            weak_self.stateLabel.textColor = succeeded
+                ? [UIColor colorWithRed:0.25 green:0.88 blue:0.68 alpha:1.0]
+                : [UIColor colorWithRed:1.0 green:0.30 blue:0.28 alpha:1.0];
+            [weak_self appendLog:message];
+        }];
+    }
+    else
+    {
+        [self.core bootTitleID:title_id completion:^(BOOL succeeded, NSString* message) {
+            weak_self.stateLabel.text = message;
+            weak_self.stateLabel.textColor = succeeded
+                ? [UIColor colorWithRed:0.25 green:0.88 blue:0.68 alpha:1.0]
+                : [UIColor colorWithRed:1.0 green:0.30 blue:0.28 alpha:1.0];
+            [weak_self appendLog:message];
+        }];
+    }
 }
 
 - (void)updateRuntimeStatus
@@ -455,16 +568,34 @@
 
 - (void)touchDown:(UIButton*)sender
 {
-    self.touchButtons |= (uint64_t)sender.tag;
+    NSNumber* key = @((uint64_t)sender.tag);
+    self.touchReleaseTokens[key] = @(++self.touchEventSequence);
+    self.touchPressStarted[key] = @(CACurrentMediaTime());
+    self.touchButtons |= key.unsignedLongLongValue;
     sender.transform = CGAffineTransformMakeScale(0.90, 0.90);
     [self pushTouchPad];
 }
 
 - (void)touchUp:(UIButton*)sender
 {
-    self.touchButtons &= ~((uint64_t)sender.tag);
-    sender.transform = CGAffineTransformIdentity;
-    [self pushTouchPad];
+    // Keep fast taps visible across at least several guest pad polls. Heavy
+    // first-run LLVM work can otherwise consume an entire short touch pulse.
+    static const CFTimeInterval minimum_press_duration = 0.12;
+    NSNumber* key = @((uint64_t)sender.tag);
+    const CFTimeInterval started = [self.touchPressStarted[key] doubleValue];
+    const CFTimeInterval remaining = MAX(0.0, minimum_press_duration - (CACurrentMediaTime() - started));
+    const NSUInteger token = ++self.touchEventSequence;
+    self.touchReleaseTokens[key] = @(token);
+    __weak ARMSX3ViewController* weak_self = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(remaining * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        ARMSX3ViewController* strong_self = weak_self;
+        if (!strong_self || [strong_self.touchReleaseTokens[key] unsignedIntegerValue] != token)
+            return;
+        strong_self.touchButtons &= ~key.unsignedLongLongValue;
+        [strong_self.touchPressStarted removeObjectForKey:key];
+        sender.transform = CGAffineTransformIdentity;
+        [strong_self pushTouchPad];
+    });
 }
 
 - (void)pushTouchPad

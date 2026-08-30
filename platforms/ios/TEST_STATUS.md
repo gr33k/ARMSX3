@@ -9,7 +9,7 @@ Source:
   `e422589696e480b52c3e083e34e18ccd5a74cc0f`
 - ARMSX3 comparison revision:
   `a74a0f3e045f064515a5fa48643e66ab386577d3`
-- Core ABI: `29`
+- Core ABI: `30`
 
 Pinned dependencies:
 
@@ -23,8 +23,9 @@ Pinned dependencies:
 Static core gates:
 
 - PASS: all `1,292` Ninja edges built with `-j2` for arm64 iOS 15.0.
-- PASS: `libRPCS3Core.dylib` is a 78,017,952-byte arm64 Mach-O with minimum
-  iOS 15.0 and the expected ABI 29 C exports.
+- PASS: the current `libRPCS3Core.dylib` is a 77,454,672-byte arm64 Mach-O with
+  minimum iOS 15.0 and the expected ABI 30 C exports, including all five
+  NETISO entry points.
 - PASS: Vulkan/RSX, MoltenVK Metal surface, iOS audio, iOS pad input, firmware
   installer, ISO/ZIP/folder/package import, game library, and LLVM recompilers
   are present in the real core.
@@ -48,8 +49,96 @@ Static app/package gates:
   `extended-virtual-addressing`, `increased-memory-limit`, and `get-task-allow`.
 - PASS: packaged binary scan found no private Mac path, NAS path, or private
   server address.
-- V0.3 BUILD PENDING: app version `0.3.0`/build `2` adds an explicit native
+- PASS: app version `0.3.0`/build `2` added an explicit native
   `Open XMB` action through the existing `rpcs3_ios_boot_vsh()` export.
+
+V0.4 NETISO feasibility artifact:
+
+- Name: `ARMSX3-iOS-Core-Test-v0.4.ipa`
+- Compressed size: `27,969,563` bytes
+- SHA-256:
+  `aac015054a66c459d99947e4a6968607f640d19e9abfd69ef2c02039d5478b6f`
+- PASS: incremental two-job core compilation and one-job UIKit compilation
+  completed for arm64 iOS 15.0. The adaptive iOS PPU path also compiled: it
+  uses up to three direct short-lived workers with healthy process headroom,
+  two under moderate pressure, and one under severe pressure, then joins every
+  worker before linking or gameplay. It does not alter live-game scheduling.
+- PASS: the ABI 30 core exports connect, disconnect, enumerate, direct boot,
+  and lock-independent NETISO metrics. The read-only virtual device implements
+  standard ps3netsrv list/stat/open/offset-read, finite timeouts, reconnect-once
+  identity checking, split/ordinary PS3 ISO enumeration, and server-generated
+  virtual ISO paths for extracted `/GAMES` folders.
+- PASS: the standalone app takes a user-entered host and port, persists them in
+  `NSUserDefaults`, merges remote and local title rows, directly boots a remote
+  row, and reports NETISO Mbps, transferred MiB, and reconnect count next to
+  FPS and process memory. No private host is compiled into the artifact.
+- PASS: independent archive readback verified ZIP integrity, deep strict
+  signing, TrollStore JIT/memory entitlements, bundle
+  `com.thec0de.armsx3ios`, version `0.4.0` build `3`, local-network usage text,
+  arm64/iOS 15.0 app and core, all five ABI exports, and zero private Mac, NAS,
+  or `192.168.10.*` strings in either executable.
+- PASS PHYSICAL: exact v0.4 bytes connected from the iOS 15.3 phone to the
+  user-selected standard ps3netsrv endpoint, enumerated remote titles, and
+  directly booted both extracted `/GAMES` content and ISO content without a
+  full-disc local import.
+- PASS PHYSICAL: `The Walking Dead` cold-compiled all 100 PPU modules with
+  three workers and about 3.8 GiB headroom, crossed linking, and reached a
+  live guest loop. Syscall counters continued increasing with no NETISO fatal,
+  crash, or Jetsam event.
+- FAIL PHYSICAL / INPUT: the v0.4 on-screen `START` tap did not advance `The
+  Walking Dead`. Pad 0 was bound to `iOS Game Controller 1`, and the ABI bit is
+  mapped correctly, so v0.5 holds every short touch pulse for at least 120 ms
+  across multiple guest pad polls. This fix is not physically qualified yet.
+- PARTIAL PHYSICAL / GTA V: remote title `BLES01807` reached the Duplex logo,
+  loaded its child SELF, and used RPCS3's continuous executable handoff. It
+  did not yet prove sustained demanding 3D gameplay.
+- FAIL PHYSICAL / UNCHARTED 1 MEDIA: `BCES00065` mounted remotely but its
+  `/PS3_GAME/USRDIR/EBOOT.BIN` was rejected as invalid or unsupported. This is
+  title/release executable compatibility or encryption, not proof of a NETISO
+  transport failure.
+- PARTIAL PHYSICAL / UNCHARTED 2: `BCUS98123` mounted, scanned, and began a
+  cold 111-module PPU compilation with three workers and about 3.5 GiB
+  headroom. Gameplay has not yet been reported.
+- OPEN TRANSPORT/CORE ERROR: the user saw a resource/NETISO temporarily
+  unavailable message several times before Uncharted 2 proceeded. No matching
+  socket failure has yet been isolated, so reconnect exhaustion and guest
+  `0x80010001` must both remain open rather than guessing at the source.
+- FAIL PHYSICAL / SESSION RACE: v0.4 briefly exposed `stopped` during GTA's
+  child SELF handoff, allowing another external boot to collide with the live
+  title. V0.5 owns one guest session across executable transitions and rejects
+  another boot until explicit Stop; physical retest remains pending.
+- PRIMARY FEASIBILITY GATE: run Red Dead Redemption and at least one GTA-class
+  or comparably demanding 3D title long enough to measure sustained FPS/frame
+  pacing, CPU/RSX utilization, process memory, thermals, NETISO throughput and
+  reconnects, compile time, audio, input, Stop latency, and second-boot cache
+  reuse. Do not integrate this core into EmuHub based on package or menu proof.
+- PRODUCT BOUNDARY: retain this standalone iPhone emulator as a supported
+  harness/product and integrate EmuHub later through the same ABI 30 core,
+  avoiding separate emulator behavior or a second NETISO implementation.
+
+V0.5 input/session candidate:
+
+- Name: `ARMSX3-iOS-Core-Test-v0.5.ipa`
+- Compressed size: `27,973,081` bytes
+- SHA-256:
+  `9e411d4f83ad4c1604e878a617f7d1b223baaddfdb192136f600608826abe7cd`
+- PASS: the unsigned source core and app-embedded core matched SHA-256
+  `a46b62f69ca8560fc00ca8c3bd98e90d67755e8c03b3a23d8995f5eeddfa0214`
+  before signing. A build-time Xcode target-directory embed script prevents a
+  newly labeled app from silently retaining a stale core dylib.
+- PASS: ZIP readback, deep strict signing, arm64 app/core, iOS 15.0 minimum,
+  version `0.5.0` build `4`, local-network privacy text, all five NETISO ABI
+  exports, and executable path-leak scans passed.
+- FIX READY / PHYSICAL PENDING: short touch pulses remain asserted for at least
+  120 ms, with tokenized delayed releases so a stale release cannot cancel a
+  newer press. Retest `START`, face buttons, D-pad chords, and rapid re-presses.
+- FIX READY / PHYSICAL PENDING: one externally launched guest session remains
+  claimed across continuous child executable handoffs. A second title must be
+  rejected until explicit Stop, and Stop must make the library bootable again.
+- UI FOLLOW-UP: the production standalone landscape controller will reuse the
+  accepted EmuHub PS2 visual language, continuous analog sticks, exact artwork
+  hit geometry, and an accessible menu overlay. V0.5 intentionally retains the
+  transparent debug controls so the input/session fix can be isolated first.
 
 V0.2 artifact:
 
@@ -158,23 +247,28 @@ Physical gates:
   `42 * 3 + 7 = 133`; downstream PPU compilation is positive JIT evidence but
   is not a substitute for that exact gate.
 - PASS: real gameplay rendering is physically proven for Bejeweled 3 and Zuma.
+- PASS PHYSICAL: v0.4's adaptive path cold-compiled all 100 Walking Dead PPU
+  modules with three direct workers, transitioned through linking, and reached
+  a live guest loop. Uncharted 2 independently selected three workers for 111
+  cold modules; its final transition remains pending.
 - PENDING: audio accuracy, sustained FPS, thermals, V0.3 second-boot cache
   reuse, multi-touch accuracy, Stop during compilation, clean Stop/relaunch,
   and XMB evidence.
 
-The current result is a physically launched real-core IPA with real Bejeweled 3
-and Zuma gameplay. V0.3 has crossed the former finalization stall for a newly
-compiled title, while V0.2 remains the captured failure baseline. Qualification
-remains open until the path-scrubbed V0.3 replacement passes artifact audits and
-the device passes clean-install first boot, measured multi-touch, audio,
-sustained FPS, Stop, relaunch, and XMB gates.
+The current result is a physically launched real-core IPA with local Bejeweled
+3/Zuma gameplay and physical remote NETISO execution through a live Walking
+Dead guest loop. GTA V reached its child-executable handoff and Uncharted 2
+reached cold compilation, but neither is sustained demanding-3D proof. V0.5 is
+the audited START/session-race candidate; qualification remains open until its
+exact bytes pass physical input, Stop/relaunch, intermittent network-error, Red
+Dead direct-stream, sustained FPS, audio, thermals, and cache-reuse gates.
 
 ## Storage and network-disc checkpoint
 
 - PASS: the live private-NAS standard `ps3netsrv` endpoint on port `38008`
   accepted NETISO directory, stat, open, and random-read commands from an
   independent client probe.
-- FAIL: importing Red Dead Redemption still requires a full local copy and the
+- HISTORICAL V0.3 FAIL: importing Red Dead Redemption requires a full local copy and the
   device reported `5.52 GiB more needed`. This is the physical storage failure
   that the read-only NETISO virtual filesystem must eliminate; no workaround is
   claimed in the current IPA.
@@ -188,9 +282,11 @@ sustained FPS, Stop, relaunch, and XMB gates.
   available and `6.17 GiB` total data available. The current importer requires
   free space for a complete local copy, so the 9.52 GiB Red Dead ISO cannot be
   imported on that device.
-- REQUIRED: implement a read-only NETISO virtual filesystem so local EmuHub
-  storage and user-entered standard `ps3netsrv` servers share one streaming
-  client. Keep saves, patches, PPU objects, shaders, and title metadata local.
+- PHYSICAL PARTIAL PASS: v0.4's read-only NETISO virtual filesystem booted both
+  extracted and ISO titles while leaving saves, patches, PPU/SPU objects,
+  shaders, and metadata local. Red Dead itself still requires a direct `[NAS]`
+  row boot; the local `Import` button intentionally requires full-copy space
+  and is not the NETISO path.
 - REQUIRED: EmuHub's admin panel remains authoritative for managed host paths,
   Docker bind mounts, source ordering, and enable/disable state. See
   `PS3_NETWORK_DISC_DESIGN.md`.

@@ -17,7 +17,7 @@ extern "C" {
 #define RPCS3_IOS_EXPORT
 #endif
 
-#define RPCS3_IOS_ABI_VERSION 29u
+#define RPCS3_IOS_ABI_VERSION 30u
 
 typedef enum rpcs3_ios_status
 {
@@ -66,7 +66,10 @@ typedef enum rpcs3_ios_status
     RPCS3_IOS_SETTINGS_PRESET_INVALID = 42,
     RPCS3_IOS_SETTINGS_PRESET_EXISTS = 43,
     RPCS3_IOS_SETTINGS_PRESET_NOT_FOUND = 44,
-    RPCS3_IOS_GAME_CACHE_FAILED = 45
+    RPCS3_IOS_GAME_CACHE_FAILED = 45,
+    RPCS3_IOS_NETISO_NOT_CONFIGURED = 46,
+    RPCS3_IOS_NETISO_CONNECTION_FAILED = 47,
+    RPCS3_IOS_NETISO_GAME_INVALID = 48
 } rpcs3_ios_status;
 
 typedef enum rpcs3_ios_state
@@ -223,6 +226,41 @@ typedef struct rpcs3_ios_game_info
 typedef void (*rpcs3_ios_game_callback)(
     void* user_context,
     const rpcs3_ios_game_info* game);
+
+typedef enum rpcs3_ios_netiso_game_kind
+{
+    RPCS3_IOS_NETISO_GAME_ISO = 1,
+    RPCS3_IOS_NETISO_GAME_EXTRACTED_FOLDER = 2
+} rpcs3_ios_netiso_game_kind;
+
+// Strings remain valid only for the duration of the synchronous callback.
+// Extracted folders report zero size until ps3netsrv creates their virtual ISO.
+typedef struct rpcs3_ios_netiso_game_info
+{
+    uint32_t struct_size;
+    uint32_t kind;
+    uint64_t size;
+    const char* remote_path;
+    const char* display_name;
+} rpcs3_ios_netiso_game_info;
+
+typedef void (*rpcs3_ios_netiso_game_callback)(
+    void* user_context,
+    const rpcs3_ios_netiso_game_info* game);
+
+// Monotonic counters reset after a successful NETISO connection. Callers can
+// compute current throughput from deltas without taking the lifecycle lock.
+typedef struct rpcs3_ios_netiso_metrics
+{
+    uint32_t struct_size;
+    uint32_t reserved;
+    uint64_t remote_bytes;
+    uint64_t logical_bytes;
+    uint64_t cached_bytes;
+    uint64_t remote_reads;
+    uint64_t cache_hits;
+    uint64_t reconnects;
+} rpcs3_ios_netiso_metrics;
 
 typedef enum rpcs3_ios_game_cache_type
 {
@@ -547,6 +585,19 @@ RPCS3_IOS_EXPORT rpcs3_ios_status rpcs3_ios_download_game_update_package(
 RPCS3_IOS_EXPORT rpcs3_ios_status rpcs3_ios_enumerate_games(
     rpcs3_ios_game_callback callback,
     void* user_context) RPCS3_IOS_NOEXCEPT;
+// Connects one standard ps3netsrv endpoint and registers its read-only virtual
+// filesystem. Reconfiguration and disconnect require stopped emulation.
+RPCS3_IOS_EXPORT rpcs3_ios_status rpcs3_ios_netiso_connect(
+    const char* host,
+    uint16_t port) RPCS3_IOS_NOEXCEPT;
+RPCS3_IOS_EXPORT rpcs3_ios_status rpcs3_ios_netiso_disconnect(void) RPCS3_IOS_NOEXCEPT;
+RPCS3_IOS_EXPORT rpcs3_ios_status rpcs3_ios_enumerate_netiso_games(
+    rpcs3_ios_netiso_game_callback callback,
+    void* user_context) RPCS3_IOS_NOEXCEPT;
+RPCS3_IOS_EXPORT rpcs3_ios_status rpcs3_ios_boot_netiso_game(
+    const char* remote_path) RPCS3_IOS_NOEXCEPT;
+RPCS3_IOS_EXPORT rpcs3_ios_status rpcs3_ios_get_netiso_metrics(
+    rpcs3_ios_netiso_metrics* metrics) RPCS3_IOS_NOEXCEPT;
 // Enumerates registered trophy data for one installed title and the active PS3
 // user. The read-only path never generates or repairs TROPUSR.DAT.
 RPCS3_IOS_EXPORT rpcs3_ios_status rpcs3_ios_enumerate_trophies(
