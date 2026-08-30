@@ -376,8 +376,8 @@ std::string database_config_for_guest_boot(const std::string& title_id)
 
 	if (is_uncharted_1)
 	{
-		merged.video.resolution_scale_percent.set(75);
-		emit_log(4, "Applying iOS Uncharted 1 performance profile: Resolution Scale = 75%");
+		merged.video.resolution_scale_percent.set(50);
+		emit_log(4, "Applying iOS Uncharted 1 memory-safe profile: Resolution Scale = 50%");
 	}
 	else
 	{
@@ -4474,6 +4474,11 @@ extern "C" rpcs3_ios_status rpcs3_ios_get_performance_metrics(
 	}
 
 	return RPCS3_IOS_INTERNAL_ERROR;
+}
+
+extern "C" void rpcs3_ios_notify_memory_warning(void) noexcept
+{
+	rpcs3::ios::notify_process_memory_warning();
 }
 
 extern "C" rpcs3_ios_status rpcs3_ios_pause_emulation(void) noexcept

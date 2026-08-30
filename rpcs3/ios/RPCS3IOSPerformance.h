@@ -2,7 +2,7 @@
 
 #include "RPCS3IOS.h"
 
-#include "util/types.hpp"
+#include <cstdint>
 
 namespace rpcs3::ios
 {
@@ -13,15 +13,21 @@ void reset_performance_metrics();
 // Called from the RSX presentation thread after a frame has been queued for
 // display. rsx_load is RPCS3's approximate renderer utilization, not a Metal
 // device-wide hardware counter.
-void record_presented_frame(u32 rsx_load) noexcept;
+void record_presented_frame(std::uint32_t rsx_load) noexcept;
 
 // Returns the current dirty-memory headroom before iOS applies the process
 // limit. The query is intentionally cheap enough for frame-boundary sampling.
-u64 available_process_memory_headroom() noexcept;
+std::uint64_t available_process_memory_headroom() noexcept;
 
 // Returns unused pages from all malloc zones to iOS after a bounded transient
 // allocation workload, such as an LLVM compilation batch.
-u64 relieve_process_memory_pressure() noexcept;
+std::uint64_t relieve_process_memory_pressure() noexcept;
+
+// UIKit can observe system-wide pressure before the process-headroom query
+// crosses a local threshold. The wrapper publishes that warning atomically and
+// the RSX frame boundary consumes it without taking the lifecycle lock.
+void notify_process_memory_warning() noexcept;
+bool consume_process_memory_warning() noexcept;
 
 // Produces an observational snapshot without taking the serialized lifecycle
 // lock. The caller supplies struct_size for ABI validation.

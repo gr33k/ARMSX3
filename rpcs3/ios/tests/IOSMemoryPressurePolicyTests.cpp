@@ -27,17 +27,20 @@ int main()
 	static_assert(get_soft_vram_memory_pressure(75.f) == process_memory_pressure::low);
 	static_assert(get_soft_vram_memory_pressure(76.f) == process_memory_pressure::moderate);
 	static_assert(get_soft_vram_memory_pressure(91.f) == process_memory_pressure::severe);
-	static_assert(get_soft_vram_memory_pressure(183.f) == process_memory_pressure::severe);
+	static_assert(get_soft_vram_memory_pressure(149.f) == process_memory_pressure::severe);
+	static_assert(get_soft_vram_memory_pressure(150.f) == process_memory_pressure::fatal);
+	static_assert(get_soft_vram_memory_pressure(183.f) == process_memory_pressure::fatal);
 
 	static_assert(get_process_memory_pressure(2'000 * process_memory_mib) == process_memory_pressure::low);
 	static_assert(get_process_memory_pressure(1536 * process_memory_mib) == process_memory_pressure::moderate);
 	static_assert(get_process_memory_pressure(1024 * process_memory_mib) == process_memory_pressure::severe);
-	static_assert(get_process_memory_pressure(512 * process_memory_mib) == process_memory_pressure::fatal);
+	static_assert(get_process_memory_pressure(768 * process_memory_mib) == process_memory_pressure::fatal);
 	static_assert(get_process_memory_pressure(0) == process_memory_pressure::fatal);
 
 	// A state relaxes only after recovering the extra 256 MiB hysteresis band.
 	static_assert(get_process_memory_pressure(700 * process_memory_mib, process_memory_pressure::fatal) == process_memory_pressure::fatal);
-	static_assert(get_process_memory_pressure(900 * process_memory_mib, process_memory_pressure::fatal) == process_memory_pressure::severe);
+	static_assert(get_process_memory_pressure(900 * process_memory_mib, process_memory_pressure::fatal) == process_memory_pressure::fatal);
+	static_assert(get_process_memory_pressure(1100 * process_memory_mib, process_memory_pressure::fatal) == process_memory_pressure::severe);
 	static_assert(get_process_memory_pressure(1200 * process_memory_mib, process_memory_pressure::severe) == process_memory_pressure::severe);
 	static_assert(get_process_memory_pressure(1400 * process_memory_mib, process_memory_pressure::severe) == process_memory_pressure::moderate);
 	static_assert(get_process_memory_pressure(1700 * process_memory_mib, process_memory_pressure::moderate) == process_memory_pressure::moderate);

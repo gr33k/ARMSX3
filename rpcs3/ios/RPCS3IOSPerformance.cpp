@@ -124,6 +124,7 @@ private:
 };
 
 performance_registry g_performance_registry;
+std::atomic_bool g_process_memory_warning_pending{false};
 }
 
 namespace rpcs3::ios
@@ -131,6 +132,7 @@ namespace rpcs3::ios
 void reset_performance_metrics()
 {
 	g_performance_registry.reset();
+	g_process_memory_warning_pending.store(false, std::memory_order_release);
 }
 
 void record_presented_frame(u32 rsx_load) noexcept
@@ -154,6 +156,16 @@ u64 relieve_process_memory_pressure() noexcept
 #else
 	return 0;
 #endif
+}
+
+void notify_process_memory_warning() noexcept
+{
+	g_process_memory_warning_pending.store(true, std::memory_order_release);
+}
+
+bool consume_process_memory_warning() noexcept
+{
+	return g_process_memory_warning_pending.exchange(false, std::memory_order_acq_rel);
 }
 
 rpcs3_ios_status capture_performance_metrics(rpcs3_ios_performance_metrics* metrics)

@@ -49,6 +49,7 @@ namespace vk
 		rsx::problem_severity last_reclaim_severity = rsx::problem_severity::low;
 		std::chrono::steady_clock::time_point next_report{};
 		std::chrono::steady_clock::time_point next_reclaim{};
+		std::chrono::steady_clock::time_point next_heap_relief{};
 	} g_ios_process_memory_pressure;
 
 	static rsx::problem_severity to_problem_severity(rpcs3::ios::process_memory_pressure severity)
@@ -253,6 +254,7 @@ namespace vk
 
 #ifdef RPCS3_IOS
 		const u64 process_headroom = rpcs3::ios::available_process_memory_headroom();
+		const bool system_memory_warning = rpcs3::ios::consume_process_memory_warning();
 		g_ios_process_memory_pressure.process_severity = rpcs3::ios::get_process_memory_pressure(
 			process_headroom,
 			g_ios_process_memory_pressure.process_severity);
@@ -332,6 +334,14 @@ namespace vk
 		load_severity = std::max(load_severity, process_severity);
 
 #ifdef RPCS3_IOS
+		if (system_memory_warning)
+		{
+			// UIKit has system-wide visibility that os_proc_available_memory lacks.
+			// One fatal frame-boundary pass is safer than waiting for Jetsam to
+			// reduce the process-local allowance below its emergency threshold.
+			load_severity = rsx::problem_severity::fatal;
+		}
+
 		const auto previous_severity = std::exchange(g_ios_process_memory_pressure.combined_severity, load_severity);
 		const auto now = std::chrono::steady_clock::now();
 		const bool severity_changed = previous_severity != load_severity;
@@ -379,6 +389,7 @@ namespace vk
 #ifdef RPCS3_IOS
 			g_ios_process_memory_pressure.last_reclaim_severity = rsx::problem_severity::low;
 			g_ios_process_memory_pressure.next_reclaim = {};
+			g_ios_process_memory_pressure.next_heap_relief = {};
 #endif
 			return;
 		}
@@ -393,6 +404,18 @@ namespace vk
 		}
 
 		vmm_handle_memory_pressure(load_severity);
+		if (load_severity >= rsx::problem_severity::fatal &&
+			now >= g_ios_process_memory_pressure.next_heap_relief)
+		{
+			const u64 released = rpcs3::ios::relieve_process_memory_pressure();
+			g_ios_process_memory_pressure.next_heap_relief = now + std::chrono::seconds(1);
+			if (released)
+			{
+				rsx_log.warning(
+					"iOS fatal memory recovery returned %llu MiB of unused malloc pages",
+					released / rpcs3::ios::process_memory_mib);
+			}
+		}
 		g_ios_process_memory_pressure.last_reclaim_severity = load_severity;
 		const auto interval = load_severity >= rsx::problem_severity::fatal
 			? std::chrono::milliseconds(250)

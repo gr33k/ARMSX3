@@ -384,12 +384,21 @@ V0.9 live-3D pressure candidate:
   `b25596b075085fbcb7f968ca6445943a8c4defdfaaed4fffa37a4d64444e7e60`;
   the packaged ad-hoc signed core SHA-256 is
   `e25478f2b284e1445601a522ed326b17317f5068723faa453c4276133c0e78d1`.
-- REQUIRED PHYSICAL GATE: install these exact V0.9 bytes and return to the same
-  Uncharted 1 live-gameplay scene. Record sustained FPS, memory, CPU/RSX load,
-  thermals, and syslog pressure cadence for at least five minutes, then Stop and
-  repeat to measure shader/pipeline-cache reuse. Success requires eliminating
-  the old per-frame fatal drain without a crash, corrupted rendering, or input
-  regression; static/package evidence does not claim a speed pass.
+- FAIL PHYSICAL / JETSAM: the exact V0.9 package was installed and reached the
+  Uncharted 1 live-3D scene twice. The first failure report at
+  `2026-08-30 08:40:45 -0700` names `ARMSX3iOS` as `largestProcess`, records
+  `rpages=255556` with 16 KiB pages (approximately `3.90 GiB` resident), and
+  terminates PID `11088` for `vm-pageshortage` with only `2005` system pages
+  free. An immediately preceding Jetsam snapshot recorded approximately
+  `3.47 GiB` resident while iOS killed background daemons for
+  `vm-pageshortage` and `compressor-thrashing`.
+- FAIL PHYSICAL / REPRODUCED: the second exact-package run reached the same
+  streamed gameplay path as PID `11352`. USB syslog captured UIKit memory
+  warnings at `08:42:35.850544` and `08:42:42.028695`, repeated texture-cache
+  eviction warnings, interruption/reconnection of the GameController daemon
+  under system pressure, and then device-log disconnection at termination.
+  This disproves the V0.9 assumption that 500 ms severe reclaim alone could
+  bound the active 3D working set. V0.9 must not be promoted.
 
 V0.2 artifact:
 

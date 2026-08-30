@@ -295,7 +295,7 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
     [scroll addSubview:stack];
 
     UILabel* title = [[UILabel alloc] init];
-    title.text = @"ARMSX3 iOS Core Test v0.8";
+    title.text = @"ARMSX3 iOS Core Test v0.10";
     title.textColor = UIColor.whiteColor;
     title.font = [UIFont systemFontOfSize:24.0 weight:UIFontWeightBlack];
     [stack addArrangedSubview:title];
@@ -1328,6 +1328,12 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
         if (strong_self && strong_self.telemetryHideToken == token)
             strong_self.inputTelemetryLabel.hidden = YES;
     });
+}
+
+- (void)didReceiveMemoryWarning
+{
+    [super didReceiveMemoryWarning];
+    rpcs3_ios_notify_memory_warning();
 }
 
 - (void)dealloc

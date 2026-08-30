@@ -51,17 +51,24 @@ namespace rpcs3::ios
 	inline constexpr std::uint64_t process_headroom_moderate_exit = 1792 * process_memory_mib;
 	inline constexpr std::uint64_t process_headroom_severe_enter = 1024 * process_memory_mib;
 	inline constexpr std::uint64_t process_headroom_severe_exit = 1280 * process_memory_mib;
-	inline constexpr std::uint64_t process_headroom_fatal_enter = 512 * process_memory_mib;
-	inline constexpr std::uint64_t process_headroom_fatal_exit = 768 * process_memory_mib;
+	inline constexpr std::uint64_t process_headroom_fatal_enter = 768 * process_memory_mib;
+	inline constexpr std::uint64_t process_headroom_fatal_exit = 1024 * process_memory_mib;
 	inline constexpr std::uint64_t texture_cache_quota_moderate = 384 * process_memory_mib;
 	inline constexpr std::uint64_t texture_cache_quota_severe = 256 * process_memory_mib;
 	inline constexpr std::uint64_t texture_cache_quota_fatal = 128 * process_memory_mib;
+	inline constexpr float soft_vram_fatal_percent = 150.f;
 
 	// The iOS VRAM budget is a proactive unified-memory target, not a hard heap
-	// ceiling. It can be exceeded legitimately, so only process headroom or a
-	// real allocation failure may escalate pressure to fatal.
+	// ceiling. Moderate overshoot can be legitimate, but the physical Uncharted
+	// run reached 183% and grew to the device's Jetsam limit. Reserve fatal
+	// recovery for extreme overshoot rather than invoking it on every frame above
+	// the ordinary 95% desktop threshold.
 	constexpr process_memory_pressure get_soft_vram_memory_pressure(float usage_percent)
 	{
+		if (usage_percent >= soft_vram_fatal_percent)
+		{
+			return process_memory_pressure::fatal;
+		}
 		if (usage_percent > 90.f)
 		{
 			return process_memory_pressure::severe;
