@@ -715,7 +715,10 @@ V0.14 signed candidate artifact:
   dense RSX fragment-program failure burst (`Unexpected instruction`, invalid
   registers, bad precision/scale, and unknown opcodes) followed by Metal
   warnings. Forced Multithreaded RSX is the leading V0.14-specific suspect and
-  requires an isolated physical candidate; this is not yet a proven fix.
+  requires an isolated physical candidate; this is not yet a proven fix. A
+  subsequent live observation after relaunch explicitly reconfirmed both the
+  green hue and block artifacts, with the green hue worse than the pre-V0.14
+  rendering.
 - FAIL PHYSICAL / UNCHARTED 3 RELAUNCH CLEANUP: exiting the reused V0.14 process
   unloaded the ISO and then terminated with
   `Verification failed (object: 0x0)`. The clean comparison process launched
@@ -791,9 +794,27 @@ V0.16 focused compatibility/render-isolation candidate:
   isolated A/B candidate, not a claimed renderer fix; RDR, GTA, and Uncharted
   1/2 keep their existing profiles.
 - PASS STATIC: the complete bounded iOS contract suite and incremental
-  two-worker `RPCS3Core` build pass. Package/sign/install and physical
-  Uncharted 3 menu/gameplay, GTA post-Duplex, Spider-Man 2, and TMNT gates remain
-  required.
+  two-worker `RPCS3Core` build pass. Physical Uncharted 3 menu/gameplay, GTA
+  post-Duplex, Spider-Man 2, and TMNT gates remain required.
+
+V0.16 signed candidate artifact:
+
+- Name: `ARMSX3-iOS-Core-Test-v0.16.ipa`
+- Source commit: `609c4f4b230a6695dc1d4af34a6b3db455f21f4b`
+- SHA-256:
+  `9c141f0d9a5c65f0b3350bd2c25723bb0de5d3c2a1ed898adad70fdd8f8f0f4b`
+- PASS STATIC: archive integrity, version `0.16.0` build `15`, strict deep
+  signing, required TrollStore JIT/unsigned-memory/extended-address/increased-
+  memory entitlements, arm64/iOS 15.0 metadata, bounded contract tests, and the
+  two-worker real-core build passed.
+- PASS TRANSFER: repository artifact, Desktop copy, and iCloud Drive copy have
+  the exact SHA-256 above. V0.14 and V0.15 remain available for controlled
+  rollback/comparison.
+- PENDING PHYSICAL: install these exact bytes and inspect the Uncharted 3 menu
+  before gameplay. Absence of the V0.14 green cast would isolate forced
+  Multithreaded RSX as that regression; the older square artifacts remain a
+  separate renderer failure until physically disproved. GTA post-Duplex and
+  Spider-Man 2/TMNT boot remain independent gates.
 
 V0.2 artifact:
 
