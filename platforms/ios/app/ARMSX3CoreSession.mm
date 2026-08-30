@@ -511,7 +511,11 @@ static void netiso_game_enumeration_callback(void* user_context, const rpcs3_ios
     uint32_t completed = 0;
     uint32_t total = 0;
     char stage[192]{};
-    rpcs3_ios_get_boot_progress(&completed, &total, stage, sizeof(stage));
+    if (state == RPCS3_IOS_EMULATION_STATE_LOADING ||
+        state == RPCS3_IOS_EMULATION_STATE_STARTING)
+    {
+        rpcs3_ios_get_boot_progress(&completed, &total, stage, sizeof(stage));
+    }
 
     rpcs3_ios_performance_metrics metrics{};
     metrics.struct_size = sizeof(metrics);

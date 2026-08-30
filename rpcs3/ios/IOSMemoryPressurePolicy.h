@@ -56,19 +56,14 @@ namespace rpcs3::ios
 	inline constexpr std::uint64_t texture_cache_quota_moderate = 384 * process_memory_mib;
 	inline constexpr std::uint64_t texture_cache_quota_severe = 256 * process_memory_mib;
 	inline constexpr std::uint64_t texture_cache_quota_fatal = 128 * process_memory_mib;
-	inline constexpr float soft_vram_fatal_percent = 150.f;
 
 	// The iOS VRAM budget is a proactive unified-memory target, not a hard heap
-	// ceiling. Moderate overshoot can be legitimate, but the physical Uncharted
-	// run reached 183% and grew to the device's Jetsam limit. Reserve fatal
-	// recovery for extreme overshoot rather than invoking it on every frame above
-	// the ordinary 95% desktop threshold.
+	// ceiling. Physical V0.10 evidence showed that treating allocator overshoot as
+	// fatal caused destructive texture eviction to oscillate around the target.
+	// Real process headroom, UIKit warnings, and allocation failures retain their
+	// independent fatal paths.
 	constexpr process_memory_pressure get_soft_vram_memory_pressure(float usage_percent)
 	{
-		if (usage_percent >= soft_vram_fatal_percent)
-		{
-			return process_memory_pressure::fatal;
-		}
 		if (usage_percent > 90.f)
 		{
 			return process_memory_pressure::severe;
@@ -78,6 +73,21 @@ namespace rpcs3::ios
 			return process_memory_pressure::moderate;
 		}
 		return process_memory_pressure::low;
+	}
+
+	// Reclaim is a frame-boundary synchronization point. Keep emergency recovery
+	// responsive while allowing useful caches to settle under nonfatal pressure.
+	constexpr std::uint32_t get_memory_reclaim_interval_ms(process_memory_pressure pressure)
+	{
+		switch (pressure)
+		{
+		case process_memory_pressure::low: return 0;
+		case process_memory_pressure::moderate: return 5000;
+		case process_memory_pressure::severe: return 2000;
+		case process_memory_pressure::fatal: return 250;
+		}
+
+		return 250;
 	}
 
 	constexpr process_memory_pressure get_process_memory_pressure(

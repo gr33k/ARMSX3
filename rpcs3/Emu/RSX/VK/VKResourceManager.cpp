@@ -65,6 +65,19 @@ namespace vk
 		return rsx::problem_severity::fatal;
 	}
 
+	static rpcs3::ios::process_memory_pressure to_process_memory_pressure(rsx::problem_severity severity)
+	{
+		switch (severity)
+		{
+		case rsx::problem_severity::low: return rpcs3::ios::process_memory_pressure::low;
+		case rsx::problem_severity::moderate: return rpcs3::ios::process_memory_pressure::moderate;
+		case rsx::problem_severity::severe: return rpcs3::ios::process_memory_pressure::severe;
+		case rsx::problem_severity::fatal: return rpcs3::ios::process_memory_pressure::fatal;
+		}
+
+		return rpcs3::ios::process_memory_pressure::fatal;
+	}
+
 	static const char* memory_severity_name(rsx::problem_severity severity)
 	{
 		switch (severity)
@@ -417,11 +430,9 @@ namespace vk
 			}
 		}
 		g_ios_process_memory_pressure.last_reclaim_severity = load_severity;
-		const auto interval = load_severity >= rsx::problem_severity::fatal
-			? std::chrono::milliseconds(250)
-			: load_severity >= rsx::problem_severity::severe
-				? std::chrono::milliseconds(500)
-				: std::chrono::milliseconds(1000);
+		const auto interval = std::chrono::milliseconds(
+			rpcs3::ios::get_memory_reclaim_interval_ms(
+				to_process_memory_pressure(load_severity)));
 		g_ios_process_memory_pressure.next_reclaim = now + interval;
 #else
 		vmm_handle_memory_pressure(load_severity);

@@ -377,7 +377,8 @@ std::string database_config_for_guest_boot(const std::string& title_id)
 	if (is_uncharted_1)
 	{
 		merged.video.resolution_scale_percent.set(50);
-		emit_log(4, "Applying iOS Uncharted 1 memory-safe profile: Resolution Scale = 50%");
+		merged.video.shader_compiler_threads_count.set(2);
+		emit_log(4, "Applying iOS Uncharted 1 profile: Resolution Scale = 50%, Shader Compiler Threads = 2");
 	}
 	else
 	{

@@ -8,6 +8,7 @@ using rpcs3::ios::process_memory_pressure;
 int main()
 {
 	using rpcs3::ios::get_llvm_compile_thread_limit;
+	using rpcs3::ios::get_memory_reclaim_interval_ms;
 	using rpcs3::ios::get_process_memory_pressure;
 	using rpcs3::ios::get_process_pressure_texture_cache_quota;
 	using rpcs3::ios::get_savestate_compression_thread_limit;
@@ -28,8 +29,12 @@ int main()
 	static_assert(get_soft_vram_memory_pressure(76.f) == process_memory_pressure::moderate);
 	static_assert(get_soft_vram_memory_pressure(91.f) == process_memory_pressure::severe);
 	static_assert(get_soft_vram_memory_pressure(149.f) == process_memory_pressure::severe);
-	static_assert(get_soft_vram_memory_pressure(150.f) == process_memory_pressure::fatal);
-	static_assert(get_soft_vram_memory_pressure(183.f) == process_memory_pressure::fatal);
+	static_assert(get_soft_vram_memory_pressure(150.f) == process_memory_pressure::severe);
+	static_assert(get_soft_vram_memory_pressure(183.f) == process_memory_pressure::severe);
+	static_assert(get_memory_reclaim_interval_ms(process_memory_pressure::low) == 0);
+	static_assert(get_memory_reclaim_interval_ms(process_memory_pressure::moderate) == 5000);
+	static_assert(get_memory_reclaim_interval_ms(process_memory_pressure::severe) == 2000);
+	static_assert(get_memory_reclaim_interval_ms(process_memory_pressure::fatal) == 250);
 
 	static_assert(get_process_memory_pressure(2'000 * process_memory_mib) == process_memory_pressure::low);
 	static_assert(get_process_memory_pressure(1536 * process_memory_mib) == process_memory_pressure::moderate);
