@@ -400,6 +400,44 @@ V0.9 live-3D pressure candidate:
   This disproves the V0.9 assumption that 500 ms severe reclaim alone could
   bound the active 3D working set. V0.9 must not be promoted.
 
+V0.10 Jetsam-resistance candidate:
+
+- Source revision: `fb59ab7654b8705c0ada40142cd08dacaaf660d5`
+- Name: `ARMSX3-iOS-Core-Test-v0.10.ipa`
+- Compressed size: `31,769,396` bytes
+- SHA-256:
+  `cd023265a4ca8a709576207b04f3922505198fe6235182e3294da42421f19ebb`
+- FIX READY / PHYSICAL PENDING: the extreme soft-VRAM boundary is now `150%`,
+  so the measured `183%` Uncharted condition receives fatal recovery while the
+  ordinary `95-149%` overshoot remains severe. Process headroom enters fatal at
+  `768 MiB` and remains there until it recovers above `1024 MiB`; this responds
+  before the prior `565 MiB` sample without restoring the old every-frame fatal
+  policy. Fatal frame-boundary reclaim remains capped at four passes per second.
+- FIX READY / PHYSICAL PENDING: UIKit memory warnings now cross an ABI 31,
+  lock-free core notification and force one immediate fatal RSX reclaim pass.
+  Fatal recovery can return unused malloc-zone pages to iOS no more than once
+  per second. This directly covers the two warnings captured before the V0.9
+  Jetsam while retaining direct allocation-failure recovery.
+- FIX READY / PHYSICAL PENDING: exact title `BCES00065` now receives a `50%`
+  internal resolution scale through the same reversible database profile. The
+  full output surface, aspect ratio, and controls remain unchanged; a user
+  title-specific configuration continues to take precedence.
+- PASS STATIC/PACKAGE: the complete lightweight iOS contract suite, focused
+  pressure thresholds, incremental two-worker arm64 core build, serial app
+  build, ABI export, ZIP readback, strict signatures, iOS 15.0 load command,
+  TrollStore JIT/unsigned-memory/extended-address/increased-memory entitlements,
+  version `0.10.0` build `9`, and private path/address scans passed. The
+  unsigned checkpoint core SHA-256 is
+  `1c096d4ca1bb5fae7e34490943b3d8fa43892e137a904b385deda4a98ae32d9a`;
+  the packaged ad-hoc signed core SHA-256 is
+  `cf59eba373fe35659c78bfe7d92723b205acda2ede980beb5d9bce07ccc31821`.
+- REQUIRED PHYSICAL GATE: install these exact V0.10 bytes and replay the same
+  Uncharted 1 live-3D scene for at least five minutes with USB syslog attached.
+  Acceptance requires no Jetsam/crash, no sustained fatal-reclaim loop, bounded
+  resident memory after streaming settles, responsive controls, and usable FPS.
+  Then Stop and relaunch once to verify cleanup and cache reuse. Build/package
+  evidence does not close this gate.
+
 V0.2 artifact:
 
 - Name: `ARMSX3-iOS-Core-Test-v0.2.ipa`
