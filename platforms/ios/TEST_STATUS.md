@@ -525,10 +525,59 @@ V0.12 bounded texture-recovery candidate:
 - PASS DISTRIBUTION: the audited IPA was copied to iCloud Drive as
   `ARMSX3-iOS-Core-Test-v0.12.ipa`; Desktop and destination SHA-256 readback are
   identical. Installation, launch, and gameplay remain physical gates.
-- REQUIRED PHYSICAL GATE: replay the exact Uncharted scene and compare FPS,
-  resident memory, graphics completeness, eviction count, memory warnings, and
-  stability against V0.11. A useful result requires sustained frame progress
-  without replacing the eviction lockup with unacceptable missing textures.
+- PASS PHYSICAL / EVICTION CADENCE: device inventory confirmed exact version
+  `0.12.0` build `11`. A 101-second USB sample from the same Uncharted 1
+  live-3D run recorded 13 texture-eviction batches, versus 389 batches in 403
+  seconds on V0.11. The first overlay sample measured `0.0 FPS` at `2734 MiB`,
+  a later sample measured `4.0 FPS` at `3312 MiB`, and a denser jungle scene
+  measured `6.9 FPS` at `3074 MiB`. The user could move through that scene and
+  observed brief peaks near `12 FPS`, where previous builds could not progress.
+- FAIL PHYSICAL / SUSTAINED PERFORMANCE: V0.12 still intermittently returned to
+  `0 FPS` and is not playable or promotable. A later 37-second USB sample
+  measured normalized CPU between `71.0%` and `79.3%`, stable severe memory
+  pressure near `1022-1029 MiB` process headroom, and repeated guest
+  `BATCHJOB: Waiting for batch job list 0 to finish` messages. NETISO remained
+  idle. This isolates the next candidate to SPU execution/compile scheduling
+  rather than transport or another unbounded texture-eviction loop.
+
+V0.13 Uncharted SPU-scheduling candidate:
+
+- Source revision: `8696f054f8f31fde47478364ed633a95ff7fd8bf`
+- Name: `ARMSX3-iOS-Core-Test-v0.13.ipa`
+- Compressed size: `31,769,699` bytes
+- SHA-256:
+  `a9af91a5326866217d1cc18d7a2b50ab7a0808bc6e7e7f66379beb10dd9546a6`
+- FIX READY / PHYSICAL PENDING: exact title `BCES00065` now resolves automatic
+  Mobile SPU Compile Scheduling to enabled after global, database, and custom
+  title settings are composed. An explicit user Enabled/Disabled selection
+  still takes precedence. On the six-thread A15, the two SPU compiler workers
+  therefore use the existing three-thread free floor instead of forcing one or
+  two gameplay SPUs into 200-microsecond waits while code compiles.
+- DIAGNOSTIC READY / PHYSICAL PENDING: the ten-second performance log now
+  reports active `SPU Compilers` and interval `SPU Compile-Throttle Waits`.
+  This is a lock-free counter on the existing wait branch; it does not add a
+  synchronous log to the SPU hot path. The boot policy log includes the title
+  ID and resolved `mobile_spu` value.
+- PASS STATIC/PACKAGE: the complete lightweight iOS contract suite, new
+  title-default and six-thread scheduling assertions, incremental two-worker
+  arm64 core build, serial app build, ZIP readback, deep strict signing, iOS
+  15.0 load commands, TrollStore JIT/unsigned-memory/extended-address/
+  increased-memory entitlements, version `0.13.0` build `12`, expected core
+  exports, and private path/address scans passed. The unsigned checkpoint core
+  SHA-256 is
+  `1f5f8dd5d97d0f83a28fb499bb19b329fb68d5b219068804b68cd9f26057d939`;
+  the packaged ad-hoc signed core SHA-256 is
+  `a09b7ac34ca72c2d44a8d8e89d93095439ac25937b7f57c784deec170f3e8785`.
+- PASS DISTRIBUTION: the audited IPA was copied to iCloud Drive as
+  `ARMSX3-iOS-Core-Test-v0.13.ipa`; Desktop and destination size/hash readback
+  are identical.
+- REQUIRED PHYSICAL GATE: install these exact bytes, confirm `0.13.0` build
+  `12`, and replay the same Uncharted jungle section. Capture boot policy,
+  `SPU Compilers`, throttle waits, FPS floor/average/peak, normalized CPU,
+  resident memory, eviction cadence, graphics completeness, memory warnings,
+  and stability. The candidate passes only with sustained frame progress and
+  fewer or shorter zero-FPS stalls; a package or a momentary FPS spike is not
+  qualification.
 
 V0.2 artifact:
 
