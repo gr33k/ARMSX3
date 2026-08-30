@@ -948,7 +948,9 @@ V0.18 physical Uncharted 3 result:
   100% resolution, one serialized shader compiler worker, Multithreaded RSX
   off, color-buffer read/write on, accurate RSX reservation access on, and
   asynchronous texture streaming off. U1, U2, Red Dead, GTA V, and unprofiled
-  titles retain their prior game settings.
+  titles retain their prior game settings. A post-boot diagnostic reports every
+  effective value after custom-config resolution; the prepared database profile
+  alone is not accepted as proof that these settings reached the renderer.
 - CACHE CONTROL FOR V0.19: iOS graphics cache generation 4 and
   `vk_pipeline_cache_ios_g4.bin` guarantee that the changed U3 rendering policy
   cannot consume V0.18 shader or driver records. This globally changes only the

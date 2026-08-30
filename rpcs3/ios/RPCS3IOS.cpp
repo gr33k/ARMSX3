@@ -400,7 +400,7 @@ std::string database_config_for_guest_boot(const std::string& title_id)
 	}
 
 	emit_log(4, fmt::format(
-		"Applying iOS title profile for {}: Resolution Scale = {}%, Shader Compiler Threads = {}, Multithreaded RSX = {}, Stub PPU Traps = {}, Write Color Buffers = {}, Read Color Buffers = {}, Accurate RSX Reservation Access = {}, Async Texture Streaming = {}",
+		"Prepared iOS title profile for {}: Resolution Scale = {}%, Shader Compiler Threads = {}, Multithreaded RSX = {}, Stub PPU Traps = {}, Write Color Buffers = {}, Read Color Buffers = {}, Accurate RSX Reservation Access = {}, Async Texture Streaming = {}",
 		title_id,
 		merged.video.resolution_scale_percent.get(),
 		merged.video.shader_compiler_threads_count.get(),
@@ -411,6 +411,26 @@ std::string database_config_for_guest_boot(const std::string& title_id)
 		merged.core.rsx_accurate_res_access.get(),
 		merged.video.vk.asynchronous_texture_streaming.get()));
 	return merged.to_string();
+}
+
+void emit_effective_mobile_profile_settings(std::string_view title_id)
+{
+	if (!rpcs3::ios::mobile_profile_for_title(title_id))
+	{
+		return;
+	}
+
+	emit_log(4, fmt::format(
+		"Effective iOS title settings for {}: Resolution Scale = {}%, Shader Compiler Threads = {}, Multithreaded RSX = {}, Stub PPU Traps = {}, Write Color Buffers = {}, Read Color Buffers = {}, Accurate RSX Reservation Access = {}, Async Texture Streaming = {}",
+		title_id,
+		g_cfg.video.resolution_scale_percent.get(),
+		g_cfg.video.shader_compiler_threads_count.get(),
+		g_cfg.video.multithreaded_rsx.get(),
+		g_cfg.core.stub_ppu_traps.get(),
+		g_cfg.video.write_color_buffers.get(),
+		g_cfg.video.read_color_buffers.get(),
+		g_cfg.core.rsx_accurate_res_access.get(),
+		g_cfg.video.vk.asynchronous_texture_streaming.get()));
 }
 
 rpcs3_ios_status validate_game_settings_target(const char* title_id, rpcs3::ios::installed_game* installed_game = nullptr)
@@ -4355,6 +4375,7 @@ extern "C" rpcs3_ios_status rpcs3_ios_boot_game(const char* title_id) noexcept
 		}
 
 		session_claim.retain();
+		emit_effective_mobile_profile_settings(game->title_id);
 		emit_log(4, fmt::format("Installed game boot request completed: %s", game->title_id));
 		return RPCS3_IOS_OK;
 	}
@@ -4426,6 +4447,7 @@ extern "C" rpcs3_ios_status rpcs3_ios_boot_netiso_game(const char* remote_path) 
 		}
 
 		session_claim.retain();
+		emit_effective_mobile_profile_settings(metadata.title_id);
 		emit_log(4, fmt::format("NETISO game boot request completed: %s", metadata.title_id));
 		return RPCS3_IOS_OK;
 	}
