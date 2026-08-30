@@ -12,5 +12,8 @@ int main()
 	static_assert(mobile_profile_for_title("BCES01175").shader_compiler_threads == 2);
 	static_assert(!mobile_profile_for_title("BCES01175").multithreaded_rsx);
 	static_assert(!mobile_profile_for_title("BCUS98233").multithreaded_rsx);
+	static_assert(is_uncharted_3_title("BCES01175"));
+	static_assert(is_uncharted_3_title("BCUS98233"));
+	static_assert(!is_uncharted_3_title("BCES00065"));
 	static_assert(!mobile_profile_for_title("BLUS31368"));
 }

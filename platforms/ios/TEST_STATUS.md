@@ -816,6 +816,28 @@ V0.16 signed candidate artifact:
   separate renderer failure until physically disproved. GTA post-Duplex and
   Spider-Man 2/TMNT boot remain independent gates.
 
+V0.16 physical Uncharted 3 result and V0.17 cache-isolation candidate:
+
+- PASS IDENTITY: the connected phone reported installed version `0.16.0` build
+  `15` for `com.thec0de.armsx3ios`; this was not a stale-package observation.
+- FAIL PHYSICAL: a direct device screenshot of `BCES01175` reproduced the same
+  severe green field and pink banding at approximately `14 FPS`, `2767 MiB`,
+  and `NET 0.0 Mbps`. Removing forced Multithreaded RSX alone therefore did not
+  visibly repair the already-running session.
+- CACHE CONFOUND: TrollStore upgraded the app in place and retained V0.14's
+  title shader records plus global Vulkan driver pipeline cache. V0.16 could
+  therefore recompile/reuse previously persisted corrupt graphics programs;
+  it did not provide a clean shader A/B despite the source-level profile split.
+- FIX READY FOR V0.17: only Uncharted 3 uses a new on-disk shader-cache
+  namespace and a new driver-pipeline-cache file. This forces one graphics-only
+  reconstruction while preserving firmware, PPU/SPU objects, saves, trophies,
+  game data, and every other title's caches. Multithreaded RSX remains disabled,
+  while 50% resolution and two shader workers remain unchanged.
+- REQUIRED: package/install the exact V0.17 bytes, verify the generation-2 cache
+  diagnostic, and inspect the menu before gameplay. If the green cast remains,
+  cached graphics are ruled out and the next isolated delta is MoltenVK shader
+  compression; periodic square artifacts remain a separate renderer defect.
+
 V0.2 artifact:
 
 - Name: `ARMSX3-iOS-Core-Test-v0.2.ipa`

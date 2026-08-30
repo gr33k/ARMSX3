@@ -20,6 +20,10 @@
 #include "Emu/RSX/Host/RSXDMAWriter.h"
 #include "Emu/RSX/NV47/HW/context_accessors.define.h"
 #include "Emu/Memory/vm_locking.h"
+#ifdef RPCS3_IOS
+#include "Emu/System.h"
+#include "ios/IOSGameProfilePolicy.h"
+#endif
 
 #include "../Program/SPIRVCommon.h"
 
@@ -618,7 +622,17 @@ VKGSRender::VKGSRender(utils::serial* ar) noexcept : GSRender(ar)
 	else
 		m_vertex_cache = std::make_unique<vk::weak_vertex_cache>();
 
-	m_shaders_cache = std::make_unique<vk::shader_cache>(*m_prog_buffer, "vulkan", "v1.95");
+	const char* shader_cache_version = "v1.95";
+#ifdef RPCS3_IOS
+	if (rpcs3::ios::is_uncharted_3_title(Emu.GetTitleID()))
+	{
+		// V0.14 persisted visibly corrupt U3 fragment programs. Keep the CPU
+		// caches intact while forcing a one-time graphics-only reconstruction.
+		shader_cache_version = "v1.95-ios-u3-g2";
+		rsx_log.notice("Using clean iOS Uncharted 3 shader cache generation 2.");
+	}
+#endif
+	m_shaders_cache = std::make_unique<vk::shader_cache>(*m_prog_buffer, "vulkan", shader_cache_version);
 
 	for (u32 i = 0; i < m_swapchain->get_swap_image_count(); ++i)
 	{

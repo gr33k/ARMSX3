@@ -39,6 +39,11 @@ constexpr bool is_grand_theft_auto_v_title(std::string_view title_id) noexcept
 	return title_id == "BLES01807" || title_id == "BLUS31156";
 }
 
+constexpr bool is_uncharted_3_title(std::string_view title_id) noexcept
+{
+	return title_id == "BCES01175" || title_id == "BCUS98233";
+}
+
 constexpr mobile_title_profile mobile_profile_for_title(std::string_view title_id) noexcept
 {
 	if (title_id == "BCES00065" || title_id == "BCUS98103" || title_id == "BCAS20024")
@@ -51,7 +56,7 @@ constexpr mobile_title_profile mobile_profile_for_title(std::string_view title_i
 		return {mobile_title_profile_kind::uncharted_2, 50, 2, true, 1};
 	}
 
-	if (title_id == "BCES01175" || title_id == "BCUS98233")
+	if (is_uncharted_3_title(title_id))
 	{
 		// V0.14's forced RSX offload produced deterministic fragment-program
 		// corruption on the physical A15. Keep the other mobile limits while
