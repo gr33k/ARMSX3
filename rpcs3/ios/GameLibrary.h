@@ -188,6 +188,7 @@ game_patch_install_result install_game_patch(
 game_delete_result delete_installed_game(std::string_view title_id);
 game_cache_result inspect_game_cache(std::string_view title_id);
 game_cache_result clear_game_cache(std::string_view title_id, game_cache_type type);
+game_cache_result clear_all_graphics_caches();
 bool is_valid_game_title_id(std::string_view title_id) noexcept;
 std::vector<installed_game> installed_games();
 std::optional<installed_game> find_installed_game(std::string_view title_id);

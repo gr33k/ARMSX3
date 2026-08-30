@@ -297,7 +297,7 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
     [scroll addSubview:stack];
 
     UILabel* title = [[UILabel alloc] init];
-    title.text = @"ARMSX3 iOS Core Test v0.17";
+    title.text = @"ARMSX3 iOS Core Test v0.18";
     title.textColor = UIColor.whiteColor;
     title.font = [UIFont systemFontOfSize:24.0 weight:UIFontWeightBlack];
     [stack addArrangedSubview:title];
@@ -380,6 +380,7 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
 
     UIStackView* third_row = [self buttonRow:@[
         [self button:@"Stop Emulation" action:@selector(stopGame)],
+        [self button:@"Rebuild Graphics Caches" action:@selector(confirmRebuildGraphicsCaches)],
     ]];
     [stack addArrangedSubview:third_row];
 
@@ -885,6 +886,33 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
         weak_self.stateLabel.text = message;
         [weak_self appendLog:message];
     }];
+}
+
+- (void)confirmRebuildGraphicsCaches
+{
+    UIAlertController* confirmation = [UIAlertController
+        alertControllerWithTitle:@"Rebuild Graphics Caches?"
+        message:@"Stop emulation first. This clears PS3 graphics shaders and Vulkan pipelines for every title. Firmware, CPU modules, saves, trophies, and games are preserved."
+        preferredStyle:UIAlertControllerStyleAlert];
+    [confirmation addAction:[UIAlertAction actionWithTitle:@"Cancel"
+        style:UIAlertActionStyleCancel handler:nil]];
+    __weak ARMSX3ViewController* weak_self = self;
+    [confirmation addAction:[UIAlertAction actionWithTitle:@"Rebuild"
+        style:UIAlertActionStyleDestructive handler:^(__unused UIAlertAction* action) {
+            ARMSX3ViewController* strong_self = weak_self;
+            if (!strong_self)
+                return;
+            strong_self.stateLabel.text = @"Clearing graphics caches...";
+            [strong_self.core rebuildGraphicsCachesWithCompletion:^(BOOL succeeded, NSString* message) {
+                strong_self.lastOperationMessage = message;
+                strong_self.stateLabel.text = message;
+                strong_self.stateLabel.textColor = succeeded
+                    ? [UIColor colorWithRed:0.25 green:0.88 blue:0.68 alpha:1.0]
+                    : [UIColor colorWithRed:1.0 green:0.30 blue:0.28 alpha:1.0];
+                [strong_self appendLog:message];
+            }];
+        }]];
+    [self presentViewController:confirmation animated:YES completion:nil];
 }
 
 - (NSInteger)tableView:(UITableView*)tableView numberOfRowsInSection:(NSInteger)section

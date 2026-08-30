@@ -1168,7 +1168,7 @@ extern "C" uint32_t rpcs3_ios_abi_version(void) noexcept
 
 extern "C" const char* rpcs3_ios_build_info(void) noexcept
 {
-	return "{\"abi\":30,\"frontend\":\"ios\",\"upstream\":\"fdcfded8dfd3060af66bda0a3ac4635458980038\",\"llvm\":\"ca7933e47d3a3451d81e72ac174dcb5aa28b59d1\",\"jit\":\"sealed-arena\",\"renderer\":\"vulkan-moltenvk\",\"moltenvk\":\"1.4.2\",\"ffmpeg\":\"8.1.1\",\"audio\":\"remoteio\",\"input\":\"gamecontroller-multiplayer-rumble\",\"games\":\"pkg-rap-iso-zip-folder-netiso-updates-runtime-patches-library-delete-cache-management-trophies-big-picture\",\"settings\":\"global-and-per-game-cfg-root-catalog-title-database-recommendations-presets\",\"rpcn\":\"servers-account-social-online\",\"performance\":\"fps-cpu-rsx-memory-netiso\",\"lifecycle\":\"pause-resume-stop-big-picture\",\"media_codecs\":true}";
+	return "{\"abi\":32,\"frontend\":\"ios\",\"upstream\":\"fdcfded8dfd3060af66bda0a3ac4635458980038\",\"llvm\":\"ca7933e47d3a3451d81e72ac174dcb5aa28b59d1\",\"jit\":\"sealed-arena\",\"renderer\":\"vulkan-moltenvk\",\"moltenvk\":\"1.4.2\",\"ffmpeg\":\"8.1.1\",\"audio\":\"remoteio\",\"input\":\"gamecontroller-multiplayer-rumble\",\"games\":\"pkg-rap-iso-zip-folder-netiso-updates-runtime-patches-library-delete-cache-management-trophies-big-picture\",\"settings\":\"global-and-per-game-cfg-root-catalog-title-database-recommendations-presets\",\"rpcn\":\"servers-account-social-online\",\"performance\":\"fps-cpu-rsx-memory-netiso\",\"lifecycle\":\"pause-resume-stop-big-picture\",\"media_codecs\":true}";
 }
 
 extern "C" rpcs3_ios_status rpcs3_ios_initialize(const rpcs3_ios_config* config) noexcept
@@ -2520,6 +2520,49 @@ extern "C" rpcs3_ios_status rpcs3_ios_clear_game_cache(
 	catch (...)
 	{
 		set_error("Unknown exception while clearing the game cache");
+	}
+	return RPCS3_IOS_GAME_CACHE_FAILED;
+}
+
+extern "C" rpcs3_ios_status rpcs3_ios_clear_graphics_caches(
+	uint64_t* bytes_removed) noexcept
+{
+	std::lock_guard lock(g_api_mutex);
+	if (bytes_removed)
+	{
+		*bytes_removed = 0;
+	}
+	if (!bytes_removed)
+	{
+		set_error("Graphics cache cleanup requires an output size");
+		return RPCS3_IOS_INVALID_ARGUMENT;
+	}
+	if (const auto result = rpcs3::ios::validate_idle_operation_contract(
+		g_lifecycle.state(), current_emulation_state()); result != RPCS3_IOS_OK)
+	{
+		set_error("Stop emulation before rebuilding graphics caches");
+		return result;
+	}
+
+	try
+	{
+		const auto result = rpcs3::ios::clear_all_graphics_caches();
+		if (result.error == rpcs3::ios::game_cache_error::none)
+		{
+			*bytes_removed = result.usage.shader;
+			emit_log(4, fmt::format(
+				"Cleared all iOS graphics caches (%llu bytes measured)", *bytes_removed));
+			return RPCS3_IOS_OK;
+		}
+		set_error(result.detail);
+	}
+	catch (const std::exception& error)
+	{
+		set_error(error.what());
+	}
+	catch (...)
+	{
+		set_error("Unknown exception while clearing graphics caches");
 	}
 	return RPCS3_IOS_GAME_CACHE_FAILED;
 }

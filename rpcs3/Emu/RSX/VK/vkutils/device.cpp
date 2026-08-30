@@ -6,8 +6,6 @@
 #include "Emu/system_config.h"
 #include "Utilities/File.h"
 #ifdef RPCS3_IOS
-#include "Emu/System.h"
-#include "ios/IOSGameProfilePolicy.h"
 #include "ios/IOSPipelineCachePolicy.h"
 #include "ios/RPCS3IOSPerformance.h"
 #endif
@@ -42,10 +40,7 @@ namespace vk
 		std::string get_pipeline_cache_path()
 		{
 #ifdef RPCS3_IOS
-			if (rpcs3::ios::is_uncharted_3_title(Emu.GetTitleID()))
-			{
-				return fs::get_cache_dir() + "vk_pipeline_cache_u3_g2.bin";
-			}
+			return fs::get_cache_dir() + std::string{rpcs3::ios::graphics_driver_cache_filename};
 #endif
 			return fs::get_cache_dir() + "vk_pipeline_cache.bin";
 		}

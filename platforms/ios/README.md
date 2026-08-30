@@ -6,7 +6,7 @@ signing keys, device identifiers, or private server paths.
 
 ## What the test app does
 
-The UIKit app links the real ABI 30 `libRPCS3Core.dylib`. It initializes and
+The UIKit app links the real ABI 32 `libRPCS3Core.dylib`. It initializes and
 seals the iOS JIT arena, runs an LLVM-generated AArch64 self-test, attaches a
 `CAMetalLayer` to RPCS3's Vulkan renderer through MoltenVK, imports firmware and
 games through the Files picker, enumerates installed titles, and boots a chosen
@@ -15,6 +15,11 @@ enumerate `/PS3ISO` and `/GAMES`, and boot through a read-only streamed virtual
 disc without copying the complete image to the phone. It exposes live boot
 stage, FPS, memory, NETISO throughput/reconnect telemetry, plus basic touch and
 external GameController input.
+
+`Rebuild Graphics Caches` is an explicit stopped-session recovery control. It
+clears every title's derived shader records and the Vulkan driver pipeline
+caches, then forces reconstruction on the next launch. It never removes
+firmware, PPU/SPU modules, saves, trophies, imported games, or NETISO metadata.
 
 Firmware and game files stay outside the source tree and IPA. Select local
 content from Files or enter a NETISO host and port after installing the app.

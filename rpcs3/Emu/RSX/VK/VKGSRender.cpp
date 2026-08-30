@@ -21,8 +21,7 @@
 #include "Emu/RSX/NV47/HW/context_accessors.define.h"
 #include "Emu/Memory/vm_locking.h"
 #ifdef RPCS3_IOS
-#include "Emu/System.h"
-#include "ios/IOSGameProfilePolicy.h"
+#include "ios/IOSPipelineCachePolicy.h"
 #endif
 
 #include "../Program/SPIRVCommon.h"
@@ -624,13 +623,10 @@ VKGSRender::VKGSRender(utils::serial* ar) noexcept : GSRender(ar)
 
 	const char* shader_cache_version = "v1.95";
 #ifdef RPCS3_IOS
-	if (rpcs3::ios::is_uncharted_3_title(Emu.GetTitleID()))
-	{
-		// V0.14 persisted visibly corrupt U3 fragment programs. Keep the CPU
-		// caches intact while forcing a one-time graphics-only reconstruction.
-		shader_cache_version = "v1.95-ios-u3-g2";
-		rsx_log.notice("Using clean iOS Uncharted 3 shader cache generation 2.");
-	}
+	// Renderer creation can precede title-ID publication. Use one generation
+	// for every iOS title so the diagnostic rebuild cannot silently fall back.
+	shader_cache_version = rpcs3::ios::graphics_shader_cache_version.data();
+	rsx_log.notice("Using clean iOS graphics shader cache generation 3.");
 #endif
 	m_shaders_cache = std::make_unique<vk::shader_cache>(*m_prog_buffer, "vulkan", shader_cache_version);
 

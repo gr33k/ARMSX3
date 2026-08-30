@@ -17,7 +17,7 @@ extern "C" {
 #define RPCS3_IOS_EXPORT
 #endif
 
-#define RPCS3_IOS_ABI_VERSION 31u
+#define RPCS3_IOS_ABI_VERSION 32u
 
 typedef enum rpcs3_ios_status
 {
@@ -619,6 +619,11 @@ RPCS3_IOS_EXPORT rpcs3_ios_status rpcs3_ios_get_game_cache_info(
 RPCS3_IOS_EXPORT rpcs3_ios_status rpcs3_ios_clear_game_cache(
     const char* title_id,
     rpcs3_ios_game_cache_type cache_type,
+    uint64_t* bytes_removed) RPCS3_IOS_NOEXCEPT;
+// Clears all title shader caches and Vulkan driver pipeline caches. CPU module
+// caches, firmware, saves, trophies, and game content are retained. The
+// operation is available only while emulation is fully stopped.
+RPCS3_IOS_EXPORT rpcs3_ios_status rpcs3_ios_clear_graphics_caches(
     uint64_t* bytes_removed) RPCS3_IOS_NOEXCEPT;
 RPCS3_IOS_EXPORT rpcs3_ios_status rpcs3_ios_enumerate_game_patches(
     const char* title_id,

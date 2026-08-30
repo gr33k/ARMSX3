@@ -485,6 +485,19 @@ static void netiso_game_enumeration_callback(void* user_context, const rpcs3_ios
     });
 }
 
+- (void)rebuildGraphicsCachesWithCompletion:(ARMSX3CoreCompletion)completion
+{
+    dispatch_async(_coreQueue, ^{
+        uint64_t bytes_removed = 0;
+        const rpcs3_ios_status status = rpcs3_ios_clear_graphics_caches(&bytes_removed);
+        NSString* message = status == RPCS3_IOS_OK
+            ? [NSString stringWithFormat:@"Graphics caches cleared (%.1f MiB); shaders will rebuild on next launch",
+                bytes_removed / (1024.0 * 1024.0)]
+            : last_core_error(status);
+        [self finish:completion succeeded:status == RPCS3_IOS_OK message:message];
+    });
+}
+
 - (void)stopWithCompletion:(ARMSX3CoreCompletion)completion
 {
     // Stop cannot share the boot queue: BootGame remains synchronous while PPU

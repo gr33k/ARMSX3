@@ -3,6 +3,7 @@
 #include "GameArchiveContract.h"
 #include "GameFolderContract.h"
 #include "GamePatchContract.h"
+#include "IOSPipelineCachePolicy.h"
 
 #include "Utilities/StrFmt.h"
 #include "Crypto/unpkg.h"
@@ -1875,6 +1876,61 @@ game_cache_result clear_game_cache(std::string_view title_id, game_cache_type ty
 			inventory.usage,
 			std::move(detail),
 		};
+	}
+	return {game_cache_error::none, inventory.usage, {}};
+}
+
+game_cache_result clear_all_graphics_caches()
+{
+	game_cache_inventory inventory;
+	std::string detail;
+	const std::string title_cache_root = rpcs3::utils::get_cache_dir();
+	fs::stat_t title_cache_info{};
+	if (fs::get_stat(title_cache_root, title_cache_info))
+	{
+		if (!title_cache_info.is_directory || title_cache_info.is_symlink)
+		{
+			return {
+				game_cache_error::inspection_failed,
+				{},
+				fmt::format("RPCS3 cache root is not a directory: %s", title_cache_root),
+			};
+		}
+		if (!inspect_main_cache_directory(title_cache_root, inventory, detail))
+		{
+			return {game_cache_error::inspection_failed, inventory.usage, std::move(detail)};
+		}
+	}
+	else if (fs::g_tls_error != fs::error::noent)
+	{
+		return {
+			game_cache_error::inspection_failed,
+			{},
+			fmt::format("RPCS3 could not inspect cache root %s", title_cache_root),
+		};
+	}
+
+	std::vector<std::string> driver_cache_files;
+	const std::string driver_cache_root = fs::get_cache_dir();
+	for (const auto& entry : fs::dir{driver_cache_root})
+	{
+		if (entry.name == "." || entry.name == ".." || entry.is_directory ||
+			entry.is_symlink || !is_graphics_driver_cache_filename(entry.name))
+		{
+			continue;
+		}
+		if (!add_cache_size(inventory.usage.shader, entry.size, detail))
+		{
+			return {game_cache_error::inspection_failed, inventory.usage, std::move(detail)};
+		}
+		driver_cache_files.emplace_back(driver_cache_root + entry.name);
+	}
+	inventory.usage.total = inventory.usage.shader;
+
+	if (!remove_cache_paths(inventory.shader_directories, detail) ||
+		!remove_cache_files(driver_cache_files, detail))
+	{
+		return {game_cache_error::deletion_failed, inventory.usage, std::move(detail)};
 	}
 	return {game_cache_error::none, inventory.usage, {}};
 }

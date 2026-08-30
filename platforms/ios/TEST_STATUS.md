@@ -865,6 +865,31 @@ V0.17 signed graphics-cache-isolation artifact:
   confirm the generation-2 graphics rebuild plus green/pink/block result before
   spending time on gameplay.
 
+V0.17 physical result and V0.18 pre-regression renderer candidate:
+
+- PASS IDENTITY: the connected phone reported installed version `0.17.0` build
+  `16`; the exact candidate was running.
+- FAIL PHYSICAL: a direct screenshot again captured the severe green field and
+  pink banding in `BCES01175` at approximately `12.1 FPS`, `2669 MiB`,
+  `NET 0.0 Mbps`, and `651 MiB` reported headroom. The user also confirmed the
+  existing block artifacts remain.
+- INVALID CACHE GATE: the user saw no shader rebuild, and the generation-2
+  diagnostic was not captured before renderer startup. The title-scoped cache
+  selector can run before title-ID publication, so V0.17 did not prove that its
+  fresh namespace was selected.
+- FIX READY FOR V0.18: every iOS title now uses graphics cache generation 3,
+  independent of title-ID timing, and the driver cache uses a new global iOS
+  filename. The explicit LZFSE MoltenVK shader-source compression added in
+  V0.14 is removed, restoring the pre-V0.14 behavior that had correct U3 color.
+  Firmware, PPU/SPU objects, saves, trophies, and game data remain untouched.
+- CONTROL READY FOR V0.18: the standalone app exposes a confirmed
+  `Rebuild Graphics Caches` action. ABI 32 removes every title's shader cache
+  plus legacy/current Vulkan pipeline-cache files only while emulation is fully
+  stopped, reports measured reclaimed bytes, and preserves all CPU/content/user
+  data. This also covers NETISO titles whose IDs are unknown before first boot.
+- REQUIRED: package/install exact V0.18 bytes, capture both generation-3 and
+  pre-V0.14-compression diagnostics, and inspect the U3 menu before gameplay.
+
 V0.2 artifact:
 
 - Name: `ARMSX3-iOS-Core-Test-v0.2.ipa`
