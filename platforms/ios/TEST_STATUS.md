@@ -489,10 +489,46 @@ V0.11 cache-thrash correction candidate:
 - PASS DISTRIBUTION: the audited IPA was copied to iCloud Drive as
   `ARMSX3-iOS-Core-Test-v0.11.ipa`; Desktop and destination SHA-256 readback are
   identical. Installation, launch, and gameplay remain physical gates.
-- REQUIRED PHYSICAL GATE: compare the same Uncharted 1 gameplay scene on first
-  launch and after a clean Stop/relaunch. Record FPS, resident memory, shader
-  compiles, texture-eviction count, memory warnings, and any crash/Jetsam. This
-  candidate is not accepted until the phone proves the result.
+- FAIL PHYSICAL / PERFORMANCE: device inventory confirmed the installed package
+  as version `0.11.0` build `10`. In the Uncharted 1 live-3D scene, the overlay
+  measured `0.0 FPS` at `3351 MiB` with NETISO idle. A USB syslog capture from
+  `10:24:39` through `10:31:22` recorded 389 coalesced texture-cache eviction
+  warning batches, CPU samples mostly between `44%` and `69%`, and 23
+  GameController-daemon interruptions. V0.11 removed the stale progress display
+  but did not remove the fatal RSX synchronization loop and must not be promoted.
+
+V0.12 bounded texture-recovery candidate:
+
+- Source revision: `8c371380ed596c6167c56a9e15e463da72b5e355`
+- Name: `ARMSX3-iOS-Core-Test-v0.12.ipa`
+- Compressed size: `31,769,254` bytes
+- SHA-256:
+  `607e59c2511ac2a5383ea29e301d5b9d30580b44691dc6ccb0f1dfa707cf0320`
+- FIX READY / PHYSICAL PENDING: persistent fatal process pressure now runs a
+  hard frame-boundary cache reclaim no more than once every five seconds instead
+  of four times per second. Entering fatal pressure and every UIKit memory
+  warning still force an immediate pass; malloc-zone heap relief remains
+  independently eligible once per second while hard reclaim is gated.
+- FIX READY / PHYSICAL PENDING: a nullable temporary-texture allocation miss
+  no longer escalates from its allocator-level severe retry into an unbounded
+  fatal bind retry on iOS. The draw advances with its already-bound null texture
+  for that miss. Non-nullable Vulkan allocation failures retain immediate fatal
+  recovery, preserving the crash-safety path.
+- PASS STATIC/PACKAGE: the lightweight iOS contracts, focused fatal-cadence
+  assertion, incremental two-worker core build, serial app build, ZIP readback,
+  strict deep signing, iOS 15.0 load commands, TrollStore JIT/unsigned-memory/
+  extended-address/increased-memory entitlements, and version `0.12.0` build
+  `11` passed. The unsigned checkpoint core SHA-256 is
+  `260133096e4e340cbd64ed97fc441b51720be77882f83ad2fa2592a0afed253f`;
+  the packaged ad-hoc signed core SHA-256 is
+  `461acc2a017e8f547d57ad6b5311f5241ab7bc2e46ccec469e16e3defcc9f222`.
+- PASS DISTRIBUTION: the audited IPA was copied to iCloud Drive as
+  `ARMSX3-iOS-Core-Test-v0.12.ipa`; Desktop and destination SHA-256 readback are
+  identical. Installation, launch, and gameplay remain physical gates.
+- REQUIRED PHYSICAL GATE: replay the exact Uncharted scene and compare FPS,
+  resident memory, graphics completeness, eviction count, memory warnings, and
+  stability against V0.11. A useful result requires sustained frame progress
+  without replacing the eviction lockup with unacceptable missing textures.
 
 V0.2 artifact:
 
