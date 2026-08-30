@@ -472,6 +472,7 @@ class SELFDecrypter
 public:
 	SELFDecrypter(const fs::file& s);
 	fs::file MakeElf(bool isElf32);
+	fs::file MakeDebugElf(bool isElf32);
 	bool LoadHeaders(bool isElf32, SelfAdditionalInfo* out_info = nullptr);
 	void ShowHeaders(bool isElf32);
 	bool LoadMetadata(const u8* klic_key);

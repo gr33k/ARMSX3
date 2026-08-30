@@ -1302,6 +1302,131 @@ fs::file SELFDecrypter::MakeElf(bool isElf32)
 	return e;
 }
 
+fs::file SELFDecrypter::MakeDebugElf(bool isElf32)
+{
+	fs::file e = fs::make_stream<std::vector<u8>>();
+
+	const auto rebuild = [&]<typename EHdr, typename SHdr, typename PHdr>(
+		const EHdr& ehdr,
+		const std::vector<SHdr>& shdrs,
+		const std::vector<PHdr>& phdrs) -> bool
+	{
+		if (m_seg_ext_hdr.size() != phdrs.size())
+		{
+			self_log.error("Structured debug SELF segment table has %u entries for %u program headers.",
+				::size32(m_seg_ext_hdr), ::size32(phdrs));
+			return false;
+		}
+
+		WriteEhdr(e, ehdr);
+		for (const PHdr& phdr : phdrs)
+		{
+			WritePhdr(e, phdr);
+		}
+
+		std::vector<u8> copy_buffer(64 * 1024);
+		u32 restored_segments = 0;
+		for (u32 index = 0; index < ::size32(phdrs); ++index)
+		{
+			const auto& segment = m_seg_ext_hdr[index];
+			const auto& phdr = phdrs[index];
+			if (!phdr.p_filesz)
+			{
+				continue;
+			}
+			if (!segment.offset || !segment.size)
+			{
+				self_log.error("Structured debug SELF segment %u is missing its stored payload.", index);
+				return false;
+			}
+
+			if (!ps3::crypto::has_valid_debug_self_segment(
+					self_f.size(), segment.offset, segment.size, phdr.p_filesz, segment.compression))
+			{
+				self_log.error(
+					"Structured debug SELF segment %u is invalid (offset=0x%llx, stored=0x%llx, output=0x%llx, compression=%u).",
+					index, segment.offset, segment.size, phdr.p_filesz, segment.compression);
+				return false;
+			}
+
+			e.seek(phdr.p_offset);
+			const u64 output_start = e.pos();
+			if (segment.compression == 2)
+			{
+				std::array<u8, 2> zlib_header{};
+				if (self_f.read_at(segment.offset, zlib_header.data(), zlib_header.size()) != zlib_header.size() ||
+					!ps3::crypto::has_zlib_header(zlib_header[0], zlib_header[1]) ||
+					!unzip(self_f, segment.offset, segment.size, phdr.p_filesz, e))
+				{
+					self_log.error("Failed to inflate structured debug SELF segment %u.", index);
+					return false;
+				}
+			}
+			else
+			{
+				if (segment.size != phdr.p_filesz)
+				{
+					self_log.error(
+						"Structured debug SELF segment %u size mismatch (stored=0x%llx, output=0x%llx).",
+						index, segment.size, phdr.p_filesz);
+					return false;
+				}
+
+				u64 input_offset = segment.offset;
+				u64 remaining = segment.size;
+				while (remaining)
+				{
+					const usz requested = static_cast<usz>(std::min<u64>(copy_buffer.size(), remaining));
+					const usz read = self_f.read_at(input_offset, copy_buffer.data(), requested);
+					if (read != requested || e.write(copy_buffer.data(), read) != read)
+					{
+						self_log.error("Failed to copy structured debug SELF segment %u.", index);
+						return false;
+					}
+					input_offset += read;
+					remaining -= read;
+				}
+			}
+
+			if (e.pos() - output_start != phdr.p_filesz)
+			{
+				self_log.error("Structured debug SELF segment %u produced the wrong output size.", index);
+				return false;
+			}
+			restored_segments++;
+		}
+
+		if (!restored_segments)
+		{
+			self_log.error("Structured debug SELF contains no restorable segments.");
+			return false;
+		}
+
+		if (m_ext_hdr.shdr_offset)
+		{
+			e.seek(ehdr.e_shoff);
+			for (const SHdr& shdr : shdrs)
+			{
+				WriteShdr(e, shdr);
+			}
+		}
+
+		return true;
+	};
+
+	const bool rebuilt = isElf32
+		? rebuild(elf32_hdr, shdr32_arr, phdr32_arr)
+		: rebuild(elf64_hdr, shdr64_arr, phdr64_arr);
+	if (!rebuilt)
+	{
+		return {};
+	}
+
+	e.seek(0);
+	self_log.notice("Reconstructed structured debug SELF into a %llu-byte ELF.", e.size());
+	return e;
+}
+
 bool SELFDecrypter::GetKeyFromRap(std::string_view content_id, u8* npdrm_key)
 {
 	// Set empty RAP key.
@@ -1374,6 +1499,34 @@ static bool IsDebugSelf(const fs::file& f)
 	}
 
 	return false;
+}
+
+static bool IsStructuredDebugSelf(const fs::file& f)
+{
+	if (!IsDebugSelf(f) || f.size() < sizeof(SceHeader) + sizeof(ext_hdr))
+	{
+		return false;
+	}
+
+	f.seek(0);
+	SceHeader sce_header{};
+	ext_hdr self_header{};
+	sce_header.Load(f);
+	self_header.Load(f);
+
+	std::array<u8, 4> elf_magic{};
+	const bool has_embedded_elf =
+		self_header.ehdr_offset <= f.size() &&
+		f.read_at(self_header.ehdr_offset, elf_magic.data(), elf_magic.size()) == elf_magic.size() &&
+		ps3::crypto::has_elf_magic(elf_magic[0], elf_magic[1], elf_magic[2], elf_magic[3]);
+
+	return ps3::crypto::has_structured_debug_self_layout(
+		f.size(),
+		sce_header.se_hsize,
+		self_header.ehdr_offset,
+		self_header.phdr_offset,
+		self_header.segment_ext_hdr_offset,
+		has_embedded_elf);
 }
 
 static fs::file CheckDebugSelf(const fs::file& s)
@@ -1469,10 +1622,14 @@ fs::file decrypt_self(const fs::file& elf_or_self, const u8* klic_key, SelfAddit
 
 	if (file_type == "SCE\0"_u32)
 	{
-		if (fs::file res = CheckDebugSelf(elf_or_self))
+		const bool structured_debug_self = IsStructuredDebugSelf(elf_or_self);
+		if (!structured_debug_self)
 		{
-			// TODO: Decrypt
-			return res;
+			if (fs::file res = CheckDebugSelf(elf_or_self))
+			{
+				// TODO: Decrypt
+				return res;
+			}
 		}
 
 		// Check the ELF file class (32 or 64 bit).
@@ -1486,6 +1643,12 @@ fs::file decrypt_self(const fs::file& elf_or_self, const u8* klic_key, SelfAddit
 		{
 			self_log.error("Failed to load SELF file headers!");
 			return fs::file{};
+		}
+
+		if (structured_debug_self)
+		{
+			self_log.warning("Structured debug SELF detected; rebuilding its segment table.");
+			return self_dec.MakeDebugElf(isElf32);
 		}
 
 		// Load and decrypt the SELF file metadata.

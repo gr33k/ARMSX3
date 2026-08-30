@@ -19,6 +19,11 @@ bool unzip(const void* src, usz size, fs::file& out);
 // the complete compressed payload in memory.
 bool unzip(const fs::file& src, u64 offset, fs::file& out);
 
+// Inflate exactly one bounded zlib stream and verify its expected output size.
+// This is used for SELF segment tables where another compressed stream may
+// immediately follow the current segment in the same file.
+bool unzip(const fs::file& src, u64 offset, u64 compressed_size, u64 expected_size, fs::file& out);
+
 template <typename T>
 inline bool unzip(const std::vector<u8>& src, fs::file& out)
 {

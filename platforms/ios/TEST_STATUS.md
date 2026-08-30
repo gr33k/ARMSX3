@@ -617,15 +617,17 @@ V0.13 Red Dead / lifecycle / NETISO physical evidence:
   Teenage Mutant Ninja Turtles: Danger of the Ooze (`BLUS31435`) mounted valid
   NETISO virtual images but failed on `PS3_GAME/USRDIR/EBOOT.BIN` as an invalid
   format. NAS byte inspection proved both are fake-signed debug SELF files with
-  a declared `0x900` payload that is zlib-compressed; inflating either payload
-  yields a valid 64-bit ELF. DuckTales uses a normal encrypted retail SELF.
+  a structured `0x900` SELF header and two independently compressed ELF
+  segments. V0.14 inflated only the first segment, which produced ELF magic but
+  not a complete ELF: the second loadable segment and section-header table were
+  missing. DuckTales uses a normal encrypted retail SELF.
 
 V0.14 implementation candidate (physical qualification in progress):
 
-- FIX READY: compressed CFW fake-SELF payloads are now inflated directly from
-  their file range with bounded buffers and accepted only when the result has a
-  valid ELF header. The original raw debug-SELF and encrypted retail-SELF paths
-  remain intact.
+- SUPERSEDED IMPLEMENTATION: V0.14's compressed fake-SELF path bounded one zlib
+  stream and checked only ELF magic. Physical Spider-Man 2 and TMNT testing
+  proved that was insufficient for structured debug SELF files with multiple
+  segments. The complete segment-table repair is recorded after V0.15 below.
 - FIX READY: MoltenVK retains pipeline-export MSL as LZFSE instead of raw text.
   Final graphics/compute pipeline-cache use is externally synchronized, and
   iOS atomically checkpoints after 64 new pipelines and 15 seconds when at
@@ -704,7 +706,22 @@ V0.14 signed candidate artifact:
   an iOS exit-spawn child has an active virtual ISO. Normal installed games and
   non-child processes are explicitly excluded, and the redirected path keeps
   the BDVD read-only mount semantics.
-- PENDING PHYSICAL: Uncharted 1/2/3, Spider-Man 2, TMNT, Toy Story Mania, app
+- FAIL PHYSICAL / UNCHARTED 3 GRAPHICS: a clean V0.14 process (`PID 19348`)
+  reproduced the existing periodic square artifacts in the Uncharted 3 menu
+  and added a severe green cast, pink banding, and bright rectangular
+  corruption. A physical screenshot captured the overlay at approximately
+  `12.0 FPS`, `2734 MiB`, and `NET 0.0 Mbps`, proving that active NETISO
+  streaming was not the source. The preceding reused-process boot emitted a
+  dense RSX fragment-program failure burst (`Unexpected instruction`, invalid
+  registers, bad precision/scale, and unknown opcodes) followed by Metal
+  warnings. Forced Multithreaded RSX is the leading V0.14-specific suspect and
+  requires an isolated physical candidate; this is not yet a proven fix.
+- FAIL PHYSICAL / UNCHARTED 3 RELAUNCH CLEANUP: exiting the reused V0.14 process
+  unloaded the ISO and then terminated with
+  `Verification failed (object: 0x0)`. The clean comparison process launched
+  afterward, so this teardown failure is separate from the deterministic
+  graphics corruption.
+- PENDING PHYSICAL: Uncharted 2, Spider-Man 2, TMNT, Toy Story Mania, app
   switch/resume, and sustained thermal/cache-reuse gates remain open. Static
   or partial physical success does not close those title-specific gates.
 
@@ -740,6 +757,25 @@ V0.15 signed candidate artifact:
 - PENDING PHYSICAL: install these exact bytes and verify the GTA child-loader
   redirect plus normal NETISO/local-title isolation. Package success is not
   gameplay qualification.
+
+Post-V0.15 structured debug SELF repair candidate:
+
+- FIX READY: structured debug SELF files now bypass the legacy single-stream
+  fake-header shortcut. The core reads the embedded ELF/program/segment/section
+  tables, reconstructs every declared file segment at its ELF offset, inflates
+  only the segment's bounded zlib range, requires exact compressed and output
+  sizes, restores the section-header table, and rejects missing or malformed
+  segment payloads. Legacy raw debug SELF and encrypted retail SELF paths remain
+  isolated.
+- PASS STATIC / NAS FORMAT PROOF: Spider-Man 2 has two compressed segments
+  (`8501370 -> 20365416` bytes and `148619 -> 535152` bytes) and reconstructs to
+  `20942048` bytes. TMNT has two compressed segments
+  (`2617142 -> 10497312` bytes and `121748 -> 398920` bytes) and reconstructs to
+  `10957596` bytes. Both embedded ELF64 layouts and section tables validated
+  against the authoritative NAS files without writing or changing game media.
+- PASS STATIC: the bounded iOS contract suite and a two-worker incremental
+  `RPCS3Core` build pass. Physical Spider-Man 2 and TMNT boot/gameplay remain
+  required before this compatibility repair can be promoted.
 
 V0.2 artifact:
 

@@ -139,6 +139,16 @@ bool unzip(const fs::file& src, u64 offset, fs::file& out)
 		return false;
 	}
 
+	return unzip(src, offset, src.size() - offset, umax, out);
+}
+
+bool unzip(const fs::file& src, u64 offset, u64 compressed_size, u64 expected_size, fs::file& out)
+{
+	if (!src || !out || !compressed_size || offset > src.size() || compressed_size > src.size() - offset)
+	{
+		return false;
+	}
+
 	constexpr usz buffer_size = 64 * 1024;
 	std::vector<u8> input(buffer_size);
 	std::vector<u8> output(buffer_size);
@@ -157,9 +167,10 @@ bool unzip(const fs::file& src, u64 offset, fs::file& out)
 
 	bool complete = false;
 	u64 read_offset = offset;
-	while (!complete && read_offset < src.size())
+	const u64 read_end = offset + compressed_size;
+	while (!complete && read_offset < read_end)
 	{
-		const usz requested = static_cast<usz>(std::min<u64>(input.size(), src.size() - read_offset));
+		const usz requested = static_cast<usz>(std::min<u64>(input.size(), read_end - read_offset));
 		const usz read = src.read_at(read_offset, input.data(), requested);
 		if (!read)
 		{
@@ -181,6 +192,11 @@ bool unzip(const fs::file& src, u64 offset, fs::file& out)
 			}
 
 			const usz produced = output.size() - stream.avail_out;
+			if (expected_size != umax && stream.total_out > expected_size)
+			{
+				inflateEnd(&stream);
+				return false;
+			}
 			if (produced && out.write(output.data(), produced) != produced)
 			{
 				inflateEnd(&stream);
@@ -191,8 +207,11 @@ bool unzip(const fs::file& src, u64 offset, fs::file& out)
 		while (!complete && (stream.avail_in || stream.avail_out == 0));
 	}
 
+	const u64 consumed = stream.total_in;
+	const u64 produced = stream.total_out;
 	inflateEnd(&stream);
-	return complete;
+	return complete && consumed == compressed_size &&
+		(expected_size == umax || produced == expected_size);
 }
 
 bool zip(const void* src, usz size, fs::file& out, bool multi_thread_it)
