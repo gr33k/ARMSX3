@@ -877,6 +877,15 @@ V0.17 physical result and V0.18 pre-regression renderer candidate:
   diagnostic was not captured before renderer startup. The title-scoped cache
   selector can run before title-ID publication, so V0.17 did not prove that its
   fresh namespace was selected.
+- FAIL PHYSICAL / CORE FATAL: after the V0.17 Uncharted 3 session was left
+  running, a direct device screenshot showed `0.0 FPS`, `3880 MiB`, and
+  `NET 0.0 Mbps 1398 MiB R0`, followed by `[Core:1] SPU[0x2000100] Thread
+  (highCellSpursKernel2) [0x0203c]: Thread terminated due to f...`. The failed
+  session remained foreground and no newer ARMSX3 CrashReporter `.ips` existed,
+  so this is a caught RPCS3 SPU fatal that paused emulation, not evidence of a
+  fresh top-level iOS process crash or Jetsam. The overlay truncates the fatal
+  suffix; `ARMSX3-last-session.log` could not be extracted because House Arrest
+  rejects the TrollStore app's `ApplicationType=System` classification.
 - FIX READY FOR V0.18: every iOS title now uses graphics cache generation 3,
   independent of title-ID timing, and the driver cache uses a new global iOS
   filename. The explicit LZFSE MoltenVK shader-source compression added in
