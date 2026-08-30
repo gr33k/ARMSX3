@@ -10,7 +10,6 @@
 #include <cmath>
 
 typedef void (^ARMSX3StickHandler)(float x, float y);
-typedef void (^ARMSX3DPadHandler)(uint64_t directions);
 
 @interface ARMSX3ArtworkButton : UIButton
 
@@ -41,7 +40,37 @@ typedef void (^ARMSX3DPadHandler)(uint64_t directions);
 @end
 
 
-@interface ARMSX3VirtualStick : UIControl
+@interface ARMSX3DPadSectorButton : UIButton
+
+@property(nonatomic) CGFloat directionAngle;
+
+@end
+
+
+@implementation ARMSX3DPadSectorButton
+
+- (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent*)event
+{
+    if (![super pointInside:point withEvent:event])
+        return NO;
+
+    const CGFloat radius_x = MAX(1.0, self.bounds.size.width * 0.5);
+    const CGFloat radius_y = MAX(1.0, self.bounds.size.height * 0.5);
+    const CGFloat x = (point.x - CGRectGetMidX(self.bounds)) / radius_x;
+    const CGFloat y = (point.y - CGRectGetMidY(self.bounds)) / radius_y;
+    const CGFloat radius = hypot(x, y);
+    if (radius < 0.18 || radius > 1.0)
+        return NO;
+
+    const CGFloat angle = atan2(y, x);
+    const CGFloat delta = atan2(sin(angle - self.directionAngle), cos(angle - self.directionAngle));
+    return fabs(delta) <= M_PI_4 * 0.5 + 0.001;
+}
+
+@end
+
+
+@interface ARMSX3VirtualStick : UIView
 
 @property(nonatomic, copy) ARMSX3StickHandler valueHandler;
 
@@ -51,6 +80,7 @@ typedef void (^ARMSX3DPadHandler)(uint64_t directions);
 @implementation ARMSX3VirtualStick
 {
     UIView* _touchIndicator;
+    __weak UITouch* _trackingTouch;
 }
 
 - (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent*)event
@@ -69,8 +99,8 @@ typedef void (^ARMSX3DPadHandler)(uint64_t directions);
     self = [super initWithFrame:CGRectZero];
     if (self)
     {
+        self.userInteractionEnabled = YES;
         self.multipleTouchEnabled = NO;
-        self.exclusiveTouch = NO;
         _touchIndicator = [[UIView alloc] init];
         _touchIndicator.userInteractionEnabled = NO;
         _touchIndicator.hidden = YES;
@@ -126,130 +156,44 @@ typedef void (^ARMSX3DPadHandler)(uint64_t directions);
         self.valueHandler(x, y);
 }
 
-- (BOOL)beginTracking:(UITouch*)touch withEvent:(UIEvent*)event
+- (void)touchesBegan:(NSSet<UITouch*>*)touches withEvent:(UIEvent*)event
 {
     (void)event;
-    [self updateWithTouch:touch];
-    return YES;
+    if (_trackingTouch)
+        return;
+    _trackingTouch = touches.anyObject;
+    if (_trackingTouch)
+        [self updateWithTouch:_trackingTouch];
 }
 
-- (BOOL)continueTracking:(UITouch*)touch withEvent:(UIEvent*)event
+- (void)touchesMoved:(NSSet<UITouch*>*)touches withEvent:(UIEvent*)event
 {
     (void)event;
-    [self updateWithTouch:touch];
-    return YES;
+    if (_trackingTouch && [touches containsObject:_trackingTouch])
+        [self updateWithTouch:_trackingTouch];
 }
 
 - (void)resetTracking
 {
     _touchIndicator.hidden = YES;
     self.backgroundColor = UIColor.clearColor;
+    _trackingTouch = nil;
     if (self.valueHandler)
         self.valueHandler(0.0f, 0.0f);
 }
 
-- (void)endTracking:(UITouch*)touch withEvent:(UIEvent*)event
-{
-    (void)touch;
-    (void)event;
-    [self resetTracking];
-}
-
-- (void)cancelTrackingWithEvent:(UIEvent*)event
+- (void)touchesEnded:(NSSet<UITouch*>*)touches withEvent:(UIEvent*)event
 {
     (void)event;
-    [self resetTracking];
+    if (_trackingTouch && [touches containsObject:_trackingTouch])
+        [self resetTracking];
 }
 
-@end
-
-
-@interface ARMSX3VirtualDPad : UIControl
-
-@property(nonatomic, copy) ARMSX3DPadHandler valueHandler;
-
-@end
-
-
-@implementation ARMSX3VirtualDPad
-{
-    uint64_t _directions;
-}
-
-- (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent*)event
-{
-    if (![super pointInside:point withEvent:event])
-        return NO;
-    const CGFloat radius_x = MAX(1.0, self.bounds.size.width * 0.5);
-    const CGFloat radius_y = MAX(1.0, self.bounds.size.height * 0.5);
-    const CGFloat x = (point.x - CGRectGetMidX(self.bounds)) / radius_x;
-    const CGFloat y = (point.y - CGRectGetMidY(self.bounds)) / radius_y;
-    return x * x + y * y <= 1.0;
-}
-
-- (void)updateWithTouch:(UITouch*)touch
-{
-    const CGPoint point = [touch locationInView:self];
-    const CGFloat half_width = MAX(1.0, self.bounds.size.width * 0.5);
-    const CGFloat half_height = MAX(1.0, self.bounds.size.height * 0.5);
-    const CGFloat x = (point.x - CGRectGetMidX(self.bounds)) / half_width;
-    const CGFloat y = (point.y - CGRectGetMidY(self.bounds)) / half_height;
-    const CGFloat magnitude = hypot(x, y);
-    uint64_t directions = 0;
-    if (magnitude >= 0.16)
-    {
-        if (y < -0.18 && fabs(y) >= fabs(x) * 0.45)
-            directions |= RPCS3_IOS_PAD_BUTTON_DPAD_UP;
-        if (y > 0.18 && fabs(y) >= fabs(x) * 0.45)
-            directions |= RPCS3_IOS_PAD_BUTTON_DPAD_DOWN;
-        if (x < -0.18 && fabs(x) >= fabs(y) * 0.45)
-            directions |= RPCS3_IOS_PAD_BUTTON_DPAD_LEFT;
-        if (x > 0.18 && fabs(x) >= fabs(y) * 0.45)
-            directions |= RPCS3_IOS_PAD_BUTTON_DPAD_RIGHT;
-    }
-    if (_directions == directions)
-        return;
-    _directions = directions;
-    self.backgroundColor = directions
-        ? [UIColor colorWithWhite:1.0 alpha:0.08]
-        : UIColor.clearColor;
-    if (self.valueHandler)
-        self.valueHandler(directions);
-}
-
-- (BOOL)beginTracking:(UITouch*)touch withEvent:(UIEvent*)event
+- (void)touchesCancelled:(NSSet<UITouch*>*)touches withEvent:(UIEvent*)event
 {
     (void)event;
-    [self updateWithTouch:touch];
-    return YES;
-}
-
-- (BOOL)continueTracking:(UITouch*)touch withEvent:(UIEvent*)event
-{
-    (void)event;
-    [self updateWithTouch:touch];
-    return YES;
-}
-
-- (void)resetTracking
-{
-    _directions = 0;
-    self.backgroundColor = UIColor.clearColor;
-    if (self.valueHandler)
-        self.valueHandler(0);
-}
-
-- (void)endTracking:(UITouch*)touch withEvent:(UIEvent*)event
-{
-    (void)touch;
-    (void)event;
-    [self resetTracking];
-}
-
-- (void)cancelTrackingWithEvent:(UIEvent*)event
-{
-    (void)event;
-    [self resetTracking];
+    if (_trackingTouch && [touches containsObject:_trackingTouch])
+        [self resetTracking];
 }
 
 @end
@@ -269,6 +213,11 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
 @property(nonatomic, strong) ARMSX3CoreSession* core;
 @property(nonatomic, strong) UIScrollView* rootScroll;
 @property(nonatomic, strong) UIStackView* contentStack;
+@property(nonatomic, strong) NSLayoutConstraint* stackTopConstraint;
+@property(nonatomic, strong) NSLayoutConstraint* stackLeadingConstraint;
+@property(nonatomic, strong) NSLayoutConstraint* stackTrailingConstraint;
+@property(nonatomic, strong) NSLayoutConstraint* stackBottomConstraint;
+@property(nonatomic, strong) NSLayoutConstraint* stackWidthConstraint;
 @property(nonatomic, strong) UIView* playerStage;
 @property(nonatomic, strong) NSLayoutConstraint* playerStageHeightConstraint;
 @property(nonatomic, strong) ARMSX3MetalView* metalView;
@@ -285,12 +234,14 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
 @property(nonatomic) BOOL pickingFirmware;
 @property(nonatomic) uint64_t touchButtons;
 @property(nonatomic, strong) NSMutableArray<UIButton*>* touchControls;
-@property(nonatomic, strong) NSMutableArray<UIControl*>* landscapeControls;
+@property(nonatomic, strong) NSMutableArray<UIView*>* landscapeControls;
 @property(nonatomic, strong) NSMutableArray<UIButton*>* landscapeButtons;
-@property(nonatomic, strong) ARMSX3VirtualDPad* landscapeDPad;
+@property(nonatomic, strong) NSMutableArray<ARMSX3DPadSectorButton*>* landscapeDPadButtons;
 @property(nonatomic, strong) ARMSX3VirtualStick* leftVirtualStick;
 @property(nonatomic, strong) ARMSX3VirtualStick* rightVirtualStick;
 @property(nonatomic, strong) UIButton* landscapeMenuButton;
+@property(nonatomic, strong) UILabel* landscapeRuntimeLabel;
+@property(nonatomic, strong) UILabel* inputTelemetryLabel;
 @property(nonatomic, copy) NSArray<UIView*>* debugChromeViews;
 @property(nonatomic, strong) NSMutableDictionary<NSNumber*, NSNumber*>* touchPressStarted;
 @property(nonatomic, strong) NSMutableDictionary<NSNumber*, NSNumber*>* touchReleaseTokens;
@@ -303,6 +254,9 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
 @property(nonatomic) BOOL displayUpdateScheduled;
 @property(nonatomic) CGSize lastDisplaySize;
 @property(nonatomic) float lastDisplayRefreshRate;
+@property(nonatomic, copy) NSString* lastCoreLog;
+@property(nonatomic, copy) NSString* lastOperationMessage;
+@property(nonatomic) NSUInteger telemetryHideToken;
 
 @end
 
@@ -316,6 +270,7 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
     self.touchControls = [NSMutableArray array];
     self.landscapeControls = [NSMutableArray array];
     self.landscapeButtons = [NSMutableArray array];
+    self.landscapeDPadButtons = [NSMutableArray array];
     self.touchPressStarted = [NSMutableDictionary dictionary];
     self.touchReleaseTokens = [NSMutableDictionary dictionary];
 
@@ -340,7 +295,7 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
     [scroll addSubview:stack];
 
     UILabel* title = [[UILabel alloc] init];
-    title.text = @"ARMSX3 iOS Core Test v0.7";
+    title.text = @"ARMSX3 iOS Core Test v0.8";
     title.textColor = UIColor.whiteColor;
     title.font = [UIFont systemFontOfSize:24.0 weight:UIFontWeightBlack];
     [stack addArrangedSubview:title];
@@ -379,6 +334,29 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
     [self.playerStage addSubview:self.metalView];
     [self installTouchControls];
     [self installLandscapeControls];
+
+    self.landscapeRuntimeLabel = [[UILabel alloc] init];
+    self.landscapeRuntimeLabel.hidden = YES;
+    self.landscapeRuntimeLabel.userInteractionEnabled = NO;
+    self.landscapeRuntimeLabel.numberOfLines = 2;
+    self.landscapeRuntimeLabel.textAlignment = NSTextAlignmentCenter;
+    self.landscapeRuntimeLabel.textColor = UIColor.whiteColor;
+    self.landscapeRuntimeLabel.backgroundColor = [UIColor colorWithWhite:0.0 alpha:0.66];
+    self.landscapeRuntimeLabel.font = [UIFont monospacedSystemFontOfSize:9.0 weight:UIFontWeightSemibold];
+    self.landscapeRuntimeLabel.layer.cornerRadius = 7.0;
+    self.landscapeRuntimeLabel.clipsToBounds = YES;
+    [self.playerStage addSubview:self.landscapeRuntimeLabel];
+
+    self.inputTelemetryLabel = [[UILabel alloc] init];
+    self.inputTelemetryLabel.hidden = YES;
+    self.inputTelemetryLabel.userInteractionEnabled = NO;
+    self.inputTelemetryLabel.textAlignment = NSTextAlignmentCenter;
+    self.inputTelemetryLabel.textColor = [UIColor colorWithRed:0.38 green:0.96 blue:0.82 alpha:1.0];
+    self.inputTelemetryLabel.backgroundColor = [UIColor colorWithWhite:0.0 alpha:0.72];
+    self.inputTelemetryLabel.font = [UIFont monospacedSystemFontOfSize:9.0 weight:UIFontWeightBold];
+    self.inputTelemetryLabel.layer.cornerRadius = 7.0;
+    self.inputTelemetryLabel.clipsToBounds = YES;
+    [self.playerStage addSubview:self.inputTelemetryLabel];
 
     self.progressView = [[UIProgressView alloc] initWithProgressViewStyle:UIProgressViewStyleDefault];
     self.progressView.progressTintColor = [UIColor colorWithRed:0.20 green:0.78 blue:0.66 alpha:1.0];
@@ -468,17 +446,21 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
         self.logView,
     ];
 
-    UILayoutGuide* safe = self.view.safeAreaLayoutGuide;
+    self.stackTopConstraint = [stack.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor constant:12.0];
+    self.stackLeadingConstraint = [stack.leadingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.leadingAnchor constant:12.0];
+    self.stackTrailingConstraint = [stack.trailingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.trailingAnchor constant:-12.0];
+    self.stackBottomConstraint = [stack.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor constant:-16.0];
+    self.stackWidthConstraint = [stack.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor constant:-24.0];
     [NSLayoutConstraint activateConstraints:@[
-        [scroll.topAnchor constraintEqualToAnchor:safe.topAnchor],
-        [scroll.leadingAnchor constraintEqualToAnchor:safe.leadingAnchor],
-        [scroll.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor],
-        [scroll.bottomAnchor constraintEqualToAnchor:safe.bottomAnchor],
-        [stack.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor constant:12.0],
-        [stack.leadingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.leadingAnchor constant:12.0],
-        [stack.trailingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.trailingAnchor constant:-12.0],
-        [stack.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor constant:-16.0],
-        [stack.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor constant:-24.0],
+        [scroll.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+        [scroll.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [scroll.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+        [scroll.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
+        self.stackTopConstraint,
+        self.stackLeadingConstraint,
+        self.stackTrailingConstraint,
+        self.stackBottomConstraint,
+        self.stackWidthConstraint,
     ]];
 
     [self startControllerSupport];
@@ -488,6 +470,7 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
                                                      userInfo:nil
                                                       repeats:YES];
     [self.core initializeWithCompletion:^(BOOL succeeded, NSString* message) {
+        weak_self.lastOperationMessage = message;
         weak_self.stateLabel.text = message;
         weak_self.stateLabel.textColor = succeeded
             ? [UIColor colorWithRed:0.25 green:0.88 blue:0.68 alpha:1.0]
@@ -564,9 +547,11 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
 
 - (void)handleCoreLog:(NSString*)line
 {
+    self.lastCoreLog = line;
     [self appendLog:line];
     if ([line containsString:@"Thread terminated due to fatal error"])
     {
+        self.lastOperationMessage = line;
         self.stateLabel.text = @"Game stopped: fatal guest error. See the final log line.";
         self.stateLabel.textColor = [UIColor colorWithRed:1.0 green:0.30 blue:0.28 alpha:1.0];
         self.progressView.hidden = YES;
@@ -620,12 +605,27 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
             view.hidden = landscape;
         for (UIButton* button in self.touchControls)
             button.hidden = landscape;
-        for (UIControl* control in self.landscapeControls)
+        for (UIView* control in self.landscapeControls)
             control.hidden = !landscape;
         self.leftControllerSkin.hidden = !landscape;
         self.rightControllerSkin.hidden = !landscape;
+        self.landscapeRuntimeLabel.hidden = !landscape;
+        if (!landscape)
+            self.inputTelemetryLabel.hidden = YES;
         self.rootScroll.alwaysBounceVertical = !landscape;
         self.rootScroll.scrollEnabled = !landscape;
+        self.rootScroll.contentInsetAdjustmentBehavior = landscape
+            ? UIScrollViewContentInsetAdjustmentNever
+            : UIScrollViewContentInsetAdjustmentAutomatic;
+        self.contentStack.spacing = landscape ? 0.0 : 9.0;
+        self.stackTopConstraint.constant = landscape ? 0.0 : 12.0;
+        self.stackLeadingConstraint.constant = landscape ? 0.0 : 12.0;
+        self.stackTrailingConstraint.constant = landscape ? 0.0 : -12.0;
+        self.stackBottomConstraint.constant = landscape ? 0.0 : -16.0;
+        self.stackWidthConstraint.constant = landscape ? 0.0 : -24.0;
+        self.playerStage.layer.cornerRadius = landscape ? 0.0 : 12.0;
+        if (landscape)
+            self.rootScroll.contentOffset = CGPointZero;
     }
 
     const CGRect safe_frame = self.view.safeAreaLayoutGuide.layoutFrame;
@@ -633,7 +633,7 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
         ? self.contentStack.bounds.size.width
         : MAX(1.0, safe_frame.size.width - 24.0);
     const CGFloat target_height = landscape
-        ? MAX(1.0, safe_frame.size.height - 28.0)
+        ? MAX(1.0, self.view.bounds.size.height)
         : floor(portrait_width * 9.0 / 16.0);
     if (fabs(self.playerStageHeightConstraint.constant - target_height) >= 0.5)
         self.playerStageHeightConstraint.constant = target_height;
@@ -678,7 +678,7 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
     self.leftControllerSkin.frame = left_rail;
     self.rightControllerSkin.frame = right_rail;
 
-    const CGFloat gap = 8.0;
+    const CGFloat gap = 0.0;
     const CGRect display_slot = CGRectInset(
         CGRectMake(CGRectGetMaxX(left_rail), 0,
             CGRectGetMinX(right_rail) - CGRectGetMaxX(left_rail), bounds.size.height),
@@ -702,9 +702,9 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
         frame:normalized_rect(left_rail, 0.1010, 0.0520, 0.3970, 0.0990) circular:NO];
     [self setLandscapeButton:RPCS3_IOS_PAD_BUTTON_L1
         frame:normalized_rect(left_rail, 0.5050, 0.0520, 0.3970, 0.0990) circular:NO];
-    self.landscapeDPad.frame = normalized_rect(left_rail, 0.2020, 0.2220, 0.5720, 0.2680);
-    self.landscapeDPad.layer.cornerRadius = MIN(self.landscapeDPad.bounds.size.width,
-        self.landscapeDPad.bounds.size.height) * 0.20;
+    const CGRect dpad_frame = normalized_rect(left_rail, 0.2020, 0.2220, 0.5720, 0.2680);
+    for (ARMSX3DPadSectorButton* button in self.landscapeDPadButtons)
+        button.frame = dpad_frame;
     self.leftVirtualStick.frame = normalized_rect(left_rail, 0.2210, 0.5520, 0.5410, 0.2520);
     self.leftVirtualStick.layer.cornerRadius = MIN(self.leftVirtualStick.bounds.size.width,
         self.leftVirtualStick.bounds.size.height) * 0.5;
@@ -731,6 +731,14 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
         self.rightVirtualStick.bounds.size.height) * 0.5;
     [self setLandscapeButton:RPCS3_IOS_PAD_BUTTON_START
         frame:normalized_rect(right_rail, 0.1470, 0.8480, 0.2880, 0.0760) circular:NO];
+
+    const CGRect display_inset = CGRectInset(self.metalView.frame, 8.0, 8.0);
+    self.landscapeRuntimeLabel.frame = CGRectMake(display_inset.origin.x,
+        display_inset.origin.y, display_inset.size.width, 34.0);
+    self.inputTelemetryLabel.frame = CGRectMake(display_inset.origin.x,
+        CGRectGetMaxY(display_inset) - 28.0, display_inset.size.width, 28.0);
+    [self.playerStage bringSubviewToFront:self.landscapeRuntimeLabel];
+    [self.playerStage bringSubviewToFront:self.inputTelemetryLabel];
 }
 
 - (void)pickFirmware
@@ -771,6 +779,7 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
             weak_self.progressView.hidden = NO;
         }
     } completion:^(BOOL succeeded, NSString* message) {
+        weak_self.lastOperationMessage = message;
         weak_self.stateLabel.text = message;
         weak_self.stateLabel.textColor = succeeded
             ? [UIColor colorWithRed:0.25 green:0.88 blue:0.68 alpha:1.0]
@@ -785,6 +794,7 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
 {
     __weak ARMSX3ViewController* weak_self = self;
     [self.core refreshGamesWithCompletion:^(BOOL succeeded, NSString* message) {
+        weak_self.lastOperationMessage = message;
         [weak_self appendLog:message];
         if (!succeeded)
             return;
@@ -809,6 +819,7 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
     self.stateLabel.text = [NSString stringWithFormat:@"Connecting to NETISO %@:%ld...", host, (long)port];
     __weak ARMSX3ViewController* weak_self = self;
     [self.core connectNetISOHost:host port:(uint16_t)port completion:^(BOOL succeeded, NSString* message) {
+        weak_self.lastOperationMessage = message;
         weak_self.stateLabel.text = message;
         weak_self.stateLabel.textColor = succeeded
             ? [UIColor colorWithRed:0.25 green:0.88 blue:0.68 alpha:1.0]
@@ -834,6 +845,7 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
 {
     __weak ARMSX3ViewController* weak_self = self;
     [self.core runJITSelfTestWithCompletion:^(BOOL succeeded, NSString* message) {
+        weak_self.lastOperationMessage = message;
         weak_self.stateLabel.text = message;
         [weak_self appendLog:message];
     }];
@@ -845,6 +857,7 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
     [self attachDisplay];
     __weak ARMSX3ViewController* weak_self = self;
     [self.core bootXMBWithCompletion:^(BOOL succeeded, NSString* message) {
+        weak_self.lastOperationMessage = message;
         weak_self.stateLabel.text = message;
         [weak_self appendLog:message];
     }];
@@ -855,6 +868,7 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
     __weak ARMSX3ViewController* weak_self = self;
     self.stateLabel.text = @"Stopping emulation...";
     [self.core stopWithCompletion:^(BOOL succeeded, NSString* message) {
+        weak_self.lastOperationMessage = message;
         weak_self.stateLabel.text = message;
         [weak_self appendLog:message];
     }];
@@ -902,6 +916,7 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
     if ([game[@"remote"] boolValue])
     {
         [self.core bootNetISOPath:game[@"path"] completion:^(BOOL succeeded, NSString* message) {
+            weak_self.lastOperationMessage = message;
             weak_self.stateLabel.text = message;
             weak_self.stateLabel.textColor = succeeded
                 ? [UIColor colorWithRed:0.25 green:0.88 blue:0.68 alpha:1.0]
@@ -912,6 +927,7 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
     else
     {
         [self.core bootTitleID:title_id completion:^(BOOL succeeded, NSString* message) {
+            weak_self.lastOperationMessage = message;
             weak_self.stateLabel.text = message;
             weak_self.stateLabel.textColor = succeeded
                 ? [UIColor colorWithRed:0.25 green:0.88 blue:0.68 alpha:1.0]
@@ -924,7 +940,21 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
 - (void)updateRuntimeStatus
 {
     if (self.core.isReady)
-        self.stateLabel.text = [self.core runtimeStatus];
+    {
+        NSString* runtime = [self.core runtimeStatus];
+        self.stateLabel.text = runtime;
+        if (self.landscapeLayout)
+        {
+            NSString* detail = self.lastOperationMessage.length
+                ? self.lastOperationMessage
+                : self.lastCoreLog;
+            if (detail.length > 180)
+                detail = [detail substringToIndex:180];
+            self.landscapeRuntimeLabel.text = detail.length
+                ? [NSString stringWithFormat:@"%@\n%@", runtime, detail]
+                : runtime;
+        }
+    }
 }
 
 - (void)startControllerSupport
@@ -1035,6 +1065,26 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
     return button;
 }
 
+- (void)addLandscapeDPadSector:(NSString*)label bit:(uint64_t)bit angle:(CGFloat)angle
+{
+    ARMSX3DPadSectorButton* button = [ARMSX3DPadSectorButton buttonWithType:UIButtonTypeCustom];
+    button.tag = (NSInteger)bit;
+    button.directionAngle = angle;
+    button.hidden = YES;
+    button.exclusiveTouch = NO;
+    button.multipleTouchEnabled = YES;
+    button.backgroundColor = UIColor.clearColor;
+    button.accessibilityLabel = label;
+    [button addTarget:self action:@selector(touchDown:)
+        forControlEvents:UIControlEventTouchDown | UIControlEventTouchDragEnter];
+    [button addTarget:self action:@selector(touchUp:)
+        forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside
+            | UIControlEventTouchCancel | UIControlEventTouchDragExit];
+    [self.playerStage addSubview:button];
+    [self.landscapeDPadButtons addObject:button];
+    [self.landscapeControls addObject:button];
+}
+
 - (void)installLandscapeControls
 {
     [self landscapePadButton:@"L2" bit:RPCS3_IOS_PAD_BUTTON_L2];
@@ -1048,24 +1098,24 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
     [self landscapePadButton:@"Select" bit:RPCS3_IOS_PAD_BUTTON_SELECT];
     [self landscapePadButton:@"Start" bit:RPCS3_IOS_PAD_BUTTON_START];
 
-    __weak ARMSX3ViewController* weak_self = self;
-    self.landscapeDPad = [[ARMSX3VirtualDPad alloc] initWithFrame:CGRectZero];
-    self.landscapeDPad.hidden = YES;
-    self.landscapeDPad.accessibilityLabel = @"Directional pad";
-    self.landscapeDPad.valueHandler = ^(uint64_t directions) {
-        static const uint64_t mask = RPCS3_IOS_PAD_BUTTON_DPAD_UP
-            | RPCS3_IOS_PAD_BUTTON_DPAD_DOWN
-            | RPCS3_IOS_PAD_BUTTON_DPAD_LEFT
-            | RPCS3_IOS_PAD_BUTTON_DPAD_RIGHT;
-        ARMSX3ViewController* strong_self = weak_self;
-        if (!strong_self)
-            return;
-        strong_self.touchButtons = (strong_self.touchButtons & ~mask) | directions;
-        [strong_self pushTouchPad];
-    };
-    [self.playerStage addSubview:self.landscapeDPad];
-    [self.landscapeControls addObject:self.landscapeDPad];
+    [self addLandscapeDPadSector:@"D-pad right"
+        bit:RPCS3_IOS_PAD_BUTTON_DPAD_RIGHT angle:0.0];
+    [self addLandscapeDPadSector:@"D-pad down right"
+        bit:RPCS3_IOS_PAD_BUTTON_DPAD_DOWN | RPCS3_IOS_PAD_BUTTON_DPAD_RIGHT angle:M_PI_4];
+    [self addLandscapeDPadSector:@"D-pad down"
+        bit:RPCS3_IOS_PAD_BUTTON_DPAD_DOWN angle:M_PI_2];
+    [self addLandscapeDPadSector:@"D-pad down left"
+        bit:RPCS3_IOS_PAD_BUTTON_DPAD_DOWN | RPCS3_IOS_PAD_BUTTON_DPAD_LEFT angle:3.0 * M_PI_4];
+    [self addLandscapeDPadSector:@"D-pad left"
+        bit:RPCS3_IOS_PAD_BUTTON_DPAD_LEFT angle:M_PI];
+    [self addLandscapeDPadSector:@"D-pad up left"
+        bit:RPCS3_IOS_PAD_BUTTON_DPAD_UP | RPCS3_IOS_PAD_BUTTON_DPAD_LEFT angle:-3.0 * M_PI_4];
+    [self addLandscapeDPadSector:@"D-pad up"
+        bit:RPCS3_IOS_PAD_BUTTON_DPAD_UP angle:-M_PI_2];
+    [self addLandscapeDPadSector:@"D-pad up right"
+        bit:RPCS3_IOS_PAD_BUTTON_DPAD_UP | RPCS3_IOS_PAD_BUTTON_DPAD_RIGHT angle:-M_PI_4];
 
+    __weak ARMSX3ViewController* weak_self = self;
     self.leftVirtualStick = [[ARMSX3VirtualStick alloc] init];
     self.leftVirtualStick.hidden = YES;
     self.leftVirtualStick.accessibilityLabel = @"Left analog stick";
@@ -1150,12 +1200,13 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
     self.touchReleaseTokens[key] = @(++self.touchEventSequence);
     self.touchPressStarted[key] = @(CACurrentMediaTime());
     self.touchButtons |= key.unsignedLongLongValue;
-    const BOOL landscape_button = [self.landscapeButtons containsObject:sender];
+    const BOOL dpad_sector = [self.landscapeDPadButtons containsObject:(ARMSX3DPadSectorButton*)sender];
+    const BOOL landscape_button = [self.landscapeButtons containsObject:sender] || dpad_sector;
     sender.backgroundColor = landscape_button
-        ? [UIColor colorWithWhite:1.0 alpha:0.15]
+        ? [UIColor colorWithWhite:1.0 alpha:dpad_sector ? 0.0 : 0.15]
         : sender.backgroundColor;
-    sender.transform = CGAffineTransformMakeScale(landscape_button ? 0.96 : 0.90,
-        landscape_button ? 0.96 : 0.90);
+    const CGFloat scale = dpad_sector ? 1.0 : (landscape_button ? 0.96 : 0.90);
+    sender.transform = CGAffineTransformMakeScale(scale, scale);
     [self pushTouchPad];
 }
 
@@ -1177,7 +1228,8 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
         strong_self.touchButtons &= ~key.unsignedLongLongValue;
         [strong_self.touchPressStarted removeObjectForKey:key];
         sender.transform = CGAffineTransformIdentity;
-        if ([strong_self.landscapeButtons containsObject:sender])
+        if ([strong_self.landscapeButtons containsObject:sender]
+            || [strong_self.landscapeDPadButtons containsObject:(ARMSX3DPadSectorButton*)sender])
             sender.backgroundColor = UIColor.clearColor;
         [strong_self pushTouchPad];
     });
@@ -1222,6 +1274,21 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
         style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction* action) {
             [weak_self pulsePadButton:RPCS3_IOS_PAD_BUTTON_PS];
         }]];
+    [menu addAction:[UIAlertAction actionWithTitle:@"Show Diagnostics"
+        style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction* action) {
+            ARMSX3ViewController* strong_self = weak_self;
+            if (!strong_self)
+                return;
+            NSString* message = [NSString stringWithFormat:@"Runtime: %@\n\nLast operation: %@\n\nLast core line: %@",
+                [strong_self.core runtimeStatus],
+                strong_self.lastOperationMessage ?: @"None",
+                strong_self.lastCoreLog ?: @"None"];
+            UIAlertController* diagnostics = [UIAlertController alertControllerWithTitle:@"ARMSX3 Diagnostics"
+                message:message preferredStyle:UIAlertControllerStyleAlert];
+            [diagnostics addAction:[UIAlertAction actionWithTitle:@"Close"
+                style:UIAlertActionStyleCancel handler:nil]];
+            [strong_self presentViewController:diagnostics animated:YES completion:nil];
+        }]];
     [menu addAction:[UIAlertAction actionWithTitle:@"Stop Emulation"
         style:UIAlertActionStyleDestructive handler:^(__unused UIAlertAction* action) {
             [weak_self stopGame];
@@ -1233,11 +1300,34 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
 
 - (void)pushTouchPad
 {
-    [self.core updatePadConnected:YES buttons:self.touchButtons
+    const BOOL accepted = [self.core updatePadConnected:YES buttons:self.touchButtons
         leftX:self.touchLeftX leftY:self.touchLeftY
         rightX:self.touchRightX rightY:self.touchRightY
         leftTrigger:(self.touchButtons & RPCS3_IOS_PAD_BUTTON_L2) ? 1.0f : 0.0f
         rightTrigger:(self.touchButtons & RPCS3_IOS_PAD_BUTTON_R2) ? 1.0f : 0.0f];
+    if (!self.landscapeLayout)
+        return;
+
+    NSMutableString* directions = [NSMutableString string];
+    if (self.touchButtons & RPCS3_IOS_PAD_BUTTON_DPAD_UP) [directions appendString:@"U"];
+    if (self.touchButtons & RPCS3_IOS_PAD_BUTTON_DPAD_DOWN) [directions appendString:@"D"];
+    if (self.touchButtons & RPCS3_IOS_PAD_BUTTON_DPAD_LEFT) [directions appendString:@"L"];
+    if (self.touchButtons & RPCS3_IOS_PAD_BUTTON_DPAD_RIGHT) [directions appendString:@"R"];
+    if (!directions.length) [directions appendString:@"-"];
+    self.inputTelemetryLabel.textColor = accepted
+        ? [UIColor colorWithRed:0.38 green:0.96 blue:0.82 alpha:1.0]
+        : [UIColor colorWithRed:1.0 green:0.32 blue:0.28 alpha:1.0];
+    self.inputTelemetryLabel.text = [NSString stringWithFormat:@"PAD %@ | D:%@ | L %.2f %.2f | R %.2f %.2f",
+        accepted ? @"OK" : @"REJECT", directions,
+        self.touchLeftX, self.touchLeftY, self.touchRightX, self.touchRightY];
+    self.inputTelemetryLabel.hidden = NO;
+    const NSUInteger token = ++self.telemetryHideToken;
+    __weak ARMSX3ViewController* weak_self = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1200 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
+        ARMSX3ViewController* strong_self = weak_self;
+        if (strong_self && strong_self.telemetryHideToken == token)
+            strong_self.inputTelemetryLabel.hidden = YES;
+    });
 }
 
 - (void)dealloc

@@ -101,6 +101,8 @@ static void netiso_game_enumeration_callback(void* user_context, const rpcs3_ios
 {
     dispatch_queue_t _coreQueue;
     dispatch_queue_t _controlQueue;
+    dispatch_queue_t _diagnosticQueue;
+    NSURL* _diagnosticLogURL;
     ARMSX3CoreLogHandler _logHandler;
     NSLock* _verboseLogLock;
     NSString* _latestVerboseLog;
@@ -118,12 +120,40 @@ static void netiso_game_enumeration_callback(void* user_context, const rpcs3_ios
     {
         _coreQueue = dispatch_queue_create("com.thec0de.armsx3ios.core", DISPATCH_QUEUE_SERIAL);
         _controlQueue = dispatch_queue_create("com.thec0de.armsx3ios.control", DISPATCH_QUEUE_SERIAL);
+        _diagnosticQueue = dispatch_queue_create("com.thec0de.armsx3ios.diagnostics", DISPATCH_QUEUE_SERIAL);
         _logHandler = [logHandler copy];
         _verboseLogLock = [[NSLock alloc] init];
         _games = @[];
         _netISOGames = @[];
+        NSURL* documents = [NSFileManager.defaultManager URLsForDirectory:NSDocumentDirectory
+                                                                 inDomains:NSUserDomainMask].firstObject;
+        _diagnosticLogURL = [documents URLByAppendingPathComponent:@"ARMSX3-last-session.log"];
+        NSString* header = [NSString stringWithFormat:@"ARMSX3 diagnostic session %.3f\n",
+            NSDate.date.timeIntervalSince1970];
+        [header writeToURL:_diagnosticLogURL atomically:YES encoding:NSUTF8StringEncoding error:nil];
     }
     return self;
+}
+
+- (void)writeDiagnosticLine:(NSString*)line
+{
+    if (!line.length || !_diagnosticLogURL)
+        return;
+    NSURL* url = _diagnosticLogURL;
+    NSString* record = [NSString stringWithFormat:@"%.3f %@\n",
+        NSDate.date.timeIntervalSince1970, line];
+    dispatch_async(_diagnosticQueue, ^{
+        NSData* data = [record dataUsingEncoding:NSUTF8StringEncoding];
+        NSFileHandle* handle = [NSFileHandle fileHandleForWritingAtPath:url.path];
+        if (!handle)
+        {
+            [data writeToURL:url atomically:YES];
+            return;
+        }
+        [handle seekToEndOfFile];
+        [handle writeData:data];
+        [handle closeFile];
+    });
 }
 
 - (void)emitCoreLevel:(int32_t)level message:(NSString*)message
@@ -194,6 +224,7 @@ static void netiso_game_enumeration_callback(void* user_context, const rpcs3_ios
 - (void)emit:(NSString*)line
 {
     NSLog(@"[ARMSX3 iOS] %@", line);
+    [self writeDiagnosticLine:line];
     if (!_logHandler)
         return;
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -203,6 +234,8 @@ static void netiso_game_enumeration_callback(void* user_context, const rpcs3_ios
 
 - (void)finish:(ARMSX3CoreCompletion)completion succeeded:(BOOL)succeeded message:(NSString*)message
 {
+    [self writeDiagnosticLine:[NSString stringWithFormat:@"[Operation %@] %@",
+        succeeded ? @"PASS" : @"FAIL", message ?: @"No detail"]];
     if (!completion)
         return;
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -445,7 +478,7 @@ static void netiso_game_enumeration_callback(void* user_context, const rpcs3_ios
     });
 }
 
-- (void)updatePadConnected:(BOOL)connected
+- (BOOL)updatePadConnected:(BOOL)connected
                    buttons:(uint64_t)buttons
                      leftX:(float)leftX
                      leftY:(float)leftY
@@ -455,7 +488,7 @@ static void netiso_game_enumeration_callback(void* user_context, const rpcs3_ios
               rightTrigger:(float)rightTrigger
 {
     if (!self.isReady)
-        return;
+        return NO;
     rpcs3_ios_pad_state pad{};
     pad.struct_size = sizeof(pad);
     pad.connected = connected ? 1u : 0u;
@@ -466,7 +499,7 @@ static void netiso_game_enumeration_callback(void* user_context, const rpcs3_ios
     pad.right_stick_y = rightY;
     pad.left_trigger = leftTrigger;
     pad.right_trigger = rightTrigger;
-    rpcs3_ios_set_pad_state(0, &pad);
+    return rpcs3_ios_set_pad_state(0, &pad) == RPCS3_IOS_OK;
 }
 
 - (NSString*)runtimeStatus

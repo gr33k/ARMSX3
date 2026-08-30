@@ -28,7 +28,7 @@ typedef void (^ARMSX3CoreCompletion)(BOOL succeeded, NSString* message);
 - (void)bootXMBWithCompletion:(ARMSX3CoreCompletion)completion;
 - (void)bootTitleID:(NSString*)titleID completion:(ARMSX3CoreCompletion)completion;
 - (void)stopWithCompletion:(ARMSX3CoreCompletion)completion;
-- (void)updatePadConnected:(BOOL)connected
+- (BOOL)updatePadConnected:(BOOL)connected
                    buttons:(uint64_t)buttons
                      leftX:(float)leftX
                      leftY:(float)leftY
