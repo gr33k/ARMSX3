@@ -60,73 +60,40 @@ bool same_identity(const netiso::file_info& left, const netiso::file_info& right
 	return left.size == right.size &&
 		(!left.mtime || !right.mtime || left.mtime == right.mtime);
 }
+}
 
-class netiso_file final : public fs::file_base
+class netiso_backing final
 {
 public:
-	netiso_file(netiso::endpoint server, std::string path,
-		netiso::file_info identity, std::unique_ptr<netiso::connection> connection)
-		: m_server(std::move(server))
-		, m_path(std::move(path))
-		, m_identity(identity)
-		, m_connection(std::move(connection))
+	static std::shared_ptr<netiso_backing> open(
+		netiso::endpoint server, std::string path, std::string& error)
 	{
+		auto connection = std::make_unique<netiso::connection>(server);
+		netiso::file_info identity{};
+		if (!connection->connect(error) || !connection->open_file(path, identity, error))
+		{
+			return {};
+		}
+		return std::shared_ptr<netiso_backing>(new netiso_backing(
+			std::move(server), std::move(path), identity, std::move(connection)));
 	}
 
-	fs::stat_t get_stat() override
+	fs::stat_t get_stat() const
 	{
 		return to_fs_stat(m_identity);
 	}
 
-	bool trunc(u64) override
+	const netiso::file_info& identity() const noexcept
 	{
-		fs::g_tls_error = fs::error::readonly;
-		return false;
+		return m_identity;
 	}
 
-	u64 read(void* buffer, u64 size) override
-	{
-		std::lock_guard lock(m_mutex);
-		const u64 result = read_at_locked(m_position, buffer, size);
-		m_position += result;
-		return result;
-	}
-
-	u64 read_at(u64 offset, void* buffer, u64 size) override
-	{
-		std::lock_guard lock(m_mutex);
-		return read_at_locked(offset, buffer, size);
-	}
-
-	u64 write(const void*, u64) override
-	{
-		fs::g_tls_error = fs::error::readonly;
-		return 0;
-	}
-
-	u64 seek(s64 offset, fs::seek_mode whence) override
-	{
-		std::lock_guard lock(m_mutex);
-		const s64 base =
-			whence == fs::seek_set ? 0 :
-			whence == fs::seek_cur ? static_cast<s64>(m_position) :
-			whence == fs::seek_end ? static_cast<s64>(m_identity.size) : -1;
-		if (base < 0 || (offset < 0 && base < -offset) ||
-			(offset > 0 && base > std::numeric_limits<s64>::max() - offset))
-		{
-			fs::g_tls_error = fs::error::inval;
-			return umax;
-		}
-		m_position = static_cast<u64>(base + offset);
-		return m_position;
-	}
-
-	u64 size() override
+	u64 size() const noexcept
 	{
 		return m_identity.size;
 	}
 
-	fs::file_id get_id() override
+	fs::file_id get_id() const
 	{
 		std::string identity = m_server.host;
 		identity.push_back('\0');
@@ -142,52 +109,9 @@ public:
 		return result;
 	}
 
-private:
-	bool reconnect_and_verify(std::string& error)
+	u64 read_at(u64 offset, void* buffer, u64 requested)
 	{
-		auto replacement = std::make_unique<netiso::connection>(m_server);
-		if (!replacement->connect(error))
-		{
-			return false;
-		}
-		netiso::file_info identity{};
-		if (!replacement->open_file(m_path, identity, error))
-		{
-			return false;
-		}
-		if (!same_identity(m_identity, identity))
-		{
-			error = "NETISO remote file changed while it was mounted";
-			return false;
-		}
-		m_connection = std::move(replacement);
-		g_netiso_statistics.reconnects.fetch_add(1, std::memory_order_relaxed);
-		return true;
-	}
-
-	bool read_exact(u64 offset, void* buffer, usz size, std::string& error)
-	{
-		for (u32 attempt = 0; attempt < 2; attempt++)
-		{
-			usz received = 0;
-			g_netiso_statistics.remote_reads.fetch_add(1, std::memory_order_relaxed);
-			const bool succeeded = m_connection &&
-				m_connection->read_at(offset, buffer, size, received, error);
-			g_netiso_statistics.remote_bytes.fetch_add(received, std::memory_order_relaxed);
-			if (succeeded && received == size)
-			{
-				return true;
-			}
-			if (attempt || !reconnect_and_verify(error))
-			{
-				break;
-			}
-		}
-		return false;
-	}
-
-	u64 read_at_locked(u64 offset, void* buffer, u64 requested)
-	{
+		std::lock_guard lock(m_mutex);
 		if (!requested || offset >= m_identity.size)
 		{
 			return 0;
@@ -237,14 +161,157 @@ private:
 		return 0;
 	}
 
+private:
+	netiso_backing(netiso::endpoint server, std::string path,
+		netiso::file_info identity, std::unique_ptr<netiso::connection> connection)
+		: m_server(std::move(server))
+		, m_path(std::move(path))
+		, m_identity(identity)
+		, m_connection(std::move(connection))
+	{
+	}
+
+	bool reconnect_and_verify(std::string& error)
+	{
+		auto replacement = std::make_unique<netiso::connection>(m_server);
+		if (!replacement->connect(error))
+		{
+			return false;
+		}
+		netiso::file_info identity{};
+		if (!replacement->open_file(m_path, identity, error))
+		{
+			return false;
+		}
+		if (!same_identity(m_identity, identity))
+		{
+			error = "NETISO remote file changed while it was mounted";
+			return false;
+		}
+		m_connection = std::move(replacement);
+		g_netiso_statistics.reconnects.fetch_add(1, std::memory_order_relaxed);
+		return true;
+	}
+
+	bool read_exact(u64 offset, void* buffer, usz size, std::string& error)
+	{
+		for (u32 attempt = 0; attempt < 2; attempt++)
+		{
+			usz received = 0;
+			g_netiso_statistics.remote_reads.fetch_add(1, std::memory_order_relaxed);
+			const bool succeeded = m_connection &&
+				m_connection->read_at(offset, buffer, size, received, error);
+			g_netiso_statistics.remote_bytes.fetch_add(received, std::memory_order_relaxed);
+			if (succeeded && received == size)
+			{
+				return true;
+			}
+			if (attempt || !reconnect_and_verify(error))
+			{
+				break;
+			}
+		}
+		return false;
+	}
+
 	netiso::endpoint m_server;
 	std::string m_path;
 	netiso::file_info m_identity;
 	std::unique_ptr<netiso::connection> m_connection;
 	std::mutex m_mutex;
-	u64 m_position = 0;
 	u64 m_cache_offset = 0;
 	std::vector<u8> m_cache;
+};
+
+namespace
+{
+bool virtual_iso_key_probe(std::string_view path)
+{
+	if (!path.starts_with(virtual_ps3_prefix))
+	{
+		return false;
+	}
+	const std::string lower = [&]
+	{
+		std::string result{path};
+		std::transform(result.begin(), result.end(), result.begin(), [](unsigned char character)
+		{
+			return static_cast<char>(std::tolower(character));
+		});
+		return result;
+	}();
+	return lower.ends_with(".dkey") || lower.ends_with(".key");
+}
+
+class netiso_file final : public fs::file_base
+{
+public:
+	explicit netiso_file(std::shared_ptr<netiso_backing> backing)
+		: m_backing(std::move(backing))
+	{
+	}
+
+	fs::stat_t get_stat() override
+	{
+		return m_backing->get_stat();
+	}
+
+	bool trunc(u64) override
+	{
+		fs::g_tls_error = fs::error::readonly;
+		return false;
+	}
+
+	u64 read(void* buffer, u64 size) override
+	{
+		std::lock_guard lock(m_mutex);
+		const u64 result = m_backing->read_at(m_position, buffer, size);
+		m_position += result;
+		return result;
+	}
+
+	u64 read_at(u64 offset, void* buffer, u64 size) override
+	{
+		return m_backing->read_at(offset, buffer, size);
+	}
+
+	u64 write(const void*, u64) override
+	{
+		fs::g_tls_error = fs::error::readonly;
+		return 0;
+	}
+
+	u64 seek(s64 offset, fs::seek_mode whence) override
+	{
+		std::lock_guard lock(m_mutex);
+		const s64 base =
+			whence == fs::seek_set ? 0 :
+			whence == fs::seek_cur ? static_cast<s64>(m_position) :
+			whence == fs::seek_end ? static_cast<s64>(m_backing->size()) : -1;
+		if (base < 0 || (offset < 0 && base < -offset) ||
+			(offset > 0 && base > std::numeric_limits<s64>::max() - offset))
+		{
+			fs::g_tls_error = fs::error::inval;
+			return umax;
+		}
+		m_position = static_cast<u64>(base + offset);
+		return m_position;
+	}
+
+	u64 size() override
+	{
+		return m_backing->size();
+	}
+
+	fs::file_id get_id() override
+	{
+		return m_backing->get_id();
+	}
+
+private:
+	std::shared_ptr<netiso_backing> m_backing;
+	std::mutex m_mutex;
+	u64 m_position = 0;
 };
 
 class netiso_dir final : public fs::dir_base
@@ -378,6 +445,31 @@ std::string netiso_device::last_error() const
 	return m_last_error;
 }
 
+std::shared_ptr<netiso_backing> netiso_device::acquire_backing(
+	const std::string& remote_path, std::string& error)
+{
+	if (!remote_path.starts_with(virtual_ps3_prefix))
+	{
+		return netiso_backing::open(m_server, remote_path, error);
+	}
+
+	// ps3netsrv synthesizes an ISO every time a /***PS3***/ folder is opened.
+	// Keep exactly one mounted virtual image alive so every file RPCS3 opens from
+	// that archive shares the same server-side image and transport connection.
+	std::lock_guard lock(m_backing_mutex);
+	if (m_virtual_backing && m_virtual_backing_path == remote_path)
+	{
+		return m_virtual_backing;
+	}
+	auto backing = netiso_backing::open(m_server, remote_path, error);
+	if (backing)
+	{
+		m_virtual_backing_path = remote_path;
+		m_virtual_backing = backing;
+	}
+	return backing;
+}
+
 bool netiso_device::list_remote(const std::string& remote_path,
 	std::vector<netiso::directory_entry>& entries, std::string& error) const
 {
@@ -401,13 +493,29 @@ bool netiso_device::stat(const std::string& path, fs::stat_t& info)
 		set_fs_error(error);
 		return false;
 	}
+	if (virtual_iso_key_probe(remote))
+	{
+		fs::g_tls_error = fs::error::noent;
+		return false;
+	}
+
+	const bool virtual_iso = remote.starts_with(virtual_ps3_prefix);
+	if (virtual_iso)
+	{
+		const auto backing = acquire_backing(remote, error);
+		if (!backing)
+		{
+			remember_error(error);
+			set_fs_error(error);
+			return false;
+		}
+		info = backing->get_stat();
+		return true;
+	}
 
 	netiso::connection connection{m_server};
 	netiso::file_info remote_info{};
-	const bool virtual_iso = remote.starts_with(virtual_ps3_prefix);
-	if (!connection.connect(error) ||
-		!(virtual_iso ? connection.open_file(remote, remote_info, error)
-			: connection.stat(remote, remote_info, error)))
+	if (!connection.connect(error) || !connection.stat(remote, remote_info, error))
 	{
 		remember_error(error);
 		set_fs_error(error);
@@ -442,20 +550,24 @@ std::unique_ptr<fs::file_base> netiso_device::open(
 		set_fs_error(error);
 		return {};
 	}
-	auto connection = std::make_unique<netiso::connection>(m_server);
-	netiso::file_info identity{};
-	if (!connection->connect(error) || !connection->open_file(remote, identity, error))
+	if (virtual_iso_key_probe(remote))
+	{
+		fs::g_tls_error = fs::error::noent;
+		return {};
+	}
+	auto backing = acquire_backing(remote, error);
+	if (!backing)
 	{
 		remember_error(error);
 		set_fs_error(error);
 		return {};
 	}
-	if (identity.is_directory)
+	if (backing->identity().is_directory)
 	{
 		fs::g_tls_error = fs::error::isdir;
 		return {};
 	}
-	return std::make_unique<netiso_file>(m_server, std::move(remote), identity, std::move(connection));
+	return std::make_unique<netiso_file>(std::move(backing));
 }
 
 std::unique_ptr<fs::dir_base> netiso_device::open_dir(const std::string& path)

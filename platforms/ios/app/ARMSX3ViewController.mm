@@ -42,7 +42,7 @@
 
     __weak ARMSX3ViewController* weak_self = self;
     self.core = [[ARMSX3CoreSession alloc] initWithLogHandler:^(NSString* line) {
-        [weak_self appendLog:line];
+        [weak_self handleCoreLog:line];
     }];
 
     UIScrollView* scroll = [[UIScrollView alloc] init];
@@ -59,7 +59,7 @@
     [scroll addSubview:stack];
 
     UILabel* title = [[UILabel alloc] init];
-    title.text = @"ARMSX3 iOS Core Test v0.5";
+    title.text = @"ARMSX3 iOS Core Test v0.6";
     title.textColor = UIColor.whiteColor;
     title.font = [UIFont systemFontOfSize:24.0 weight:UIFontWeightBlack];
     [stack addArrangedSubview:title];
@@ -235,6 +235,17 @@
         current = [current substringFromIndex:current.length - 18000];
     self.logView.text = [current stringByAppendingFormat:@"%@\n", line];
     [self.logView scrollRangeToVisible:NSMakeRange(self.logView.text.length, 0)];
+}
+
+- (void)handleCoreLog:(NSString*)line
+{
+    [self appendLog:line];
+    if ([line containsString:@"Thread terminated due to fatal error"])
+    {
+        self.stateLabel.text = @"Game stopped: fatal guest error. See the final log line.";
+        self.stateLabel.textColor = [UIColor colorWithRed:1.0 green:0.30 blue:0.28 alpha:1.0];
+        self.progressView.hidden = YES;
+    }
 }
 
 - (void)viewDidLayoutSubviews

@@ -140,6 +140,60 @@ V0.5 input/session candidate:
   hit geometry, and an accessible menu overlay. V0.5 intentionally retains the
   transparent debug controls so the input/session fix can be isolated first.
 
+V0.6 NETISO mount/Uncharted compatibility candidate:
+
+- Name: `ARMSX3-iOS-Core-Test-v0.6.ipa`
+- Compressed size: `27,974,158` bytes
+- SHA-256:
+  `24d4fee423963f9489bd62fd981ba9680fd91bc32deef1d76e459632ac01c702`
+- PASS: the unsigned source core and app-embedded core matched SHA-256
+  `9710c8ed0fa92e596bf9daf398eb633114b3d861c357463b12f46f27be5f226c`
+  before signing. The incremental core build used `-j2`; the app build used one
+  Xcode job and completed without an OOM event.
+- PASS: ZIP readback, deep strict signing, TrollStore JIT/memory entitlements,
+  arm64 app/core, iOS 15.0 minimum, bundle `com.thec0de.armsx3ios`, version
+  `0.6.0` build `5`, all five NETISO ABI exports, and executable private-path
+  and private-address scans passed.
+- ROOT CAUSE / V0.5 TRANSPORT: each `iso_file` opened its own stateful NETISO
+  connection to the same extracted `/GAMES` folder. `ps3netsrv` therefore
+  regenerated the complete virtual ISO for every ISO-backed guest file. The
+  NAS log showed many same-timestamp `open ...` / `building virtual iso...`
+  entries for `BCES00065`, followed by the same pattern for `BCES01175`; this
+  could wedge the service until its container was restarted.
+- FIX READY / PHYSICAL PENDING: V0.6 retains one strong, persistent backing for
+  the currently mounted `/***PS3***/` extracted game. All guest ISO file handles
+  keep independent positions but share one serialized protocol connection and
+  one 1 MiB read-ahead cache. A real transport failure reconnects and verifies
+  image identity once. Selecting a different extracted game replaces the
+  retained mount; ordinary `/PS3ISO` files keep independent connections.
+- FIX READY / PHYSICAL PENDING: synthesized extracted-folder images reject the
+  automatic sibling `.dkey` and `.key` existence probes locally. Extracted game
+  folders are already decrypted; sending these probes to `ps3netsrv` caused two
+  additional pointless virtual-ISO builds per archive inspection.
+- PARTIAL PHYSICAL / V0.5 UNCHARTED 3: `BCES01175` reached its language screen
+  and then live gameplay over NETISO. Cross initially appeared unresponsive but
+  eventually advanced; its ABI bit and iOS pad-handler mapping are correct.
+  The user reports visible graphical glitches, so this is positive feasibility
+  evidence but not a renderer-quality or input-latency pass.
+- USER-REPORTED FAIL / V0.5: the user also reported a V0.5 app exit. A device
+  stack report at `23:36:52` showed the process live rather than a new formal
+  crash report, so the precise exit cause remains open and is not attributed to
+  NETISO without evidence.
+- FIX READY / PHYSICAL PENDING: exact title `BCUS98123` receives RPCS3's stated
+  first-line workaround `Stub PPU Traps = 1` through the database-config layer
+  after V0.5 reached fatal PPU trap `0x00068be4`. User custom title settings keep
+  precedence. Other titles remain unchanged, and the setting is exposed as a
+  bounded per-game integer for diagnosis.
+- PASS: a fatal guest-thread log now changes the visible state to a red stopped
+  message and hides compilation progress, instead of leaving a completed or
+  apparently frozen progress bar after the guest has already terminated.
+- REQUIRED PHYSICAL COMPARISON: after V0.5 stops, install these exact V0.6 bytes,
+  restart only `ps3netsrv` if the old client left it wedged, then launch one
+  extracted Uncharted title. The NAS log must show one initial virtual-ISO build
+  rather than a same-path flood; verify list latency, Cross/D-pad/START response,
+  compile progress, NETISO reconnect count, sustained gameplay, renderer output,
+  Stop, and a second cached launch. Package/build proof does not close these gates.
+
 V0.2 artifact:
 
 - Name: `ARMSX3-iOS-Core-Test-v0.2.ipa`
@@ -257,11 +311,14 @@ Physical gates:
 
 The current result is a physically launched real-core IPA with local Bejeweled
 3/Zuma gameplay and physical remote NETISO execution through a live Walking
-Dead guest loop. GTA V reached its child-executable handoff and Uncharted 2
-reached cold compilation, but neither is sustained demanding-3D proof. V0.5 is
-the audited START/session-race candidate; qualification remains open until its
-exact bytes pass physical input, Stop/relaunch, intermittent network-error, Red
-Dead direct-stream, sustained FPS, audio, thermals, and cache-reuse gates.
+Dead guest loop. GTA V reached its child-executable handoff; Uncharted 2 reached
+real media threads before a fatal PPU trap; Uncharted 3 reached live gameplay
+with visible graphical glitches in V0.5. None is sustained demanding-3D proof.
+V0.6 is the audited single-mount/Uncharted compatibility candidate;
+qualification remains open until its exact bytes pass the one-VISO-build NAS
+gate, prompt physical input, Stop/relaunch, intermittent-network recovery, Red
+Dead direct-stream, sustained FPS, renderer accuracy, audio, thermals, and
+cache-reuse gates.
 
 ## Storage and network-disc checkpoint
 

@@ -3,6 +3,7 @@
 #include "NetISOProtocol.h"
 #include "Utilities/File.h"
 
+#include <memory>
 #include <mutex>
 #include <string>
 #include <string_view>
@@ -10,6 +11,8 @@
 
 namespace rpcs3::ios
 {
+class netiso_backing;
+
 enum class netiso_game_kind : u32
 {
 	iso = 1,
@@ -66,9 +69,14 @@ public:
 
 private:
 	bool remote_path(const std::string& path, std::string& remote, std::string& error) const;
+	std::shared_ptr<netiso_backing> acquire_backing(
+		const std::string& remote_path, std::string& error);
 	void remember_error(std::string error) const;
 
 	netiso::endpoint m_server;
+	std::mutex m_backing_mutex;
+	std::string m_virtual_backing_path;
+	std::shared_ptr<netiso_backing> m_virtual_backing;
 	mutable std::mutex m_error_mutex;
 	mutable std::string m_last_error;
 };

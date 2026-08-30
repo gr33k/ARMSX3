@@ -354,6 +354,30 @@ bool apply_database_settings_for_api(std::string_view title_id)
 	return false;
 }
 
+std::string database_config_for_guest_boot(const std::string& title_id)
+{
+	std::string database_config = rpcs3::ios::shared_config_database().config_for(title_id);
+	if (title_id != "BCUS98123")
+	{
+		return database_config;
+	}
+
+	// The physical iOS run reached Uncharted 2's main thread and trapped at
+	// 0x00068be4. RPCS3's own first-line workaround is one skipped instruction.
+	// Returning this through the database layer preserves a user's custom title
+	// config, which RPCS3 intentionally gives precedence over database settings.
+	cfg_root merged;
+	if (!merged.from_string(g_cfg.to_string()) ||
+		(!database_config.empty() && !merged.from_string(database_config)))
+	{
+		emit_log(2, "Unable to compose the iOS Uncharted 2 compatibility profile");
+		return database_config;
+	}
+	merged.core.stub_ppu_traps.set(1);
+	emit_log(4, "Applying iOS Uncharted 2 compatibility profile: Stub PPU Traps = 1");
+	return merged.to_string();
+}
+
 rpcs3_ios_status validate_game_settings_target(const char* title_id, rpcs3::ios::installed_game* installed_game = nullptr)
 {
 	if (!title_id || !title_id[0])
@@ -911,7 +935,7 @@ EmuCallbacks make_callbacks()
 	callbacks.enable_gamemode = [](bool) {};
 	callbacks.get_database_config = [](const std::string& title_id)
 	{
-		return rpcs3::ios::shared_config_database().config_for(title_id);
+		return database_config_for_guest_boot(title_id);
 	};
 	return callbacks;
 }
