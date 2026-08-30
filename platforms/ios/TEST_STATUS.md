@@ -431,6 +431,10 @@ V0.10 Jetsam-resistance candidate:
   `1c096d4ca1bb5fae7e34490943b3d8fa43892e137a904b385deda4a98ae32d9a`;
   the packaged ad-hoc signed core SHA-256 is
   `cf59eba373fe35659c78bfe7d92723b205acda2ede980beb5d9bce07ccc31821`.
+- PASS DISTRIBUTION: the exact audited IPA was copied to iCloud Drive as
+  `ARMSX3-iOS-Core-Test-v0.10.ipa`; destination SHA-256 readback is identical to
+  the package hash above. TrollStore installation and launch remain physical
+  gates rather than consequences of this file transfer.
 - REQUIRED PHYSICAL GATE: install these exact V0.10 bytes and replay the same
   Uncharted 1 live-3D scene for at least five minutes with USB syslog attached.
   Acceptance requires no Jetsam/crash, no sustained fatal-reclaim loop, bounded
