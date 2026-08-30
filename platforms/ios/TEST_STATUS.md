@@ -620,7 +620,7 @@ V0.13 Red Dead / lifecycle / NETISO physical evidence:
   a declared `0x900` payload that is zlib-compressed; inflating either payload
   yields a valid 64-bit ELF. DuckTales uses a normal encrypted retail SELF.
 
-V0.14 implementation candidate (physical qualification pending):
+V0.14 implementation candidate (physical qualification in progress):
 
 - FIX READY: compressed CFW fake-SELF payloads are now inflated directly from
   their file range with bounded buffers and accepted only when the result has a
@@ -671,9 +671,52 @@ V0.14 signed candidate artifact:
 - PASS TRANSFER: repository artifact, Desktop copy, and iCloud Drive copy have
   the exact SHA-256 above. V0.13 is retained as the single rollback candidate;
   obsolete V0.1-V0.12 standalone ARMSX3 IPAs were removed from Desktop.
-- PENDING PHYSICAL: these exact V0.14 bytes have not yet been installed or run.
-  Static/package success does not close any gameplay, lifecycle, performance,
-  memory, renderer-correctness, or title-compatibility gate.
+- PASS PHYSICAL / EXACT PACKAGE: the user installed these exact V0.14 bytes
+  through TrollStore and launched them on the physical iPhone 14,3 running
+  iOS 15.3.
+- PASS PHYSICAL / REGRESSION CONTROL: DuckTales Remastered reached gameplay and
+  the user played through the first boss with near-full-speed behavior. This is
+  a strong transport/input/rendering control, not demanding-3D qualification.
+- PARTIAL PHYSICAL / RED DEAD: Red Dead Redemption reached menus at roughly
+  8-12 FPS with spikes to 30 FPS and its initial live-3D boat scene at roughly
+  6-8 FPS, improving on the prior 0-2 FPS result. It remains a failure against
+  the 30 FPS target: moving video was blurred, train geometry rendered
+  incorrectly, and audio crackled under load. The trace recorded repeated
+  ZCULL hard synchronizations, texture-cache eviction, Vulkan allocation above
+  the configured budget, and only about 706-797 MiB of process headroom.
+- PASS PHYSICAL / NORMAL STOP-RELAUNCH: the Red Dead session stopped without a
+  fatal renderer/device-loss line, and the same app process started the next
+  title. Teardown still emitted private Metal warnings and a sub-second hang
+  trace, so lifecycle cleanup remains under observation.
+- FAIL PHYSICAL / GTA V CHILD LOADER: the GTA V NETISO reached the Duplex intro,
+  wrote and exit-spawned `/dev_hdd1/duplex.self`, then remained on a black
+  `Loading` screen. The child process requested
+  `/dev_hdd0/game/PS3_GAME/USRDIR/EBOOT.BIN` and received `CELL_ENOENT`; the
+  streamed disc remained correctly mounted at `/dev_bdvd/PS3_GAME`. A V0.15
+  compatibility policy is being added to redirect only that legacy path when
+  an iOS exit-spawn child has an active virtual ISO. Normal installed games and
+  non-child processes are explicitly excluded, and the redirected path keeps
+  the BDVD read-only mount semantics.
+- PENDING PHYSICAL: Uncharted 1/2/3, Spider-Man 2, TMNT, Toy Story Mania, app
+  switch/resume, and sustained thermal/cache-reuse gates remain open. Static
+  or partial physical success does not close those title-specific gates.
+
+V0.15 focused compatibility candidate:
+
+- FIX READY: iOS guest filesystem calls now redirect the legacy
+  `/dev_hdd0/game/PS3_GAME` prefix to `/dev_bdvd/PS3_GAME` only when the caller
+  is an exit-spawned child process and the active BDVD is backed by a virtual
+  ISO. This covers wrappers such as GTA V's `duplex.self` without copying the
+  streamed title or changing normal installed-game paths. Redirecting before
+  mount lookup preserves the BDVD read-only contract.
+- PASS STATIC: a dedicated policy contract verifies exact-prefix and child
+  paths, rejects lookalike prefixes, and rejects initial-process or non-virtual
+  disc sessions. The full bounded iOS contract suite and the real two-worker
+  `RPCS3Core` incremental build pass.
+- REQUIRED: package/sign/install the exact V0.15 artifact, then verify that the
+  log contains the redirect diagnostic and GTA advances beyond the prior black
+  `Loading` screen. Also verify a normal NETISO title and a local installed
+  title to prove the compatibility path does not bleed into other sessions.
 
 V0.2 artifact:
 

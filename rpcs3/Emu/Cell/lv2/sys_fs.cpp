@@ -14,6 +14,12 @@
 #include "Emu/system_utils.hpp"
 #include "Emu/Cell/lv2/sys_process.h"
 
+#ifdef RPCS3_IOS
+#include "ios/IOSExitspawnDiscPathPolicy.h"
+#include "Loader/ISO.h"
+#endif
+
+#include <atomic>
 #include <span>
 #include <shared_mutex>
 
@@ -895,6 +901,24 @@ std::pair<CellError, std::string> translate_to_str(vm::cptr<char> ptr, bool is_p
 	{
 		return {CELL_ENOENT, std::move(path)};
 	}
+
+#ifdef RPCS3_IOS
+	if (is_path && path.starts_with(rpcs3::ios::exitspawn_disc_legacy_prefix))
+	{
+		const std::string disc_path = vfs::get("/dev_bdvd/PS3_GAME");
+		if (rpcs3::ios::should_redirect_exitspawn_disc_path(
+			path, Emu.IsChildProcess(), disc_path.starts_with(iso_device::virtual_device_name)))
+		{
+			const std::string original_path = std::exchange(
+				path, rpcs3::ios::redirect_exitspawn_disc_path(path));
+			static std::atomic_uint32_t redirect_log_count{0};
+			if (redirect_log_count.fetch_add(1, std::memory_order_relaxed) < 8)
+			{
+				sys_fs.notice("iOS NETISO exitspawn path redirect: '%s' -> '%s'", original_path, path);
+			}
+		}
+	}
+#endif
 
 	return {{}, std::move(path)};
 }
