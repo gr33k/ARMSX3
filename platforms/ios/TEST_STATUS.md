@@ -296,7 +296,7 @@ V0.8 fullscreen/input/diagnostic candidate:
   expectations now match shipped ABI 30, and the GPU-default assertion now
   matches the existing `async_recompiler` source default; runtime behavior was
   not changed by those test corrections.
-- MEDIA REPAIR READY / PHYSICAL PENDING: the extracted Uncharted 1 `BCES00065`
+- PASS PHYSICAL BOOT / FAIL SUSTAINED 3D: the extracted Uncharted 1 `BCES00065`
   folder was using a modified debug/FSELF `EBOOT.BIN` (SHA-256
   `1d97d8e3ab6ff860df418dc664876dd54b6fb98f6fa8e2a4b5e0f0721d0a6355`).
   It is preserved as `EBOOT.BIN_EMUHUB_BACKUP_20260830_0800`; the folder's
@@ -304,7 +304,11 @@ V0.8 fullscreen/input/diagnostic candidate:
   `bcbd125bc0614fb5994d30f2e82c6510aaaf2fc6c51f917c4953d4a210b32bd4`).
   After restarting only `ps3netsrv`, a NAS-local protocol probe enumerated 60
   extracted titles and passed an ISO PVD random read on the rebuilt Uncharted
-  virtual image at `22,654,615,552` bytes. Real gameplay remains unverified.
+  virtual image at `22,654,615,552` bytes. The repaired title physically reached
+  menus, prerendered scenes, and live 3D gameplay without a NETISO fatal, but FPS
+  collapsed as real gameplay began. The exact installed TrollStore IPA bytes
+  could not be read back through Installation Proxy, so this is positive title
+  evidence rather than qualification of a named package.
 - MEDIA REPAIR READY / PHYSICAL PENDING: Uncharted 2 `BCUS98123` had no runtime
   `pak22.psarc`; its `5,596,444,529` bytes were split across `.part00` through
   `.part02`, while an identical complete copy was hidden as
@@ -344,6 +348,48 @@ V0.8 fullscreen/input/diagnostic candidate:
   simultaneous stick/face input, Stop/relaunch, repaired Uncharted 1 boot,
   Uncharted 2, and the God of War loop. Preserve `ARMSX3-last-session.log` after
   any failure. Package/static checks do not close these gates.
+
+V0.9 live-3D pressure candidate:
+
+- Source revision: `d947a6da25d901d16f36091fbb9be09ff1743f56`
+- Name: `ARMSX3-iOS-Core-Test-v0.9.ipa`
+- Compressed size: `31,768,673` bytes
+- SHA-256:
+  `7cdd0911c110f8bc6dcc4dbc0252a2f89c96b6c6f1bc9a1a334f0c2eed9a797c`
+- ROOT CAUSE PHYSICAL: a USB syslog sample from live Uncharted 1 gameplay on
+  iPhone `iPhone14,3`, iOS 15.3, showed the renderer at `183%` of its deliberately
+  soft unified-memory target with only `565 MiB` process headroom. The old policy
+  incorrectly promoted that soft ratio to `fatal` every frame. Fatal recovery
+  hard-synchronized the GPU, drained the Metal driver, and purged reusable
+  resources repeatedly, creating self-amplifying FPS and cache thrash. Earlier
+  samples at `634-637 MiB` headroom also included iOS memory warnings, active
+  PSARC reads, SPU compilation, and Metal shader compilation. No crash, Jetsam,
+  NETISO fatal, or server OOM was present in the captured interval.
+- FIX READY / PHYSICAL PENDING: a soft iOS VRAM target can now reach at most
+  `severe`; only critically low process headroom or a real allocation failure can
+  invoke fatal recovery. Proactive reclaim remains immediate on escalation but
+  is bounded to once per 1000 ms at moderate, 500 ms at severe, and 250 ms at
+  fatal instead of once per frame. Direct allocation-failure recovery bypasses
+  this frame-boundary throttle, preserving the safety path.
+- FIX READY / PHYSICAL PENDING: exact title `BCES00065` receives a reversible
+  `75%` internal resolution scale through the database layer. The full iOS output
+  surface and controller geometry are unchanged, and a user per-game setting
+  retains precedence. Other titles remain at their existing scale.
+- PASS STATIC: the complete lightweight iOS contract suite, focused memory
+  policy assertions including the observed `183%` case, incremental two-worker
+  arm64 core build, serial app build, ZIP readback, strict deep signing, iOS 15.0
+  load commands, TrollStore JIT/unsigned-memory/extended-address/increased-memory
+  entitlements, version `0.9.0` build `8`, and private path/address scans passed.
+  The unsigned checkpoint core SHA-256 is
+  `b25596b075085fbcb7f968ca6445943a8c4defdfaaed4fffa37a4d64444e7e60`;
+  the packaged ad-hoc signed core SHA-256 is
+  `e25478f2b284e1445601a522ed326b17317f5068723faa453c4276133c0e78d1`.
+- REQUIRED PHYSICAL GATE: install these exact V0.9 bytes and return to the same
+  Uncharted 1 live-gameplay scene. Record sustained FPS, memory, CPU/RSX load,
+  thermals, and syslog pressure cadence for at least five minutes, then Stop and
+  repeat to measure shader/pipeline-cache reuse. Success requires eliminating
+  the old per-frame fatal drain without a crash, corrupted rendering, or input
+  regression; static/package evidence does not claim a speed pass.
 
 V0.2 artifact:
 
