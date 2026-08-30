@@ -11,6 +11,7 @@ int main()
 	using rpcs3::ios::get_process_memory_pressure;
 	using rpcs3::ios::get_process_pressure_texture_cache_quota;
 	using rpcs3::ios::get_savestate_compression_thread_limit;
+	using rpcs3::ios::get_soft_vram_memory_pressure;
 	using rpcs3::ios::has_safe_savestate_headroom;
 
 	static_assert(get_llvm_compile_thread_limit(10, 0) == 3);
@@ -23,6 +24,10 @@ int main()
 	static_assert(get_savestate_compression_thread_limit(2) == 1);
 	static_assert(get_savestate_compression_thread_limit(4) == 3);
 	static_assert(get_savestate_compression_thread_limit(10) == 3);
+	static_assert(get_soft_vram_memory_pressure(75.f) == process_memory_pressure::low);
+	static_assert(get_soft_vram_memory_pressure(76.f) == process_memory_pressure::moderate);
+	static_assert(get_soft_vram_memory_pressure(91.f) == process_memory_pressure::severe);
+	static_assert(get_soft_vram_memory_pressure(183.f) == process_memory_pressure::severe);
 
 	static_assert(get_process_memory_pressure(2'000 * process_memory_mib) == process_memory_pressure::low);
 	static_assert(get_process_memory_pressure(1536 * process_memory_mib) == process_memory_pressure::moderate);

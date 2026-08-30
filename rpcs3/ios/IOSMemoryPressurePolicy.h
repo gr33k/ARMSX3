@@ -57,6 +57,22 @@ namespace rpcs3::ios
 	inline constexpr std::uint64_t texture_cache_quota_severe = 256 * process_memory_mib;
 	inline constexpr std::uint64_t texture_cache_quota_fatal = 128 * process_memory_mib;
 
+	// The iOS VRAM budget is a proactive unified-memory target, not a hard heap
+	// ceiling. It can be exceeded legitimately, so only process headroom or a
+	// real allocation failure may escalate pressure to fatal.
+	constexpr process_memory_pressure get_soft_vram_memory_pressure(float usage_percent)
+	{
+		if (usage_percent > 90.f)
+		{
+			return process_memory_pressure::severe;
+		}
+		if (usage_percent > 75.f)
+		{
+			return process_memory_pressure::moderate;
+		}
+		return process_memory_pressure::low;
+	}
+
 	constexpr process_memory_pressure get_process_memory_pressure(
 		std::uint64_t available_bytes,
 		process_memory_pressure current = process_memory_pressure::low)

@@ -46,7 +46,9 @@ namespace vk
 	{
 		rpcs3::ios::process_memory_pressure process_severity = rpcs3::ios::process_memory_pressure::low;
 		rsx::problem_severity combined_severity = rsx::problem_severity::low;
+		rsx::problem_severity last_reclaim_severity = rsx::problem_severity::low;
 		std::chrono::steady_clock::time_point next_report{};
+		std::chrono::steady_clock::time_point next_reclaim{};
 	} g_ios_process_memory_pressure;
 
 	static rsx::problem_severity to_problem_severity(rpcs3::ios::process_memory_pressure severity)
@@ -271,8 +273,13 @@ namespace vk
 
 			if (vmm_load > 95.f)
 			{
+#ifdef RPCS3_IOS
+				load_severity = to_problem_severity(
+					rpcs3::ios::get_soft_vram_memory_pressure(vmm_load));
+#else
 				// Drivers will often crash long before returning OUT_OF_DEVICE_MEMORY errors.
 				load_severity = rsx::problem_severity::fatal;
+#endif
 			}
 			else if (vmm_load > 90.f)
 			{
@@ -335,7 +342,7 @@ namespace vk
 			const auto mem_info = get_current_renderer()->get_memory_mapping();
 			const auto local_memory_usage = vmm_get_application_memory_usage_impl(mem_info.device_local);
 			rsx_log.warning(
-				"iOS memory pressure is %s: process headroom %llu MiB, Vulkan allocator %d%%, internal allocations %llu MiB; reclaiming caches",
+				"iOS memory pressure is %s: process headroom %llu MiB, Vulkan allocator %d%%, internal allocations %llu MiB; cache reclaim active",
 				memory_severity_name(load_severity),
 				process_headroom / rpcs3::ios::process_memory_mib,
 				static_cast<int>(vmm_load),
@@ -366,11 +373,36 @@ namespace vk
 
 	void vmm_check_memory_usage()
 	{
-		if (const auto load_severity = vmm_determine_memory_load_severity();
-			load_severity >= rsx::problem_severity::moderate)
+		const auto load_severity = vmm_determine_memory_load_severity();
+		if (load_severity < rsx::problem_severity::moderate)
 		{
-			vmm_handle_memory_pressure(load_severity);
+#ifdef RPCS3_IOS
+			g_ios_process_memory_pressure.last_reclaim_severity = rsx::problem_severity::low;
+			g_ios_process_memory_pressure.next_reclaim = {};
+#endif
+			return;
 		}
+
+#ifdef RPCS3_IOS
+		const auto now = std::chrono::steady_clock::now();
+		const bool severity_escalated =
+			load_severity > g_ios_process_memory_pressure.last_reclaim_severity;
+		if (!severity_escalated && now < g_ios_process_memory_pressure.next_reclaim)
+		{
+			return;
+		}
+
+		vmm_handle_memory_pressure(load_severity);
+		g_ios_process_memory_pressure.last_reclaim_severity = load_severity;
+		const auto interval = load_severity >= rsx::problem_severity::fatal
+			? std::chrono::milliseconds(250)
+			: load_severity >= rsx::problem_severity::severe
+				? std::chrono::milliseconds(500)
+				: std::chrono::milliseconds(1000);
+		g_ios_process_memory_pressure.next_reclaim = now + interval;
+#else
+		vmm_handle_memory_pressure(load_severity);
+#endif
 	}
 
 	void vmm_notify_object_allocated(vmm_allocation_pool pool)
