@@ -626,7 +626,7 @@ VKGSRender::VKGSRender(utils::serial* ar) noexcept : GSRender(ar)
 	// Renderer creation can precede title-ID publication. Use one generation
 	// for every iOS title so the diagnostic rebuild cannot silently fall back.
 	shader_cache_version = rpcs3::ios::graphics_shader_cache_version.data();
-	rsx_log.notice("Using clean iOS graphics shader cache generation 3.");
+	rsx_log.notice("Using clean iOS graphics shader cache generation 4.");
 #endif
 	m_shaders_cache = std::make_unique<vk::shader_cache>(*m_prog_buffer, "vulkan", shader_cache_version);
 

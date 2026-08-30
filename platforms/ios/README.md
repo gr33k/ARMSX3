@@ -21,6 +21,13 @@ clears every title's derived shader records and the Vulkan driver pipeline
 caches, then forces reconstruction on the next launch. It never removes
 firmware, PPU/SPU modules, saves, trophies, imported games, or NETISO metadata.
 
+The physical-A15 Uncharted 3 accuracy profile is deliberately title-scoped to
+`BCES01175` and `BCUS98233`: native 100% resolution, one shader compiler worker,
+Multithreaded RSX and asynchronous texture streaming off, and color-buffer
+read/write plus accurate RSX reservation access on. Other title profiles retain
+their existing settings. Because this diagnostic profile can increase memory,
+qualify its first menu frame before entering gameplay.
+
 Firmware and game files stay outside the source tree and IPA. Select local
 content from Files or enter a NETISO host and port after installing the app.
 `Import Local Copy` always consumes iPhone storage; rows prefixed `[NAS]` stream

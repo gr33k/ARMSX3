@@ -944,6 +944,23 @@ V0.18 physical Uncharted 3 result:
   V0.14-era regression, while the box artifacts predate V0.14. The next
   candidate must restore only U3's pre-V0.14 rendering profile and required RSX
   accuracy flags without changing the better-performing U1/U2 paths.
+- FIX READY FOR V0.19: exact U3 IDs `BCES01175` and `BCUS98233` now use native
+  100% resolution, one serialized shader compiler worker, Multithreaded RSX
+  off, color-buffer read/write on, accurate RSX reservation access on, and
+  asynchronous texture streaming off. U1, U2, Red Dead, GTA V, and unprofiled
+  titles retain their prior game settings.
+- CACHE CONTROL FOR V0.19: iOS graphics cache generation 4 and
+  `vk_pipeline_cache_ios_g4.bin` guarantee that the changed U3 rendering policy
+  cannot consume V0.18 shader or driver records. This globally changes only the
+  derived-cache namespace; firmware, CPU objects, saves, and title data remain
+  intact.
+- PASS STATIC SOURCE: the complete bounded iOS contract suite and incremental
+  two-worker `RPCS3Core` build pass. The resulting core is arm64, targets iOS
+  15.0, and exports ABI 32 including graphics-cache control.
+- REQUIRED PHYSICAL GATE: install exact V0.19, capture the complete effective
+  U3 profile and generation-4 diagnostics, and inspect the first menu frame.
+  Do not enter gameplay until color and memory headroom pass because V0.18
+  already emitted memory warnings at `3571 MiB` under the lower 50% scale.
 
 V0.2 artifact:
 

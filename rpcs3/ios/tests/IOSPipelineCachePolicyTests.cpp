@@ -3,10 +3,11 @@
 int main()
 {
 	using namespace rpcs3::ios;
-	static_assert(graphics_shader_cache_version == "v1.95-ios-g3");
-	static_assert(graphics_driver_cache_filename == "vk_pipeline_cache_ios_g3.bin");
+	static_assert(graphics_shader_cache_version == "v1.95-ios-g4");
+	static_assert(graphics_driver_cache_filename == "vk_pipeline_cache_ios_g4.bin");
 	static_assert(is_graphics_driver_cache_filename("vk_pipeline_cache.bin"));
 	static_assert(is_graphics_driver_cache_filename("vk_pipeline_cache_ios_g3.bin"));
+	static_assert(is_graphics_driver_cache_filename("vk_pipeline_cache_ios_g4.bin"));
 	static_assert(!is_graphics_driver_cache_filename("vk_pipeline_cache_ios_g3.tmp"));
 	static_assert(!is_graphics_driver_cache_filename("other_pipeline_cache.bin"));
 

@@ -378,18 +378,38 @@ std::string database_config_for_guest_boot(const std::string& title_id)
 	merged.video.resolution_scale_percent.set(profile.resolution_scale_percent);
 	merged.video.shader_compiler_threads_count.set(profile.shader_compiler_threads);
 	merged.video.multithreaded_rsx.set(profile.multithreaded_rsx);
+	if (profile.write_color_buffers)
+	{
+		merged.video.write_color_buffers.set(true);
+	}
+	if (profile.read_color_buffers)
+	{
+		merged.video.read_color_buffers.set(true);
+	}
+	if (profile.accurate_rsx_reservation_access)
+	{
+		merged.core.rsx_accurate_res_access.set(true);
+	}
+	if (profile.disable_async_texture_streaming)
+	{
+		merged.video.vk.asynchronous_texture_streaming.set(false);
+	}
 	if (profile.stub_ppu_traps)
 	{
 		merged.core.stub_ppu_traps.set(profile.stub_ppu_traps);
 	}
 
 	emit_log(4, fmt::format(
-		"Applying iOS title profile for {}: Resolution Scale = {}%, Shader Compiler Threads = {}, Multithreaded RSX = {}, Stub PPU Traps = {}",
+		"Applying iOS title profile for {}: Resolution Scale = {}%, Shader Compiler Threads = {}, Multithreaded RSX = {}, Stub PPU Traps = {}, Write Color Buffers = {}, Read Color Buffers = {}, Accurate RSX Reservation Access = {}, Async Texture Streaming = {}",
 		title_id,
-		profile.resolution_scale_percent,
-		profile.shader_compiler_threads,
-		profile.multithreaded_rsx,
-		profile.stub_ppu_traps));
+		merged.video.resolution_scale_percent.get(),
+		merged.video.shader_compiler_threads_count.get(),
+		merged.video.multithreaded_rsx.get(),
+		merged.core.stub_ppu_traps.get(),
+		merged.video.write_color_buffers.get(),
+		merged.video.read_color_buffers.get(),
+		merged.core.rsx_accurate_res_access.get(),
+		merged.video.vk.asynchronous_texture_streaming.get()));
 	return merged.to_string();
 }
 

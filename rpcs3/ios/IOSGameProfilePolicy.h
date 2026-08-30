@@ -21,6 +21,10 @@ struct mobile_title_profile
 	std::uint8_t shader_compiler_threads = 0;
 	bool multithreaded_rsx = false;
 	std::int8_t stub_ppu_traps = 0;
+	bool write_color_buffers = false;
+	bool read_color_buffers = false;
+	bool accurate_rsx_reservation_access = false;
+	bool disable_async_texture_streaming = false;
 
 	constexpr explicit operator bool() const noexcept
 	{
@@ -58,10 +62,19 @@ constexpr mobile_title_profile mobile_profile_for_title(std::string_view title_i
 
 	if (is_uncharted_3_title(title_id))
 	{
-		// V0.14's forced RSX offload produced deterministic fragment-program
-		// corruption on the physical A15. Keep the other mobile limits while
-		// the underlying offload synchronization defect is isolated.
-		return {mobile_title_profile_kind::uncharted_3, 50, 2, false, 0};
+		// Restore native scaling and serialize shader compilation for the A15
+		// renderer while enabling the color-buffer paths U3 actually reads.
+		return {
+			mobile_title_profile_kind::uncharted_3,
+			100,
+			1,
+			false,
+			0,
+			true,
+			true,
+			true,
+			true,
+		};
 	}
 
 	if (is_red_dead_redemption_title(title_id) ||
