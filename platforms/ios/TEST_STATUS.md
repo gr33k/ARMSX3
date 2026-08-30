@@ -890,6 +890,24 @@ V0.17 physical result and V0.18 pre-regression renderer candidate:
 - REQUIRED: package/install exact V0.18 bytes, capture both generation-3 and
   pre-V0.14-compression diagnostics, and inspect the U3 menu before gameplay.
 
+V0.18 signed pre-regression/cache-control artifact:
+
+- Name: `ARMSX3-iOS-Core-Test-v0.18.ipa`
+- Source commit: `7a5b5bc2d385aa17e9cd92608bacccb8a27b2147`
+- SHA-256:
+  `a4a983ef74dfa8788f48935f9854077a500d9595d46df398f39bd0173dacc180`
+- PASS STATIC: archive integrity, version `0.18.0` build `17`, strict deep
+  signing, TrollStore JIT/memory entitlements, arm64/iOS 15.0 metadata, ABI 32
+  cache-control export, app control strings, generation-3 cache diagnostics,
+  pre-V0.14 compression diagnostic, bounded contracts, two-worker core build,
+  and serial Xcode build passed against the packaged bytes.
+- PASS TRANSFER: repository artifact, Desktop copy, and iCloud Drive copy have
+  the exact SHA-256 above. V0.17 remains the immediate rollback.
+- PENDING PHYSICAL: with emulation stopped, press `Rebuild Graphics Caches`,
+  confirm the measured-success message, then launch U3 and capture diagnostics
+  plus the first menu frame. An empty cache need not display a preload progress
+  bar; shaders compile on demand because no prior records remain to preload.
+
 V0.2 artifact:
 
 - Name: `ARMSX3-iOS-Core-Test-v0.2.ipa`
