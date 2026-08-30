@@ -917,6 +917,34 @@ V0.18 signed pre-regression/cache-control artifact:
   plus the first menu frame. An empty cache need not display a preload progress
   bar; shaders compile on demand because no prior records remain to preload.
 
+V0.18 physical Uncharted 3 result:
+
+- PASS IDENTITY: Installation Proxy reported exact installed version `0.18.0`
+  build `17` while the test was running.
+- PASS ACTION / CACHE ISOLATION: the user invoked `Rebuild Graphics Caches`
+  while stopped before launching U3. The measured deletion message was not
+  captured over USB, but this exact build independently selects global graphics
+  cache generation 3 and `vk_pipeline_cache_ios_g3.bin`; older generations
+  cannot be consumed by this run. Fresh compilation activity followed during
+  boot, so this was not a stale V0.17 process observation.
+- FAIL PHYSICAL / MENU: a direct device screenshot reproduced the severe
+  green/pink cast and rectangular artifacts on the first U3 title frame at
+  approximately `8.0 FPS`, `2684 MiB`, and `NET 0.0 Mbps 687 MiB R0`.
+- FAIL PHYSICAL / GAMEPLAY: a second direct screenshot reproduced the same
+  full-frame green corruption and pervasive box artifacts in live gameplay at
+  `0.0 FPS`, `3571 MiB`, and `NET 50.3 Mbps 1241 MiB R0`. The transport was
+  actively delivering data with zero reconnects, so this is not a missing-media
+  or NETISO reconnect explanation.
+- FAIL PHYSICAL / MEMORY PRESSURE: UIKit emitted memory warnings at `16:12:03`
+  and `16:12:07` while the corrupted gameplay session remained live. No
+  top-level crash was required to establish this pressure failure.
+- ROOT-CAUSE NARROWING: restoring pre-V0.14 MoltenVK compression behavior,
+  disabling forced U3 Multithreaded RSX, and isolating both shader and driver
+  caches did not repair either graphics defect. The green/pink cast remains a
+  V0.14-era regression, while the box artifacts predate V0.14. The next
+  candidate must restore only U3's pre-V0.14 rendering profile and required RSX
+  accuracy flags without changing the better-performing U1/U2 paths.
+
 V0.2 artifact:
 
 - Name: `ARMSX3-iOS-Core-Test-v0.2.ipa`
