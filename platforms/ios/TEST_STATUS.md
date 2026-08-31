@@ -2961,3 +2961,58 @@ cache-reuse gates.
   process ceiling, then pass terminal Stop, relaunch, and explicit public
   runtime-profile readback. The important-usage import/free-space gate is still
   separate and untested physically.
+
+### V0.33 audited GTA memory/color-remap package (2026-08-31)
+
+- SOURCE/INTENT: commit `08d6d7b66` preserves GTA-only WCB, enables GTA-only
+  shader-based color-space remapping, repairs literal-placeholder profile logs,
+  and adds staged long-session memory recovery. Commit `afdb39162` sets package
+  version `0.33.0`, build `32`. This is a controlled MoltenVK A/B; it does not
+  claim that the native-Metal gameplay backend is integrated.
+- BOUNDED MEMORY POLICY: one existing fatal reclaim is followed by at most two
+  additional synchronized inactive-texture evictions per continuous pressure
+  episode: one at or below `768 MiB` process headroom and one at or below
+  `384 MiB`. Each destructive pass has a `15,000 ms` cooldown, and genuine
+  recovery to moderate pressure resets the episode. This targets V0.32's
+  `268 MiB` to `7 MiB` scene-transition cliff without restoring unbounded
+  eviction/recompile oscillation.
+- STATIC/BUILD GATES: the complete iOS contract suite and `git diff --check`
+  pass. The real `VKResourceManager.cpp`, texture cache, profile application,
+  and core linked with two workers for iOS 15 arm64. Core readback contains the
+  staged-reclaim markers and both `IOS_PROFILE prepared` and
+  `IOS_PROFILE effective` telemetry fields, including `wcb` and
+  `shader_color_remap`.
+- NATIVE-METAL PARALLEL GATE: the isolated SPIRV-Cross dependency/provenance
+  contract and iOS Metal shader-compiler smoke build pass. Actual vertex and
+  fragment SPIR-V translated to MSL and compiled through Apple's Metal toolchain
+  with hashes `5d57b51aa9249429ac76ce9e14a65f698eada20781ab7da9c7f13716bbcb459e`
+  and `0e75b103427a30f2e53e5f45261d64e9e2eb8d87d8f2832bab20334122bdcb78`.
+  This proves the shader-translation lane only, not RSX command encoding,
+  resource synchronization, presentation, or native-Metal gameplay.
+- ACCEPTED PACKAGE: `ARMSX3-iOS-Core-Test-v0.33.ipa` is `31,874,222` bytes,
+  source revision `afdb39162afc96a4f038b306fb04e837b5b012c0`, core ABI `34`,
+  and SHA-256
+  `b5c4d84e82da680d2a934dd8acb031a6e80fceb14c30f7fd6f561afaa705f038`.
+- INDEPENDENT READBACK: a fresh extraction passed ZIP integrity, nine regular
+  files, no symlinks or `__MACOSX`, strict deep app signature and standalone
+  core signature verification, and private-path scanning. App UUID is
+  `69D7A59B-7C33-3246-B726-57DD65356555`; core UUID is
+  `2348260E-B902-302B-86E3-B9D18D2FF2CB`. The unsigned core SHA-256 is
+  `b7856a2decba63fe30742b0ed7c9a5f8e88fa37ef1110819a6dcd5fbe33791e1`;
+  the extracted signed-core SHA-256 is
+  `a8faeb02e8b2c87af85d4b77e54bbadf149d0bc33b263e63b0b6b694e3dd1794`.
+- TARGET/TRANSFER: app and core are arm64 Mach-O binaries targeting iOS 15.0.
+  Readback confirms version `0.33.0 (32)`, ABI/initialize/NETISO/Stop exports,
+  no iOS 17.4-only `os_sync` imports, and the required TrollStore JIT,
+  unsigned-executable-memory, Extended Virtual Addressing, increased-memory,
+  and debug entitlements. Repository artifact, iCloud root copy, and NAS
+  checkpoint at
+  `/Data/dockerprojects/armsx3-ios/checkpoints/ARMSX3-iOS-Core-Test-v0.33.ipa`
+  are byte-identical at the accepted SHA above. V0.31 and V0.32 remain intact.
+- OPEN PHYSICAL GATES: install the exact SHA above, force-close the retired
+  process, and launch GTA `BLES01807`. Require public profile readback showing
+  `wcb=1` and `shader_color_remap=1`; compare purple/lighting artifacts and FPS
+  in the same scene; verify staged reclaim `1/3`, `2/3`, and if reached `3/3`;
+  require a long run to remain well below the process ceiling; then prove Stop,
+  relaunch, and an unrelated NETISO title. Build/package results are not
+  gameplay or stability acceptance.
