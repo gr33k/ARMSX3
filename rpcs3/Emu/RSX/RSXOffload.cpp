@@ -19,13 +19,18 @@ namespace rsx
 		atomic_t<u64> m_processed_count = 0;
 		transport_packet* m_current_job = nullptr;
 
-		thread_base* current_thread_ = nullptr;
+		atomic_t<thread_base*> current_thread_ = nullptr;
 
 		void operator ()()
 		{
-			// Per-title settings may enable MTRSX after this worker starts.
-			current_thread_ = thread_ctrl::get_current();
-			ensure(current_thread_);
+			if (!g_cfg.video.multithreaded_rsx)
+			{
+				return;
+			}
+
+			auto* const current_thread = thread_ctrl::get_current();
+			ensure(current_thread);
+			current_thread_.release(current_thread);
 
 			if (g_cfg.core.thread_scheduler != thread_scheduler_mode::os)
 			{
@@ -81,6 +86,7 @@ namespace rsx
 				}
 			}
 
+			current_thread_.release(nullptr);
 			m_processed_count = -1;
 			m_processed_count.notify_all();
 		}
@@ -154,7 +160,9 @@ namespace rsx
 
 	bool dma_manager::is_offloader_running() const
 	{
-		return m_thread && m_thread->current_thread_ != nullptr;
+		return m_thread &&
+			static_cast<thread_state>(*m_thread) == thread_state::created &&
+			m_thread->current_thread_.load() != nullptr;
 	}
 
 	// Synchronization
@@ -162,7 +170,7 @@ namespace rsx
 	{
 		if (auto cpu = thread_ctrl::get_current())
 		{
-			return m_thread->current_thread_ == cpu;
+			return is_offloader_running() && m_thread->current_thread_.load() == cpu;
 		}
 
 		return false;
