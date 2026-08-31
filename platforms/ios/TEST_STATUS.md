@@ -2334,3 +2334,48 @@ cache-reuse gates.
   vblank recovery. Finish with GTA V child handoff, Sonic cache completion,
   sequential NETISO failure/recovery, background/foreground, input, rumble,
   Stop, and a second title. Static audit and packaging are not gameplay proof.
+
+## Incompatible-pitch overlap candidate (post-V0.27)
+
+- SOURCE: isolated commit `d24ca3a66`, adapted from upstream
+  `d4b287944e1ee172935665384b25afbb8c8e292f` into this fork's older
+  texture-cache architecture. The upstream 17-commit blit-destination
+  surface-cache migration remains excluded; this candidate contains only the
+  two ownership/range guards that are valid before that migration.
+- ROOT RISK: the old blit sizing heuristic can pad a destination cache block
+  across a later color/depth surface that has an incompatible pitch. A stale
+  split can also replace an exact-address surface whose newer ownership cannot
+  be preserved without pitch conversion. Either path can present neighboring
+  memory as the active image, making it a concrete candidate for U2/U3 colored
+  squares, warped regions, and directional smearing.
+- FIX READY: guessed destination padding is truncated before the earliest
+  newer incompatible-pitch color/depth surface. The safe length is floored to
+  complete rows, but the actual write payload is always retained even when it
+  ends inside the final row. Exact-address split reinsertion now preserves an
+  equal/newer incompatible-pitch owner instead of invalidating it with stale
+  data. Compatible, older, and non-overlapping surfaces keep their prior path.
+- DIAGNOSTIC SAFETY: the exact-address conflict warning is emitted on
+  occurrence `1, 2, 4, 8...` rather than for every conflict. This keeps the
+  first marker and logarithmic lifetime counts while preventing the renderer
+  path from recreating the iOS per-line logging/watchdog failure mode.
+- PASS REVIEW/STATIC/BUILD: two independent read-only reviews found both donor
+  halves present, correct iterator/range and tag semantics, preserved payload,
+  safe alignment, no missing old-architecture integration, and no issue in the
+  rate limiter. `git diff --check`, the complete bounded iOS contract runner,
+  and a two-worker arm64 iOS core build pass. The resulting unsigned core is
+  `77,497,664` bytes, SHA-256
+  `2140bc83acb836f9492edc4c5167a6be1e5b083413fad556d730de7418b2c6dd`,
+  UUID `FB0EA266-AEBB-37FE-BA97-FA51F3DC4F62`.
+- PACKAGE STATE: not packaged. V0.27 remains the latest independently audited
+  signed IPA and the immediate rollback. The Mac had only about 630 MiB free
+  after the core relink, below the package script's 5 GiB safety floor; bypassing
+  that guard would risk the workspace for no device evidence.
+- REQUIRED PHYSICAL: package and install only after safe staging space is
+  available. Rebuild the graphics cache, then repeat the same U2 and U3 menu
+  and live-3D scenes enough times to distinguish a real change from first-run
+  cache behavior. Capture conflict occurrence counts, cache invalidation and
+  allocation markers, FPS/frame-time, process headroom, colors, blocks,
+  warping, Stop, immediate relaunch, and a second title. Run the exact RDR
+  car/train and warm U1 scenes as regression controls. Reject on missing writes,
+  new corruption, crash, log growth, or worse teardown. Source/build evidence
+  is not a renderer-correctness or FPS result.

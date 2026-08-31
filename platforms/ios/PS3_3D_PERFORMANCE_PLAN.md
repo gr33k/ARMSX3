@@ -280,6 +280,26 @@ visual controls. Retain only if 1:1 motion is sharper without pixel shimmer or
 degrading legitimately scaled content. Do not report an FPS improvement from a
 sampling correction.
 
+### Incompatible-pitch overlap candidate
+
+Post-V0.27 commit `d24ca3a66` adapts upstream `d4b287944` without importing the
+17-commit blit-destination surface-cache migration. It adds both independently
+reviewed old-architecture guards: heuristic blit padding stops before a newer
+incompatible-pitch surface, and stale split reinsertion cannot replace an
+equal/newer incompatible-pitch owner at the same address. Row alignment never
+clips the actual guest write. Compatible, older, and non-overlapping ownership
+continues through the existing path.
+
+This is a renderer-ownership/correctness candidate, not a native-Metal or FPS
+claim. Its conflict marker is logarithmically rate-limited to occurrences
+`1, 2, 4, 8...` so physical evidence remains attributable without hot-path log
+amplification. Compare fresh-cache and warm U2/U3 artifact scenes first, then
+the RDR car/train and warm U1 controls. Capture occurrence count, cache
+invalidation/allocation markers, graphics, frame-time/FPS, memory/headroom,
+Stop/relaunch, and a second title. Reject any missing transfer, new corruption,
+crash, unbounded logging, or teardown regression. Keep V0.27 as rollback until
+the exact packaged candidate passes those gates.
+
 ## Required evidence
 
 Every candidate records source commit, IPA SHA-256, bundle version/build,
