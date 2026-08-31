@@ -7,6 +7,8 @@
 #include "shared.h"
 
 #include "Emu/Cell/timers.hpp"
+#include "Emu/System.h"
+#include "Utilities/Thread.h"
 
 #include <chrono>
 #include <thread>
@@ -180,9 +182,22 @@ namespace vk
 
 	void fence::wait_flush()
 	{
+		u64 spins = 0;
+
 		while (!flushed)
 		{
 			utils::pause();
+
+			if ((++spins & 0xffff) != 0)
+			{
+				continue;
+			}
+
+			if (thread_ctrl::state() == thread_state::aborting || Emu.IsStopped())
+			{
+				rsx_log.error("Abandoning an unflushed Vulkan submit while emulation is stopping.");
+				return;
+			}
 		}
 	}
 
@@ -594,7 +609,29 @@ namespace vk
 				utils::pause();
 			}
 
-			return vkWaitForFences(*g_render_device, 1, &pFence->handle, VK_FALSE, UINT64_MAX);
+			constexpr u64 wait_slice_ns = 100'000'000ull;
+
+			for (u64 slice = 1;; slice++)
+			{
+				const VkResult status = vkWaitForFences(
+					*g_render_device, 1, &pFence->handle, VK_FALSE, wait_slice_ns);
+
+				if (status != VK_TIMEOUT)
+				{
+					return status;
+				}
+
+				if (slice == 30)
+				{
+					rsx_log.error("GPU fence has not completed after 3 seconds; Stop remains available.");
+				}
+
+				if (thread_ctrl::state() == thread_state::aborting || Emu.IsStopped())
+				{
+					rsx_log.error("Abandoning a Vulkan GPU-fence wait while emulation is stopping.");
+					return VK_TIMEOUT;
+				}
+			}
 		}
 	}
 
