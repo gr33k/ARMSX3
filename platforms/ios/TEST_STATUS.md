@@ -1580,3 +1580,25 @@ cache-reuse gates.
   container, or supervised server process. Repeat once while deliberately
   restarting only `ps3netsrv` inside the container. Until this passes on-device,
   the recovery fix remains a candidate rather than accepted behavior.
+
+## GTA V NETISO child-handoff repair (post-V0.22)
+
+- ROOT CAUSE / MISSED V0.15 PATH: the existing compatibility policy was wired
+  only through `sys_fs::translate_to_str()`. GTA V's Duplex wrapper performs a
+  second `sys_game_process_exitspawn`; `lv2_exitspawn()` resolved
+  `/dev_hdd0/game/PS3_GAME/USRDIR/EBOOT.BIN` directly through `vfs::get()`
+  before `BootGame`, so the executable handoff bypassed every `sys_fs` redirect
+  and still targeted the nonexistent HDD path.
+- FIX READY: on iOS only, `lv2_exitspawn()` now applies the same exact-prefix
+  policy before host VFS resolution and updates child `argv[0]` consistently.
+  The redirect requires both continuous child-process mode and an active
+  virtual-ISO-backed `/dev_bdvd/PS3_GAME`; normal first-process launches,
+  installed-title paths, lookalike prefixes, and non-virtual discs are not
+  changed. A notice log records the old and new guest paths when activated.
+- PASS STATIC/BUILD: the focused policy contract verifies redirected and
+  isolated paths, and the incremental two-worker arm64 `RPCS3Core` build passes
+  with the real `sys_process.cpp` integration.
+- REQUIRED PHYSICAL: package the next version, launch GTA V from a fresh app,
+  advance through the Duplex intro, and require the exitspawn redirect notice
+  followed by actual GTA executable boot. A logo, intro, black Loading screen,
+  or successful wrapper process alone remains a failure.

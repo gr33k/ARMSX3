@@ -26,6 +26,11 @@
 #include "sys_vm.h"
 #include "sys_spu.h"
 
+#ifdef RPCS3_IOS
+#include "ios/IOSExitspawnDiscPathPolicy.h"
+#include "Loader/ISO.h"
+#endif
+
 // Check all flags known to be related to extended permissions (TODO)
 // It's possible anything which has root flags implicitly has debug perm as well
 // But I haven't confirmed it.
@@ -428,7 +433,22 @@ void lv2_exitspawn(ppu_thread& ppu, std::vector<std::string>& argv, std::vector<
 		if (disc.empty() && !Emu.GetTitleID().empty())
 			disc = vfs::get(Emu.GetDir());
 
-		std::string path = vfs::get(argv[0]);
+		std::string guest_path = argv[0];
+#ifdef RPCS3_IOS
+		const std::string disc_game_path = vfs::get("/dev_bdvd/PS3_GAME");
+		const std::string resolved_guest_path = rpcs3::ios::resolve_exitspawn_disc_path(
+			guest_path,
+			Emu.IsChildProcess(),
+			disc_game_path.starts_with(iso_device::virtual_device_name));
+		if (resolved_guest_path != guest_path)
+		{
+			sys_process.notice("iOS NETISO exitspawn executable redirect: '%s' -> '%s'",
+				guest_path, resolved_guest_path);
+			guest_path = resolved_guest_path;
+			argv[0] = guest_path;
+		}
+#endif
+		std::string path = vfs::get(guest_path);
 		std::string hdd1 = vfs::get("/dev_hdd1/");
 
 		const u128 klic = g_fxo->get<loaded_npdrm_keys>().last_key();

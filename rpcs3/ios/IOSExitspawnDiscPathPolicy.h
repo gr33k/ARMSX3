@@ -27,4 +27,14 @@ inline std::string redirect_exitspawn_disc_path(std::string_view path)
 	return std::string(exitspawn_disc_native_prefix) +
 		std::string(path.substr(exitspawn_disc_legacy_prefix.size()));
 }
+
+inline std::string resolve_exitspawn_disc_path(
+	std::string_view path,
+	bool is_child_process,
+	bool has_virtual_iso_disc)
+{
+	return should_redirect_exitspawn_disc_path(path, is_child_process, has_virtual_iso_disc)
+		? redirect_exitspawn_disc_path(path)
+		: std::string(path);
+}
 }

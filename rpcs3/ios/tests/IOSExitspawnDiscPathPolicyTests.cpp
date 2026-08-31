@@ -21,4 +21,13 @@ int main()
 		"/dev_bdvd/PS3_GAME");
 	assert(redirect_exitspawn_disc_path("/dev_hdd0/game/PS3_GAME/USRDIR/EBOOT.BIN") ==
 		"/dev_bdvd/PS3_GAME/USRDIR/EBOOT.BIN");
+	assert(resolve_exitspawn_disc_path(
+		"/dev_hdd0/game/PS3_GAME/USRDIR/EBOOT.BIN", true, true) ==
+		"/dev_bdvd/PS3_GAME/USRDIR/EBOOT.BIN");
+	assert(resolve_exitspawn_disc_path(
+		"/dev_hdd0/game/PS3_GAME/USRDIR/EBOOT.BIN", false, true) ==
+		"/dev_hdd0/game/PS3_GAME/USRDIR/EBOOT.BIN");
+	assert(resolve_exitspawn_disc_path(
+		"/dev_hdd0/game/BLUS31156/USRDIR/EBOOT.BIN", true, true) ==
+		"/dev_hdd0/game/BLUS31156/USRDIR/EBOOT.BIN");
 }
