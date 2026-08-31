@@ -1934,3 +1934,45 @@ cache-reuse gates.
   geometry/color corruption, no worse FPS/audio/input, and clean teardown. A
   successful build or lower theoretical lifetime is not a gameplay or
   performance claim.
+
+## V0.25 combined candidate (2026-08-31)
+
+- SOURCE: packaged executable revision
+  `3bf59d91357a9e1881d4ee76bc58f14b2d621bd8`. Relative to V0.24, it contains
+  the lazy ARM system-counter path, PPU cached-reservation repair, bounded
+  runtime logging, ARM64 SHUFB/FMS/CFLTS correctness backports, and the
+  generation-safe Vulkan command-buffer ring retirement documented above. The
+  native Metal presentation probe remains available, while Vulkan/MoltenVK
+  remains the only selected game renderer.
+- PASS PACKAGE: `ARMSX3-iOS-Core-Test-v0.25.ipa` is version `0.25.0`, build
+  `24`, `31,864,995` bytes, SHA-256
+  `32ad1ab5f36a3d1bdff208f169cea1ebcd65b6bee1979189c2698c8767c738c7`.
+- PASS INDEPENDENT READBACK: a fresh temporary extraction passed full ZIP
+  integrity and `codesign --verify --deep --strict`. The app and embedded core
+  are arm64 Mach-O binaries targeting iOS 15.0; the app links the core through
+  `@rpath`, requires arm64 plus Metal, and declares iPhone and iPad families.
+- PASS ENTITLEMENTS: the extracted signature independently reports JIT,
+  unsigned executable memory, Extended Virtual Addressing, increased memory,
+  and `get-task-allow` true under the TrollStore application identifier.
+- PASS CORE IDENTITY: the signed embedded core and unsigned build product share
+  UUID `96EC3E90-7DDA-31C6-B0BC-E48330BF4BCE`. The package exports
+  `rpcs3_ios_abi_version`, `rpcs3_ios_build_info`, and the native Metal probe;
+  its build-info marker reports ABI 34, and the named heap-growth diagnostic is
+  present. The unsigned core is `77,495,184` bytes with SHA-256
+  `b4e8c69ed69527dd87e1080f24d39f001e05210f3ae6929af27ce3e3b911a4c4`.
+- PASS TRANSFER/ROLLBACK: repository and iCloud Drive V0.25 copies are
+  byte-identical at the size and SHA above. V0.23 remains unchanged at SHA
+  `e2664a68...ffe8b`, and V0.24 remains unchanged at SHA
+  `0cc6f4f6...e1148`; neither was overwritten or deleted.
+- TOOLING FOLLOW-UP: the packaging run's old summary printed export-symbol
+  count `1` as `core ABI`. Commit `16ca69a50` now requires the ABI export and
+  validates the numeric build-info marker, correctly reading `34`. This script
+  correction occurred after packaging and does not change V0.25 app/core/IPA
+  bytes; the independent extraction above is the authoritative package audit.
+- REQUIRED PHYSICAL ORDER: install this exact SHA, run the stopped-core Metal
+  Probe first, then boot a known-good local title to prove Vulkan remains clean.
+  Next cold-test Sonic Generations while recording named heap growth and memory,
+  test GTA V child handoff, and run the same warm U1/RDR scenes plus U3 visual
+  checks. Finish with input, background/foreground, Stop, immediate relaunch,
+  and sequential-title teardown. No install, menu, compile progress, probe, or
+  package result substitutes for title-specific gameplay evidence.
