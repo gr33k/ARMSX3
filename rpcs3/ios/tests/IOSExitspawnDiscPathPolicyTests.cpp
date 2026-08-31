@@ -16,6 +16,37 @@ int main()
 		"/dev_hdd0/game/PS3_GAME/USRDIR/EBOOT.BIN", false, true));
 	static_assert(!should_redirect_exitspawn_disc_path(
 		"/dev_hdd0/game/PS3_GAME/USRDIR/EBOOT.BIN", true, false));
+	static_assert(path_has_prefix_boundary(
+		"/dev_hdd0/game/PS3_GAME/USRDIR/common.edat", exitspawn_disc_legacy_prefix));
+	static_assert(!path_has_prefix_boundary(
+		"/dev_hdd0/game/PS3_GAMEX/USRDIR/common.edat", exitspawn_disc_legacy_prefix));
+	static_assert(is_virtual_disc_source(
+		"/vfsv0_virtual_iso_overlay_fs_dev/PS3_GAME"));
+	static_assert(is_virtual_disc_source(
+		"/vfsv0_virtual_netiso_overlay_fs_dev/***PS3***/GAMES/BLES01807-[Grand Theft Auto V]"));
+	static_assert(!is_virtual_disc_source(
+		"/vfsv0_virtual_iso_overlay_fs_device/PS3_GAME"));
+
+	// Physical V0.28 evidence: BLES01807's duplex.self probes this exact
+	// pseudo-HDD tree. Only its serialized NETISO child may receive the alias.
+	static_assert(should_mount_exitspawn_disc_alias(
+		"BLES01807", true, true, 42,
+		"/vfsv0_virtual_iso_overlay_fs_dev/PS3_GAME"));
+	static_assert(!should_mount_exitspawn_disc_alias(
+		"BLES01807", false, true, 42,
+		"/vfsv0_virtual_iso_overlay_fs_dev/PS3_GAME"));
+	static_assert(!should_mount_exitspawn_disc_alias(
+		"BLES01807", true, false, 42,
+		"/vfsv0_virtual_iso_overlay_fs_dev/PS3_GAME"));
+	static_assert(!should_mount_exitspawn_disc_alias(
+		"BLES01807", true, true, 0,
+		"/vfsv0_virtual_iso_overlay_fs_dev/PS3_GAME"));
+	static_assert(!should_mount_exitspawn_disc_alias(
+		"BLUS31156", true, true, 42,
+		"/vfsv0_virtual_iso_overlay_fs_dev/PS3_GAME"));
+	static_assert(!should_mount_exitspawn_disc_alias(
+		"BLES01807", true, true, 42,
+		"/private/var/mobile/not-a-virtual-disc/PS3_GAME"));
 
 	assert(redirect_exitspawn_disc_path("/dev_hdd0/game/PS3_GAME") ==
 		"/dev_bdvd/PS3_GAME");
@@ -50,4 +81,13 @@ int main()
 		"/dev_hdd0/game/BLUS31156/USRDIR/EBOOT.BIN", true, true);
 	assert(local_paths.guest_argv0 == "/dev_hdd0/game/BLUS31156/USRDIR/EBOOT.BIN");
 	assert(local_paths.executable_lookup == local_paths.guest_argv0);
+
+	exitspawn_disc_alias_state alias_state;
+	assert(!alias_state.active());
+	alias_state.activate(42);
+	assert(alias_state.active());
+	assert(alias_state.generation == 42);
+	assert(alias_state.clear());
+	assert(!alias_state.active());
+	assert(!alias_state.clear());
 }

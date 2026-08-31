@@ -2555,3 +2555,67 @@ cache-reuse gates.
   U1/RDR plus the RDR car/train as FPS/audio/visual regressions. Reject stale
   mounts or launch state, repeated identical cache work, deadlock, unbounded
   logs, new graphics corruption, worse FPS/audio, crash, or slow Stop/relaunch.
+
+### V0.28 user physical heavy-3D result (2026-08-31)
+
+- FAIL PHYSICAL / HEAVY 3D: the user reports that Uncharted 1, Uncharted 2,
+  Uncharted 3, and Red Dead Redemption retain the same poor live-gameplay
+  performance, and that the Uncharted sessions still crash. This rejects V0.28
+  as a heavy-3D performance or stability milestone. Do not spend additional
+  device time repeating those broad comparisons on this package.
+- IDENTITY/EVIDENCE BOUNDARY: the report followed delivery of V0.28. The direct
+  USB lane was subsequently restored for `iPhone14,3` on iOS 15.3, UDID
+  `00008110-001C048C0C3B801E`, and the live `ARMSX3iOS` process was captured.
+  This is sufficient to identify the GTA child failure below, but a separate
+  warm-scene trace is still required before attributing any Uncharted/RDR crash
+  or performance change to one source revision.
+- SCOPE RETAINED: V0.28 remains an independently audited candidate for its
+  serialized GTA child handoff, Stop cleanup, bounded PPU precompile, and Sonic
+  cache diagnostics. None of those changes was a direct-Metal gameplay renderer
+  or a demonstrated settled-gameplay FPS improvement.
+- NEXT MEASURED TARGET: archived RDR and U1 physical traces prove that both
+  titles detect multiple PUTLLC16 candidates while accurate SPU reservations
+  reject them. RDR also detects the dormant CellSpurs JobChain pattern hash
+  `620oYSe8uQqq9eTkhWfMqoEXX0us`. Do not enable the reverted generic
+  writer-lock bypass: upstream reverted it after a real `SEGV_ACCERR`. Before
+  admitting any target hash, retain and disassemble its exact guest bytes and
+  prove that only one 16-byte quadword is consumed and written, with no later
+  use of the other 112 reservation bytes. A hash-gated candidate then requires
+  same-scene failure-rate, frame-time, graphics, crash, and Stop A/B evidence.
+
+### V0.28 GTA V child boot failure and candidate repair (2026-08-31)
+
+- FAIL PHYSICAL / V0.28: GTA V `BLES01807` reaches and runs `duplex.self`, then
+  displays `HDD boot game is corrupted. The application will be terminated.` A
+  repeated launch on the same package reaches the same error; no further V0.28
+  retries are useful.
+- ROOT CAUSE EVIDENCE: the device process trace records two immediate
+  `sys_fs_stat` failures with `CELL_ENOENT` for the exact guest path
+  `/dev_hdd0/game/PS3_GAME/USRDIR/common.edat`. The active PPU cache path is
+  `cache/BLES01807/ppu-...-duplex.self`, proving that the wrapper executable did
+  boot. V0.28 redirects only the child executable lookup to `/dev_bdvd`; it
+  deliberately preserves guest `argv[0]`, so subsequent literal guest file
+  access still sees an unmounted HDD-shaped placeholder.
+- EVIDENCE FILES: the process-only trace is
+  `/private/tmp/armsx3-gta-v028-process.log`. The complete device archive is
+  retained as
+  `/private/tmp/armsx3-gta-v028-20260831-0846.logarchive.tar.gz`; it was losslessly
+  compressed from 130 MiB to 35 MiB to protect the Mac's limited disk.
+- CANDIDATE REPAIR: the iOS guest-session owner now records whether the launch
+  came from `rpcs3_ios_boot_netiso_game`. On `on_ready`, only title `BLES01807`
+  with a live nonzero session generation, continuous child mode, NETISO origin,
+  and a canonical virtual ISO/NETISO `/dev_bdvd/PS3_GAME` source may mount the
+  compatibility alias `/dev_hdd0/game/PS3_GAME` to that same virtual disc tree.
+  XMB, installed games, initial NETISO executables, local discs, other titles,
+  stale generations, and prefix lookalikes fail closed.
+- CLEANUP CONTRACT: Stop, terminal child failure, shutdown, and failed launch
+  rollback clear the NETISO-session/alias state. The VFS itself is recreated for
+  each emulator load, preventing a compatibility mount from crossing into the
+  next session.
+- STATIC VERIFICATION: `IOSExitspawnDiscPathPolicyTests` passes under C++20 with
+  `-Wall -Wextra -Werror`; the full bounded
+  `rpcs3/ios/tests/run-contract-tests.sh` suite passes, including `NETISO
+  cancellation contract PASS`; `git diff --check` passes. This is not yet a
+  build or physical fix. The next gates are an iOS core compile, independently
+  audited signed IPA, then physical proof that `common.edat` resolves and GTA
+  advances beyond the corruption dialog without poisoning Stop/relaunch.

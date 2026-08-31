@@ -183,6 +183,12 @@ mkdir -p "${OUTPUT_ROOT}"
 
 "${CXX_COMPILER}" -std=c++20 -Wall -Wextra -Werror \
     -I "${SOURCE_ROOT}" -I "${SOURCE_ROOT}/rpcs3" \
+    "${SCRIPT_DIR}/IOSSPUPUTLLC16PolicyTests.cpp" \
+    -o "${OUTPUT_ROOT}/IOSSPUPUTLLC16PolicyTests"
+"${OUTPUT_ROOT}/IOSSPUPUTLLC16PolicyTests"
+
+"${CXX_COMPILER}" -std=c++20 -Wall -Wextra -Werror \
+    -I "${SOURCE_ROOT}" -I "${SOURCE_ROOT}/rpcs3" \
     "${SCRIPT_DIR}/IOSGameProfilePolicyTests.cpp" \
     -o "${OUTPUT_ROOT}/IOSGameProfilePolicyTests"
 "${OUTPUT_ROOT}/IOSGameProfilePolicyTests"

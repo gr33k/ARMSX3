@@ -22,6 +22,7 @@
 #include "SPUDisAsm.h"
 #include <algorithm>
 #include <cstring>
+#include <mutex>
 #include <optional>
 #include <thread>
 #include <unordered_set>
@@ -33,6 +34,7 @@
 #ifdef RPCS3_IOS
 #include "ios/RPCS3IOSExperimentalPolicy.h"
 #include "ios/IOSMemoryPressurePolicy.h"
+#include "ios/IOSSPUPUTLLC16Policy.h"
 #include "ios/RPCS3IOSPerformance.h"
 #include "rpcs3_version.h"
 #endif
@@ -9018,12 +9020,54 @@ spu_program spu_recompiler_base::analyse(const be_t<u32>* ls, u32 entry_point, s
 			// 2. Fetch 128 bytes (read them later), modify only 16 bytes. -> Bad for RPCS3 to optimize.
 
 			// This difference cannot be known at analyzer time but from observing callers.
+#ifdef RPCS3_IOS
+			const auto admission = rpcs3::ios::spu_putllc16_admission_for(
+				pattern_hash,
+				static_cast<bool>(g_cfg.core.ppu_reservation_priority_over_spu));
+			allow_pattern = admission.allowed;
+
+			// Analysis happens during compilation, not gameplay. Emit one bounded
+			// record per hash so physical traces can prove which exact guest bytes
+			// were admitted or rejected without flooding the device log.
+			static std::mutex s_putllc16_log_mutex;
+			static std::unordered_set<std::string> s_admitted_putllc16_patterns;
+			static std::unordered_set<std::string> s_rejected_putllc16_patterns;
+			std::lock_guard log_lock(s_putllc16_log_mutex);
+
+			if (allow_pattern && s_admitted_putllc16_patterns.size() < 8 &&
+				s_admitted_putllc16_patterns.emplace(pattern_hash).second)
+			{
+				spu_log.notice("iOS PUTLLC16 admission: hash=%s reason=%s",
+					pattern_hash, admission.reason);
+			}
+			else if (!allow_pattern && s_rejected_putllc16_patterns.size() < 32 &&
+				s_rejected_putllc16_patterns.emplace(pattern_hash).second)
+			{
+				constexpr std::size_t capture_limit = 256;
+				const auto pattern_size = static_cast<std::size_t>(pattern.rdatomic_pc - pattern.lsa_pc);
+				const auto capture_size = std::min(pattern_size, capture_limit);
+				const auto* pattern_bytes = reinterpret_cast<const u8*>(result.data.data()) +
+					(pattern.lsa_pc - result.lower_bound);
+				std::string byte_hex;
+				byte_hex.reserve(capture_size * 2);
+
+				for (std::size_t index = 0; index < capture_size; ++index)
+				{
+					fmt::append(byte_hex, "%02x", pattern_bytes[index]);
+				}
+
+				spu_log.notice("iOS PUTLLC16 rejected: hash=%s reason=%s range=0x%x-0x%x bytes=%s%s",
+					pattern_hash, admission.reason, pattern.lsa_pc, pattern.rdatomic_pc,
+					byte_hex, pattern_size > capture_limit ? " (truncated)" : "");
+			}
+#else
 			static constexpr std::initializer_list<std::string_view> allowed_patterns =
 			{
 				"disabled_620oYSe8uQqq9eTkhWfMqoEXX0us"sv, // CellSpurs JobChain acquire pattern (disabled for now)
 			};
 
 			allow_pattern = std::any_of(allowed_patterns.begin(), allowed_patterns.end(), FN(pattern_hash == x));
+#endif
 		}
 
 		if (allow_pattern)

@@ -319,6 +319,25 @@ per-title completeness record or targeted late-module prefetch is justified.
 Use U1/RDR only as regression controls; no compile-thread change substitutes for
 the direct-Metal/RSX work required by their settled gameplay bottleneck.
 
+### Target-title PUTLLC16 reservation audit
+
+Archived physical RDR and U1 traces show that accurate-reservation analysis
+detects, then rejects, multiple PUTLLC16 candidates. RDR includes the dormant
+CellSpurs JobChain hash `620oYSe8uQqq9eTkhWfMqoEXX0us`; both titles share
+additional hashes. This is a measured CPU-contention lead because the rejected
+path falls back to `do_putllc()`, whose `vm::writer_lock` parks every registered
+PPU while one SPU commits.
+
+Do not restore upstream's broad 16-byte writer-lock bypass: it was reverted
+after a physical `SEGV_ACCERR` proved that atomic data replacement did not
+preserve the page-protection exclusion provided by `writer_lock`. The surviving
+approach must use the existing JIT PUTLLC16 path and admit only a guest-byte hash
+whose disassembly proves one quadword is loaded, modified, and stored without
+later consuming the remaining reservation line. Capture each candidate's exact
+bytes/disassembly with bounded one-per-hash logging, then A/B the same warm RDR
+and U1 scenes. Require lower PUTLLC fallback/failure pressure and frame time with
+no page fault, graphics change, guest divergence, crash, or Stop regression.
+
 ## Required evidence
 
 Every candidate records source commit, IPA SHA-256, bundle version/build,
