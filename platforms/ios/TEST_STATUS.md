@@ -1013,6 +1013,37 @@ V0.19 signed Uncharted 3 accuracy artifact:
   this same A15 lane to decide whether a direct Metal RSX backend can remove
   the dominant bottleneck or whether PPU/SPU emulation is already the ceiling.
 
+V0.20 signed PS3 3D profiler artifact:
+
+- Name: `ARMSX3-iOS-Core-Test-v0.20.ipa`
+- Source commit: `3cd1d12a868c8f29ed15a1e3289566cd1f6301ae`
+- Compressed size: `31,848,336` bytes
+- SHA-256:
+  `c64f4ebef9c1767b521f52ccf4807c4357da0e21b05f1c9bed85cd9b189b862f`
+- PASS STATIC SOURCE: the complete bounded iOS contract suite, incremental
+  two-worker `RPCS3Core` build, and serial UIKit build pass. ABI 33 adds
+  one-second PPU/SPU/RSX/other CPU, iOS headroom, MoltenVK encode/wait/submit,
+  actual Metal execution, shader/pipeline compile, and sampled RSX frame
+  telemetry without changing game profiles, resolution, JIT mode, or cache
+  behavior.
+- PASS PACKAGE: archive integrity, version `0.20.0` build `19`, bundle ID
+  `com.thec0de.armsx3ios`, strict deep signing, TrollStore JIT/unsigned-memory/
+  extended-address-space/increased-memory entitlements, arm64 app/core, iOS
+  15.0 minimum, ABI exports, and private-path scan pass against the packaged
+  bytes.
+- PASS TRANSFER: the repository artifact and iCloud Drive copy have the exact
+  SHA-256 above. V0.19 remains the immediate rollback.
+- OBSERVATIONAL CANDIDATE: V0.20 is not an FPS claim. It exists to identify the
+  first optimization for V0.21. Telemetry labels and decision gates are fixed
+  in `PS3_3D_PERFORMANCE_PLAN.md`.
+- REQUIRED PHYSICAL ORDER: fully close V0.19, install only the exact V0.20 hash,
+  then start U1 from a fresh process. Capture at least 10 seconds of stable menu
+  telemetry and 30 seconds of live gameplay telemetry plus visual/audio/crash
+  result. Repeat from fresh processes for RDR and U3. Only after all isolated
+  samples pass collection, run U3 -> clean stop -> U1 to measure retained
+  memory/device state. Do not mix sequential-title pressure into the isolated
+  performance baseline.
+
 V0.2 artifact:
 
 - Name: `ARMSX3-iOS-Core-Test-v0.2.ipa`
