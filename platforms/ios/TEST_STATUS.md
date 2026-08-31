@@ -2284,3 +2284,53 @@ cache-reuse gates.
   Require sharper 1:1 motion with no pixel shimmer, missing filtering during
   real scaling, color regression, block artifacts, or crash. This candidate
   makes no settled-FPS claim.
+
+## V0.27 combined candidate (2026-08-31)
+
+- SOURCE: packaged executable revision
+  `0f57831d34fa93b99f843c760c5ac40a41851ccf`. Relative to V0.26, this adds
+  the PPU range-lock wake, post-stall audio refill/drop telemetry, hardened
+  tile-bound blit sizing, full-queue vblank liveness, and exact 1:1
+  memory-blit sampling documented above. Vulkan/MoltenVK remains the selected
+  game renderer; the native Metal presentation probe is unchanged.
+- PASS PACKAGE: `ARMSX3-iOS-Core-Test-v0.27.ipa` is version `0.27.0`, build
+  `26`, `31,865,916` bytes, SHA-256
+  `f5eb3b64841e3d8ceaecc3dc8927976a911d6574463ce374e9494e143878230c`.
+- PASS INDEPENDENT READBACK: a fresh temporary extraction passed full ZIP
+  integrity, absence of `__MACOSX`, `codesign --verify --deep --strict`, and
+  standalone embedded-core signature verification. The ZIP and extracted app
+  each contain ten regular files. App and core are arm64 Mach-O binaries
+  targeting iOS 15.0; the app links the core through `@rpath`, links
+  GameController/Metal/UIKit, requires arm64 plus Metal, and declares iPhone
+  and iPad device families.
+- PASS ENTITLEMENTS: independent signature readback reports JIT, unsigned
+  executable memory, Extended Virtual Addressing, increased memory limit, and
+  `get-task-allow` true under `com.thec0de.armsx3ios`.
+- PASS CORE IDENTITY: signed and unsigned cores share UUID
+  `70FA71F1-B238-3A63-88D0-6DB5CCDA6945`. The unsigned core is `77,496,088`
+  bytes with SHA-256
+  `1dec6ab09436ba6fcfe896ab6f1815b77241cb50b80a5b4aa5195d03a72d0f45`;
+  the independently extracted signed core is `78,119,808` bytes with SHA-256
+  `d78b44d3d8df6d573a548541d0edb3d614bd49d205b36aac7f96227f2a31c263`.
+  App UUID is `E6342429-CED6-3744-8D6A-468C7B8E09BD`. ABI 34, build-info,
+  native-Metal-probe exports, and the new vblank/audio diagnostics are present;
+  iOS 17.4-only `os_sync` imports and private local paths are absent.
+- PASS TRANSFER/ROLLBACK: repository and iCloud V0.27 copies are byte-identical
+  at the size and SHA above. V0.26 was hydrated from its iCloud dataless
+  placeholder and reverified unchanged at SHA
+  `c846c16862c690678e6c8ab97d94ef1cb1ae417187e1bae42c5eee95073e4457`;
+  it was not overwritten. Earlier recorded V0.23-V0.25 rollback artifacts also
+  retain their distinct filenames.
+- RESOURCE SAFETY: packaging ran serially on the 8 GB Mac. After the package
+  audit, only exact stale temporary audit extractions, one strip-test core, and
+  duplicate log-archive tar wrappers were removed; source, crash evidence,
+  signed IPAs, dependencies, and rollback artifacts were preserved.
+- REQUIRED PHYSICAL ORDER: install this exact V0.27 SHA. First launch/Stop and
+  immediately relaunch known-good local Bejeweled 3 or DuckTales. Then A/B the
+  exact warm U1 and RDR gameplay scenes against V0.26 while capturing FPS,
+  PPU/SPU/RSX/other CPU, memory/headroom, audio-drop telemetry, graphics, and
+  Stop time. Use the RDR car/train sequence for 1:1 blur; cold-test U2/U3 with a
+  rebuilt graphics cache for tile artifacts; exercise a full event queue for
+  vblank recovery. Finish with GTA V child handoff, Sonic cache completion,
+  sequential NETISO failure/recovery, background/foreground, input, rumble,
+  Stop, and a second title. Static audit and packaging are not gameplay proof.
