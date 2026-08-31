@@ -13,7 +13,7 @@ ENTITLEMENTS="$IOS_ROOT/app/TrollStore.entitlements"
 PREFIX_MAP_FLAGS="-ffile-prefix-map=$REPO_ROOT=/src/ARMSX3 -fdebug-prefix-map=$REPO_ROOT=/src/ARMSX3 -fmacro-prefix-map=$REPO_ROOT=/src/ARMSX3"
 PRIVATE_BINARY_PATTERN="${PRIVATE_BINARY_PATTERN:-/Users/[^/]+|/NAS/}"
 
-for command in cmake codesign ditto file ninja plutil shasum strings xcodebuild xcrun; do
+for command in cmake codesign ditto file grep ninja nm otool plutil sed shasum strings unzip xcodebuild xcrun; do
     command -v "$command" >/dev/null
 done
 
@@ -25,6 +25,16 @@ fi
 
 test -f "$CORE_LIBRARY"
 test -f "$ENTITLEMENTS"
+
+if ! nm -gU "$CORE_LIBRARY" | grep -F '_rpcs3_ios_abi_version' >/dev/null; then
+    printf 'Core does not export rpcs3_ios_abi_version.\n' >&2
+    exit 66
+fi
+CORE_ABI="$(grep -aoE '"abi":[0-9]+' "$CORE_LIBRARY" | sed 's/"abi"://')"
+if [[ "$CORE_ABI" != <-> ]]; then
+    printf 'Could not read one numeric ABI from the core build-info marker: %s\n' "$CORE_ABI" >&2
+    exit 66
+fi
 
 cmake \
     -S "$IOS_ROOT" \
@@ -131,7 +141,7 @@ ditto "$TEMP_IPA" "$OUTPUT_IPA"
 printf 'ARMSX3 iOS real-core IPA built.\n'
 printf '  source revision: %s\n' "$(git -C "$REPO_ROOT" rev-parse HEAD)"
 printf '  deployment target: iOS %s arm64\n' "$MINIMUM_IOS"
-printf '  core ABI: %s\n' "$(nm -gU "$CORE_LIBRARY" | grep -c '_rpcs3_ios_abi_version')"
+printf '  core ABI: %s\n' "$CORE_ABI"
 printf '  output: %s\n' "$OUTPUT_IPA"
 printf '  SHA-256: '
 shasum -a 256 "$OUTPUT_IPA" | awk '{print $1}'
