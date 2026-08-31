@@ -3676,6 +3676,23 @@ namespace rsx
 				{
 					block_end = write_end;
 				}
+				else if (!use_null_region && block_end > write_end)
+				{
+					const auto previous_surface = m_rtts.get_surface_at(dst_base_address);
+					const u64 reference_tag = previous_surface ? previous_surface->last_use_tag : 0;
+					const u32 block_length = block_end - dst_base_address;
+					const u32 safe_length = m_rtts.truncate_memory_range_by_pitch(
+						dst_base_address,
+						dst.pitch,
+						block_length,
+						reference_tag);
+
+					if (safe_length < block_length) [[unlikely]]
+					{
+						const u32 aligned_safe_length = (safe_length / dst.pitch) * dst.pitch;
+						block_end = std::max(dst_base_address + aligned_safe_length, write_end);
+					}
+				}
 
 				const u32 usable_section_length = std::max(write_end, block_end) - dst_base_address;
 				dst_dimensions.height = align2(usable_section_length, dst.pitch) / dst.pitch;

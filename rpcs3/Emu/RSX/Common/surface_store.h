@@ -112,11 +112,26 @@ namespace rsx
 					}
 					else
 					{
+						const bool is_pitch_compatible = Traits::surface_is_pitch_compatible(found->second, prev_surface->get_rsx_pitch());
+						if (!is_pitch_compatible && found->second->last_use_tag >= prev_surface->last_use_tag) [[unlikely]]
+						{
+							// A newer incompatible-pitch surface owns this memory. Pitch conversion
+							// is required before stale split data can safely replace it.
+							static atomic_t<u64> s_incompatible_pitch_conflicts{0};
+							const u64 conflict_count = s_incompatible_pitch_conflicts.fetch_add(1) + 1;
+							if (!(conflict_count & (conflict_count - 1)))
+							{
+								rsx_log.warning("[SURFACE CACHE] Discarding block at 0x%x from surface at 0x%x (pitch=%u); block is owned by a newer surface with pitch=%u (occurrence=%llu).",
+									new_address, prev_surface->base_addr, prev_surface->get_rsx_pitch(), found->second->get_rsx_pitch(), conflict_count);
+							}
+							return;
+						}
+
 						invalidate(found->second);
 						data.erase(new_address);
 
 						auto &old = invalidated_resources.back();
-						if (Traits::surface_is_pitch_compatible(old, prev_surface->get_rsx_pitch()))
+						if (is_pitch_compatible)
 						{
 							if (old->last_use_tag >= prev_surface->last_use_tag) [[unlikely]]
 							{
@@ -1043,6 +1058,55 @@ namespace rsx
 				return Traits::get(_It->second);
 
 			return nullptr;
+		}
+
+		// Limit a guessed surface range before it reaches newer memory owned by a
+		// surface with an incompatible pitch. Remove this once pitch conversion
+		// can merge such overlaps correctly.
+		u32 truncate_memory_range_by_pitch(u32 address, u32 pitch, u32 length, u64 reference_tag)
+		{
+			if (!length || !pitch)
+			{
+				return length;
+			}
+
+			const auto test_range = rsx::address_range32::start_length(address, length);
+			const auto test_height = static_cast<u16>(utils::aligned_div(length, pitch));
+			u32 limit = address + length;
+
+			auto process_list = [&](surface_ranged_map& data)
+			{
+				for (auto it = data.begin_range(test_range); it != data.end(); ++it)
+				{
+					const auto base_address = it->first;
+					if (base_address <= address || base_address >= limit)
+					{
+						continue;
+					}
+
+					const auto surface = Traits::get(it->second);
+					if (!surface->get_memory_range().overlaps(test_range) ||
+						rsx::pitch_compatible(surface, pitch, test_height) ||
+						surface->last_use_tag <= reference_tag)
+					{
+						continue;
+					}
+
+					limit = base_address;
+				}
+			};
+
+			if (m_render_targets_memory_range.valid() && test_range.overlaps(m_render_targets_memory_range))
+			{
+				process_list(m_render_targets_storage);
+			}
+
+			if (m_depth_stencil_memory_range.valid() && test_range.overlaps(m_depth_stencil_memory_range))
+			{
+				process_list(m_depth_stencil_storage);
+			}
+
+			return limit - address;
 		}
 
 		/**
