@@ -161,7 +161,8 @@ audio_ringbuffer::audio_ringbuffer(cell_audio_config& _cfg)
 	{
 		if (cfg.buffering_enabled)
 		{
-			return cfg.desired_buffer_duration / 1'000'000.0 + 0.02; // Add 20ms to buffer to keep buffering algorithm happy
+			// Keep post-stall refill bursts instead of discarding a whole audio block.
+			return cfg.desired_buffer_duration / 1'000'000.0 + 0.06;
 		}
 
 		return cfg.audio_min_buffer_duration;
@@ -312,7 +313,16 @@ void audio_ringbuffer::commit_data(f32* buf, u32 sample_cnt)
 		AudioBackend::convert_to_s16(sample_cnt_out, buf, buf);
 	}
 
-	cb_ringbuf.push(buf, sample_cnt_out * cfg.audio_sample_size);
+	const u64 requested_bytes = sample_cnt_out * cfg.audio_sample_size;
+
+	if (cb_ringbuf.push(buf, requested_bytes) != requested_bytes)
+	{
+		if ((m_dropped_blocks++ & 0x3f) == 0)
+		{
+			cellAudio.warning("Audio: dropped %u blocks that did not fit the ring (%.1f ms queued)",
+				m_dropped_blocks.load(), get_enqueued_playtime() / 1000.0);
+		}
+	}
 }
 
 void audio_ringbuffer::play()

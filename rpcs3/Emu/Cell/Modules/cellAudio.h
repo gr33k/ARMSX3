@@ -338,6 +338,7 @@ public:
 
 	u64 get_enqueued_samples() const;
 	u64 get_enqueued_playtime() const;
+	atomic_t<u32> m_dropped_blocks{0};
 
 	bool is_playing() const
 	{
