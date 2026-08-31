@@ -1719,6 +1719,16 @@ cache-reuse gates.
   and UUID `AA35A824-63CB-3F65-AF7F-BCEF986C9F1E`. The core exports
   `rpcs3_ios_run_metal_presentation_probe`, and the app reports version
   `0.24.0` build `23` for both iPhone and iPad.
+- PASS PACKAGE/READBACK: `ARMSX3-iOS-Core-Test-v0.24.ipa` is `31,864,950`
+  bytes with SHA-256
+  `0cc6f4f62a8c157c347c6727b45696cbfbf2fe4a1b67eca5b38bca9009ce1148`.
+  Fresh extraction passed ZIP integrity and deep strict signature validation.
+  Both Mach-O binaries are arm64 with minimum iOS 15.0; the app links the
+  nested core through `@rpath`, the package contains ABI 34 and probe markers,
+  and JIT, unsigned executable memory, Extended Virtual Addressing, increased
+  memory, and debug entitlements all read back true.
+- PASS TRANSFER: repository and iCloud Drive V0.24 copies are byte-identical
+  at the size and SHA-256 above. V0.23 remains preserved and unchanged.
 - SCOPE / NO FALSE CLAIM: a passing triangle proves that this device can use
   the app's real display layer for native MSL compilation, pipeline creation,
   command encoding, GPU execution, drawable presentation, and timing readback.
