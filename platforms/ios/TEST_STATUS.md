@@ -3040,3 +3040,30 @@ cache-reuse gates.
   require a long run to remain well below the process ceiling; then prove Stop,
   relaunch, and an unrelated NETISO title. Build/package results are not
   gameplay or stability acceptance.
+
+### Native-Metal guest-target checkpoint and BioShock observation (2026-08-31)
+
+- SOURCE: the unregistered `MTLGuestBackend` now owns real private Metal
+  color/depth targets keyed by guest address and layout, supported 1x/2x/4x
+  MSAA color resolves, full-surface color/depth/stencil clears, a bounded
+  180-frame/96-entry target cache, and aspect-preserving presentation of the
+  selected guest render target. Packed 16-bit color targets are promoted to
+  `BGRA8Unorm` pending exact guest-memory conversion.
+- FAIL-CLOSED BOUNDARY: partial-channel and scissored clears are rejected;
+  shader/resource binding and all RSX draws remain rejected. The factory is not
+  registered and no renderer enum or selector exists. This checkpoint changes
+  no packaged gameplay path and is not native-Metal gameplay evidence.
+- PASS COMPILE: `cmake --build build-ios-core --target RPCS3Core -- -j1`
+  compiled `MTLGuestBackend.mm`, archived `librpcs3_emu.a`, and linked the arm64
+  iOS `libRPCS3Core.dylib`. Symbol readback from the archive contains
+  `make_native_guest_backend` plus framebuffer, clear, draw, and presentation
+  methods. `git diff --check` passes. The build emitted only unrelated existing
+  unused-lambda-capture warnings and the existing duplicate-zlib linker warning.
+- PHYSICAL BIOSHOCK RESULT: after the preserved modified-executable fallback
+  advanced BioShock Infinite beyond its DUPLEX intro, the game repeatedly
+  displayed `There has been a disc read error. The game cannot continue. Please
+  quit and restart the game.` This proves the intro handoff is no longer the
+  first blocker, but it does not identify whether the remaining fault is source
+  content, NETISO random-read delivery, or guest filesystem handling. The
+  iPhone was not visible to CoreDevice when this result was recorded, so no
+  matching live device trace was captured and no fix is claimed.

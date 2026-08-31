@@ -105,6 +105,8 @@ if(RPCS3_FRONTEND STREQUAL "IOS")
         Io/IOS/IOSPadHandler.h
 		RSX/MTL/MTLGSRender.h
 		RSX/MTL/MTLGSRender.mm
+		RSX/MTL/MTLGuestBackend.h
+		RSX/MTL/MTLGuestBackend.mm
         ../../Utilities/JITArenaAllocator.h
         ../../Utilities/JITIOS.cpp
         ../../Utilities/JITIOS.h
@@ -125,7 +127,7 @@ if(RPCS3_FRONTEND STREQUAL "IOS")
         CPU/Backends/AArch64/AArch64JIT.cpp
         CPU/Backends/AArch64/AArch64Signal.cpp
     )
-	set_source_files_properties(RSX/MTL/MTLGSRender.mm PROPERTIES
+	set_source_files_properties(RSX/MTL/MTLGSRender.mm RSX/MTL/MTLGuestBackend.mm PROPERTIES
 		COMPILE_OPTIONS -fobjc-arc)
 endif()
 
