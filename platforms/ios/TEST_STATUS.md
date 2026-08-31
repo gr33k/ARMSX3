@@ -2919,3 +2919,30 @@ cache-reuse gates.
   separately require the device to report important-usage capacity through the
   new policy and accept a title that the old immediate-capacity preflight
   rejected.
+
+#### V0.32 physical GTA WCB A/B evidence (in progress)
+
+- PARTIAL PASS PHYSICAL / RENDERING: after installing V0.32, force-closing the
+  prior app process, and relaunching GTA V `BLES01807`, the user reports that
+  the broad graphics corruption is visibly reduced. Intermittent purple
+  effects and lighting-related glitches remain visible, so GTA rendering is
+  improved but not qualified as correct.
+- FRESH PROCESS CORRECTION: the original filtered syslog file had stopped
+  updating and contained only the retired V0.31 PID `27361`; this was a stale
+  capture, not a live V0.31 process. Restarting `idevicesyslog` without
+  restarting the game attached to fresh PID `27584` and writes
+  `/private/tmp/armsx3-gta-v032-fresh.log`. Because capture began mid-session,
+  it does not independently read back the package startup/version or WCB
+  selection marker.
+- PERFORMANCE/MEMORY: initial fresh-process samples measured `18-22 FPS`; a
+  heavier segment mostly measured `14-16 FPS`, with sampled excursions from
+  `10` to `28 FPS`. Resident memory was approximately `3338-3360 MiB`, reported
+  headroom declined from `758` to `736 MiB`, and the Vulkan allocator reported
+  `98%` with cache reclaim active. No app termination was captured in this
+  interval, but the pressure warnings and sub-20-FPS heavy segment remain open
+  risks.
+- OPEN GATES: preserve this WCB candidate while isolating the remaining purple
+  artifact path; do not call the renderer fixed or native Metal complete.
+  Capture terminal Stop, relaunch, and an explicit public runtime profile
+  marker before closing the A/B. The important-usage import/free-space gate is
+  still separate and untested physically.
