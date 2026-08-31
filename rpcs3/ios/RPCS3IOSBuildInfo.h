@@ -14,6 +14,7 @@ inline constexpr char build_info_json[] =
 	",\"llvm\":\"ca7933e47d3a3451d81e72ac174dcb5aa28b59d1\""
 	",\"jit\":\"sealed-arena\""
 	",\"renderer\":\"vulkan-moltenvk\""
+	",\"metal_probe\":\"native-msl-presentation\""
 	",\"moltenvk\":\"1.4.2\""
 	",\"ffmpeg\":\"8.1.1\""
 	",\"audio\":\"remoteio\""

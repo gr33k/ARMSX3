@@ -297,7 +297,7 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
     [scroll addSubview:stack];
 
     UILabel* title = [[UILabel alloc] init];
-    title.text = @"ARMSX3 iOS Core Test v0.21";
+    title.text = @"ARMSX3 iOS Core Test v0.24";
     title.textColor = UIColor.whiteColor;
     title.font = [UIFont systemFontOfSize:24.0 weight:UIFontWeightBlack];
     [stack addArrangedSubview:title];
@@ -374,6 +374,7 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
     UIStackView* second_row = [self buttonRow:@[
         [self button:@"Refresh" action:@selector(refreshGames)],
         [self button:@"JIT Test" action:@selector(runJITTest)],
+        [self button:@"Metal Probe" action:@selector(runMetalProbe)],
         [self button:@"Open XMB" action:@selector(openXMB)],
     ]];
     [stack addArrangedSubview:second_row];
@@ -849,6 +850,17 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
 {
     __weak ARMSX3ViewController* weak_self = self;
     [self.core runJITSelfTestWithCompletion:^(BOOL succeeded, NSString* message) {
+        weak_self.lastOperationMessage = message;
+        weak_self.stateLabel.text = message;
+        [weak_self appendLog:message];
+    }];
+}
+
+- (void)runMetalProbe
+{
+    self.stateLabel.text = @"Running stopped-core native Metal probe...";
+    __weak ARMSX3ViewController* weak_self = self;
+    [self.core runMetalProbeWithCompletion:^(BOOL succeeded, NSString* message) {
         weak_self.lastOperationMessage = message;
         weak_self.stateLabel.text = message;
         [weak_self appendLog:message];

@@ -451,6 +451,29 @@ static void netiso_game_enumeration_callback(void* user_context, const rpcs3_ios
     });
 }
 
+- (void)runMetalProbeWithCompletion:(ARMSX3CoreCompletion)completion
+{
+    dispatch_async(_coreQueue, ^{
+        rpcs3_ios_metal_probe_result result{};
+        result.struct_size = sizeof(result);
+        const rpcs3_ios_status status = rpcs3_ios_run_metal_presentation_probe(&result);
+        const BOOL passed = status == RPCS3_IOS_OK;
+        NSString* message = nil;
+        if (passed)
+        {
+            message = [NSString stringWithFormat:
+                @"Native Metal PASS: %s | %ux%u | GPU %.3f ms | %@ memory",
+                result.device_name,
+                result.width,
+                result.height,
+                (double)result.gpu_duration_ns / 1.0e6,
+                result.unified_memory ? @"unified" : @"discrete"];
+        }
+        [self finish:completion succeeded:passed
+            message:passed ? message : last_core_error(status)];
+    });
+}
+
 - (void)bootTitleID:(NSString*)titleID completion:(ARMSX3CoreCompletion)completion
 {
     self.fatalError = NO;

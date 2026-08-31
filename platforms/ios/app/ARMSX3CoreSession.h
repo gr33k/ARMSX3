@@ -26,6 +26,7 @@ typedef void (^ARMSX3CoreCompletion)(BOOL succeeded, NSString* message);
                completion:(ARMSX3CoreCompletion)completion;
 - (void)bootNetISOPath:(NSString*)remotePath completion:(ARMSX3CoreCompletion)completion;
 - (void)runJITSelfTestWithCompletion:(ARMSX3CoreCompletion)completion;
+- (void)runMetalProbeWithCompletion:(ARMSX3CoreCompletion)completion;
 - (void)bootXMBWithCompletion:(ARMSX3CoreCompletion)completion;
 - (void)bootTitleID:(NSString*)titleID completion:(ARMSX3CoreCompletion)completion;
 - (void)rebuildGraphicsCachesWithCompletion:(ARMSX3CoreCompletion)completion;

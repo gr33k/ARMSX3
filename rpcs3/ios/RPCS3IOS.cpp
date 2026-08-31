@@ -6,6 +6,7 @@
 #include "RPCS3IOSContract.h"
 #include "RPCS3IOSDisplay.h"
 #include "RPCS3IOSLocalization.h"
+#include "RPCS3IOSMetalProbe.h"
 #include "RPCS3IOSOverlayMedia.h"
 #include "RPCS3IOSPath.h"
 #include "RPCS3IOSPlatform.h"
@@ -1478,6 +1479,54 @@ extern "C" rpcs3_ios_status rpcs3_ios_run_llvm_self_test(uint64_t input, uint64_
 #endif
 
 	return RPCS3_IOS_SELF_TEST_FAILED;
+}
+
+extern "C" rpcs3_ios_status rpcs3_ios_run_metal_presentation_probe(
+	rpcs3_ios_metal_probe_result* result) noexcept
+{
+	std::lock_guard lock(g_api_mutex);
+	if (!result || result->struct_size < sizeof(rpcs3_ios_metal_probe_result))
+	{
+		set_error("The native Metal probe result contract is invalid");
+		return RPCS3_IOS_INVALID_ARGUMENT;
+	}
+	if (g_lifecycle.state() != RPCS3_IOS_STATE_READY)
+	{
+		set_error("RPCS3Core must be ready before running the native Metal probe");
+		return RPCS3_IOS_INVALID_STATE;
+	}
+	if (current_emulation_state() != RPCS3_IOS_EMULATION_STATE_STOPPED)
+	{
+		set_error("Stop emulation before running the native Metal probe");
+		return RPCS3_IOS_INVALID_STATE;
+	}
+
+	const rpcs3::ios::display_surface_snapshot surface = g_display_surface.snapshot();
+	if (!surface.valid())
+	{
+		set_error("Attach a valid iOS Metal display surface before running the native Metal probe");
+		return RPCS3_IOS_INVALID_STATE;
+	}
+
+	rpcs3_ios_metal_probe_result output{};
+	output.struct_size = sizeof(output);
+	std::string error;
+	const rpcs3_ios_status status = rpcs3::ios::run_metal_presentation_probe(surface, output, error);
+	if (status != RPCS3_IOS_OK)
+	{
+		set_error(error.empty() ? "Native Metal presentation probe failed" : std::move(error));
+		return status;
+	}
+
+	*result = output;
+	emit_log(4, fmt::format(
+		"Native Metal presentation probe passed: %s, %ux%u, format %u, GPU %.3f ms",
+		output.device_name,
+		output.width,
+		output.height,
+		output.pixel_format,
+		static_cast<double>(output.gpu_duration_ns) / 1'000'000.0));
+	return RPCS3_IOS_OK;
 }
 
 extern "C" const char* rpcs3_ios_firmware_version(void) noexcept

@@ -17,7 +17,7 @@ extern "C" {
 #define RPCS3_IOS_EXPORT
 #endif
 
-#define RPCS3_IOS_ABI_VERSION 33
+#define RPCS3_IOS_ABI_VERSION 34
 
 typedef enum rpcs3_ios_status
 {
@@ -69,7 +69,8 @@ typedef enum rpcs3_ios_status
     RPCS3_IOS_GAME_CACHE_FAILED = 45,
     RPCS3_IOS_NETISO_NOT_CONFIGURED = 46,
     RPCS3_IOS_NETISO_CONNECTION_FAILED = 47,
-    RPCS3_IOS_NETISO_GAME_INVALID = 48
+    RPCS3_IOS_NETISO_GAME_INVALID = 48,
+    RPCS3_IOS_METAL_PROBE_FAILED = 49
 } rpcs3_ios_status;
 
 typedef enum rpcs3_ios_state
@@ -151,6 +152,22 @@ typedef struct rpcs3_ios_display_surface
     float refresh_rate;
     void* metal_layer;
 } rpcs3_ios_display_surface;
+
+// Native Metal presentation result. This probe is available only while
+// emulation is stopped and does not select or qualify a PS3 renderer.
+typedef struct rpcs3_ios_metal_probe_result
+{
+    uint32_t struct_size;
+    uint32_t width;
+    uint32_t height;
+    uint32_t pixel_format;
+    uint64_t gpu_duration_ns;
+    uint64_t registry_id;
+    uint64_t max_buffer_length;
+    uint32_t unified_memory;
+    uint32_t reserved;
+    char device_name[128];
+} rpcs3_ios_metal_probe_result;
 
 typedef enum rpcs3_ios_pad_button
 {
@@ -560,6 +577,11 @@ RPCS3_IOS_EXPORT rpcs3_ios_status rpcs3_ios_update_config_database(
     const void* content,
     size_t content_size) RPCS3_IOS_NOEXCEPT;
 RPCS3_IOS_EXPORT rpcs3_ios_status rpcs3_ios_run_llvm_self_test(uint64_t input, uint64_t* output) RPCS3_IOS_NOEXCEPT;
+// Compiles native MSL, draws one diagnostic triangle, and presents through the
+// attached CAMetalLayer. Emulation must be stopped. Success proves only the
+// direct Metal presentation foundation, not PS3 RSX rendering or performance.
+RPCS3_IOS_EXPORT rpcs3_ios_status rpcs3_ios_run_metal_presentation_probe(
+    rpcs3_ios_metal_probe_result* result) RPCS3_IOS_NOEXCEPT;
 RPCS3_IOS_EXPORT const char* rpcs3_ios_firmware_version(void) RPCS3_IOS_NOEXCEPT;
 RPCS3_IOS_EXPORT rpcs3_ios_status rpcs3_ios_install_firmware(
     const char* pup_path,

@@ -8,8 +8,9 @@
 int main()
 {
 	using namespace rpcs3::ios;
-	static_assert(RPCS3_IOS_ABI_VERSION == 33);
-	static_assert(std::string_view(build_info_json).find("\"abi\":33,\"frontend\"") != std::string_view::npos);
+	static_assert(RPCS3_IOS_ABI_VERSION == 34);
+	static_assert(std::string_view(build_info_json).find("\"abi\":34,\"frontend\"") != std::string_view::npos);
+	static_assert(std::string_view(build_info_json).find("\"metal_probe\":\"native-msl-presentation\"") != std::string_view::npos);
 	static_assert(std::string_view(build_info_json).find("fps-cpu-breakdown-rsx-frame-moltenvk-metal-shaders-memory-headroom-netiso") != std::string_view::npos);
 	static_assert(RPCS3_IOS_FOLDER_INVALID == 22);
 	static_assert(RPCS3_IOS_FOLDER_INSTALL_FAILED == 23);
@@ -21,7 +22,9 @@ int main()
 	static_assert(RPCS3_IOS_RAP_INVALID == 35);
 	static_assert(RPCS3_IOS_RAP_INSTALL_FAILED == 36);
 	static_assert(RPCS3_IOS_GAME_DELETE_FAILED == 39);
+	static_assert(RPCS3_IOS_METAL_PROBE_FAILED == 49);
 	static_assert(sizeof(rpcs3_ios_display_surface) == 24);
+	static_assert(sizeof(rpcs3_ios_metal_probe_result) == 176);
 	static_assert(sizeof(rpcs3_ios_pad_state) == 40);
 	static_assert(sizeof(rpcs3_ios_pad_feedback) == 16);
 	static_assert(sizeof(rpcs3_ios_game_info) == 96);
