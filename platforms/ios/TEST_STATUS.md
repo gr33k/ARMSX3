@@ -2821,3 +2821,58 @@ cache-reuse gates.
   progress beyond the space dialog. Capture the five capacity values from app
   startup. Then Stop/relaunch GTA and launch one unrelated NETISO title to
   reject stale mount or session poisoning.
+
+#### V0.31 physical GTA first-run evidence (in progress)
+
+- PASS PHYSICAL / STORAGE PATH: the accepted V0.31 SHA above launched GTA V
+  `BLES01807` on iPhone14,3 running iOS 15.3, selected `EBOOT.BIN.ORIG`, created
+  the generation-owned streamed-install alias, and advanced through the
+  Rockstar sequence into 3D rendering. The prior GTA `NOSPACE` dialog did not
+  recur. This physically closes the exact 8.90-GB duplicate-install blocker;
+  it does not qualify general local imports or guest free-space reporting.
+- CAPACITY READBACK: app startup reported `filesystem-free=3093798912`,
+  `total=255877271552`, `volume-available=3093798912`,
+  `important-available=93802298225`, and
+  `opportunistic-available=2204915056`. Foundation therefore exposes about
+  93.8 GB for important usage even though immediate `statfs` capacity is only
+  about 3.09 GB. The separate source candidate to merge important-usage
+  capacity into bounded import and guest-space policies passes the complete
+  contract suite and an iOS 15 arm64 two-worker core build. It remains
+  unpackaged and physically unqualified.
+- PASS PHYSICAL / STREAM CONTINUITY: the first 3D run streamed more than
+  2.76 GiB with NETISO reconnect counter `R0`. No NETISO failure, process-fatal
+  RSX error, Jetsam termination, or app crash was present through 11:40 local
+  time. Backgrounding at 11:40:45 paused emulation as designed; foregrounding
+  at 11:42:02 resumed it, reclaimed about 220 MiB, and produced reconnect
+  counter `R1`. This was lifecycle-driven rather than a spontaneous NETISO
+  failure. Stop/relaunch and unrelated-title stale-state gates remain open.
+- OPEN PERFORMANCE/RENDER GATE: the Rockstar/loading sequence reached about
+  26-30 FPS. Entering 3D triggered a large Metal/MoltenVK shader-compilation
+  burst, transient green/corrupt rendering that visibly cleared after loading,
+  and an initial 6-12 FPS interval. One settled interval held mostly 14-16 FPS;
+  after lifecycle resume the same run held 24-30 FPS and emitted a true 30-FPS
+  sample. That is materially better than the prior RDR heavy-3D baseline and
+  proves target throughput is reachable, but is not a rendering qualification.
+  The user still observed intermittent flashing and purple edge traces, with
+  audio stutter when load increased; aiming targets could become difficult to
+  see. Those artifacts coincide with continued Metal warnings, fresh RSX
+  program compilation, and temporary 10-18 FPS dips; one RSX semaphore timeout
+  was logged earlier in the run. A later denser segment held mostly 12-16 FPS,
+  dipped to 6-10 FPS, and still produced isolated 26-30 FPS samples. GTA is
+  therefore promising but not sustained full speed.
+- MEMORY RISK: resident use initially plateaued near 3.12 GiB with about
+  0.98 GiB reported headroom, then reached about 3.75 GiB with only 343 MiB
+  headroom in the denser segment. RSX diagnostics repeatedly entered
+  cache-reclaim mode at roughly 76% Vulkan allocator use. The process continued,
+  but sustained gameplay and scene-transition stability are still required
+  before calling the run stable.
+- GTA WCB A/B CANDIDATE: upstream RPCS3 GTA V renderer evidence identifies
+  `Write Color Buffers` as required for correct exterior lighting. The next
+  source candidate separates GTA from RDR's shared demanding-3D profile and
+  enables WCB only for GTA title IDs `BLES01807` and `BLUS31156`; resolution,
+  shader workers, and multithreaded RSX remain unchanged. The complete iOS
+  contract suite, diff check, and iOS 15 arm64 two-worker core build pass. It
+  remains unpackaged and physically unqualified; accept only if the same scene
+  loses the flashes/purple traces without regressing FPS, memory, or stability.
+- LIVE TRACE: `/private/tmp/armsx3-gta-v031-live.log`; capture remains active
+  until the physical test ends so the terminal outcome is not inferred.

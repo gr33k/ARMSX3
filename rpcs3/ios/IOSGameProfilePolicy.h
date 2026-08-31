@@ -77,8 +77,21 @@ constexpr mobile_title_profile mobile_profile_for_title(std::string_view title_i
 		};
 	}
 
-	if (is_red_dead_redemption_title(title_id) ||
-		is_grand_theft_auto_v_title(title_id))
+	if (is_grand_theft_auto_v_title(title_id))
+	{
+		// GTA V reads back its exterior lighting through the color-buffer path.
+		// Keep this title-specific because WCB costs memory and GPU bandwidth.
+		return {
+			mobile_title_profile_kind::demanding_3d,
+			50,
+			2,
+			true,
+			0,
+			true,
+		};
+	}
+
+	if (is_red_dead_redemption_title(title_id))
 	{
 		return {mobile_title_profile_kind::demanding_3d, 50, 2, true, 0};
 	}
