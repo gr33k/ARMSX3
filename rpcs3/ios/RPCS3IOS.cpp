@@ -1,5 +1,6 @@
 #include "RPCS3IOS.h"
 #include "RPCS3IOSBigPicture.h"
+#include "RPCS3IOSBuildInfo.h"
 #include "RPCS3IOSCapabilities.h"
 #include "RPCS3IOSConfigDatabase.h"
 #include "RPCS3IOSContract.h"
@@ -1208,7 +1209,7 @@ extern "C" uint32_t rpcs3_ios_abi_version(void) noexcept
 
 extern "C" const char* rpcs3_ios_build_info(void) noexcept
 {
-	return "{\"abi\":32,\"frontend\":\"ios\",\"upstream\":\"fdcfded8dfd3060af66bda0a3ac4635458980038\",\"llvm\":\"ca7933e47d3a3451d81e72ac174dcb5aa28b59d1\",\"jit\":\"sealed-arena\",\"renderer\":\"vulkan-moltenvk\",\"moltenvk\":\"1.4.2\",\"ffmpeg\":\"8.1.1\",\"audio\":\"remoteio\",\"input\":\"gamecontroller-multiplayer-rumble\",\"games\":\"pkg-rap-iso-zip-folder-netiso-updates-runtime-patches-library-delete-cache-management-trophies-big-picture\",\"settings\":\"global-and-per-game-cfg-root-catalog-title-database-recommendations-presets\",\"rpcn\":\"servers-account-social-online\",\"performance\":\"fps-cpu-rsx-memory-netiso\",\"lifecycle\":\"pause-resume-stop-big-picture\",\"media_codecs\":true}";
+	return rpcs3::ios::build_info_json;
 }
 
 extern "C" rpcs3_ios_status rpcs3_ios_initialize(const rpcs3_ios_config* config) noexcept
