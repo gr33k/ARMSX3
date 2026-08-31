@@ -5,6 +5,8 @@
 #include "VKRenderPass.h"
 #include "VKResourceManager.h"
 #include "util/asm.hpp"
+
+#include <thread>
 #include "VKGSRender.h"
 
 namespace vk
@@ -173,9 +175,22 @@ namespace vk
 		{
 			poke_query(query_info, index, result_flags);
 
-			while (!query_info.ready)
+			for (u32 spins = 0; !query_info.ready; spins++)
 			{
+#if defined(__ANDROID__) || defined(RPCS3_IOS)
+				// Tile-based mobile GPUs can hold an occlusion result until the
+				// render pass resolves. Do not burn a scarce CPU core for that wait.
+				if (spins < 64)
+				{
+					utils::pause();
+				}
+				else
+				{
+					std::this_thread::yield();
+				}
+#else
 				utils::pause();
+#endif
 				poke_query(query_info, index, result_flags);
 			}
 		}

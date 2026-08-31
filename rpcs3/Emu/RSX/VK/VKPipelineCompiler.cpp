@@ -30,6 +30,12 @@ namespace vk
 
 	void pipe_compiler::operator()()
 	{
+#ifdef RPCS3_IOS
+		// Shader compilation is asynchronous. Keep it below latency-sensitive
+		// emulation and Metal work instead of inheriting user-interactive QoS.
+		thread_ctrl::scoped_priority low_prio(-1);
+#endif
+
 		while (thread_ctrl::state() != thread_state::aborting)
 		{
 			for (auto&& job : m_work_queue.pop_all())

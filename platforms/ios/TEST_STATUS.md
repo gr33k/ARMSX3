@@ -1632,3 +1632,34 @@ cache-reuse gates.
   title cache through SPU 100% and first gameplay, then relaunch twice. Require
   no 99% finalization stall, no recurring compile/FPS-zero cycle after caches
   settle, and explicit worker-complete/finalization log markers.
+
+## Mobile RSX wait-policy candidate (post-V0.22)
+
+- MEASURED BASIS: V0.20 heavy-3D evidence showed the iPhone process above
+  3.3 GiB, normalized SPU load at 49-66% of all six logical cores, and more
+  than one second of aggregate Metal execution in a one-second sample. Busy
+  CPU waits can therefore starve both guest work and the driver while adding
+  heat, but fixing them is not equivalent to reducing the GPU workload.
+- FIX READY: unbounded Vulkan fence polling now hot-polls briefly and then
+  blocks in `vkWaitForFences`; Vulkan event readback polling hot-polls and then
+  sleeps for 50 microseconds; the RSX DMA drain hot-polls and then waits on its
+  completion counter with a bounded 100-microsecond wake; and mobile occlusion
+  query polling yields after its short hot window. The short path and fault
+  recovery upkeep remain intact.
+- FIX READY / IOS ONLY: asynchronous Vulkan pipeline workers run at Utility
+  QoS instead of inheriting User Interactive QoS from the reusable iOS thread
+  pool. PPU, SPU, RSX, audio, and Metal work retain their existing priority.
+- SCOPE: shader translation, shader math, attachment formats, command ordering,
+  title profiles, resolution, and cache keys are unchanged. This candidate is
+  intended to reduce CPU starvation and thermal pressure, not to conceal U2/U3
+  renderer corruption or claim that MoltenVK now matches direct Metal.
+- PASS STATIC/BUILD: the complete bounded iOS contract suite passes, the four
+  modified RSX translation units compile, and the arm64 `RPCS3Core` dylib links
+  with `-j2`. The build emits the pre-existing deprecation diagnostic for a
+  timed wait on an eight-byte `atomic_t`; the upstream drain-wait contract uses
+  that API and the produced binary is valid.
+- REQUIRED PHYSICAL: use the exact same warm-cache U1 and RDR gameplay segments
+  and settings as V0.20. Record FPS, CPU P/S/R/O, MVK E/W/Q/G, RSX D/S U/X/F,
+  headroom, visual correctness, audio, thermals, and Stop/relaunch. Promotion
+  requires lower wait/CPU pressure without worse FPS, input latency, stalls,
+  artifacts, or shutdown behavior; no performance gain is claimed yet.

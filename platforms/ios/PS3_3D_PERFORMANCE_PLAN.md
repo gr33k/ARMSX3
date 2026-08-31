@@ -172,6 +172,21 @@ retain source provenance and attribution.
 - Use resolution reduction only as a diagnostic. Production must retain a
   reasonable image while sustaining the title's intended frame rate.
 
+### Mobile wait-policy experiment
+
+The post-V0.22 candidate removes four sources of avoidable CPU contention while
+preserving a short hot-spin path: Vulkan fence waits, Vulkan event readbacks,
+RSX offload drains, and mobile occlusion-query polling. Asynchronous Vulkan
+pipeline workers also use Utility QoS on iOS. These changes are independently
+reversible and do not alter renderer output or cache identity.
+
+This is a scheduling experiment, not the direct-Metal backend and not an FPS
+claim. Compare the same U1/RDR warm-cache scenes against V0.20 telemetry. Keep
+the batch only if it reduces wait/other CPU and thermal pressure without adding
+latency, stalls, or renderer regressions. If Metal execution remains dominant,
+continue the clean-room direct-Metal RSX phases above rather than stacking more
+unmeasured scheduling tweaks.
+
 ## Required evidence
 
 Every candidate records source commit, IPA SHA-256, bundle version/build,
