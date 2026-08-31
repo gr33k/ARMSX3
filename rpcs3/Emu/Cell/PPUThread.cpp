@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "Utilities/JIT.h"
+#include "Utilities/deferred_op.hpp"
 #ifdef RPCS3_IOS
 #include "Utilities/JITIOSLayoutPolicy.h"
 #include "ios/IOSMemoryPressurePolicy.h"
@@ -63,7 +64,11 @@
 #include <span>
 #include <optional>
 #include <charconv>
-#include <thread>
+
+#ifdef RPCS3_IOS
+#include <cstdlib>
+#include <pthread.h>
+#endif
 
 #include "util/asm.hpp"
 #include "util/vm.hpp"
@@ -79,6 +84,219 @@
 #endif
 
 extern atomic_t<u64> g_watchdog_hold_ctr;
+
+#ifdef RPCS3_IOS
+namespace
+{
+	template <typename Function>
+	class ios_compile_thread final
+	{
+		std::string m_name;
+		Function m_function;
+		pthread_t m_thread{};
+		bool m_joinable = false;
+
+		static void abandon(void* opaque) noexcept
+		{
+			auto& self = *static_cast<ios_compile_thread*>(opaque);
+			if constexpr (requires(Function& function) { function.cleanup_after_exit(); })
+			{
+				self.m_function.cleanup_after_exit();
+			}
+		}
+
+		static void* run(void* opaque) noexcept
+		{
+			auto& self = *static_cast<ios_compile_thread*>(opaque);
+			pthread_setname_np(self.m_name.c_str());
+			pthread_cleanup_push(&ios_compile_thread::abandon, &self);
+			self.m_function();
+			pthread_cleanup_pop(0);
+
+			return nullptr;
+		}
+
+		void join_fail_closed() noexcept
+		{
+			if (!m_joinable)
+			{
+				return;
+			}
+
+			const int join_error = pthread_join(m_thread, nullptr);
+			if (join_error != 0)
+			{
+				ppu_log.fatal("Failed to join iOS PPU compile thread: %d", join_error);
+				std::abort();
+			}
+
+			m_joinable = false;
+		}
+
+	public:
+		explicit ios_compile_thread(std::string name, Function function)
+			: m_name(std::move(name))
+			, m_function(std::move(function))
+		{
+		}
+
+		ios_compile_thread(const ios_compile_thread&) = delete;
+		ios_compile_thread& operator=(const ios_compile_thread&) = delete;
+
+		ios_compile_thread(ios_compile_thread&& other) noexcept
+			: m_name(std::move(other.m_name))
+			, m_function(std::move(other.m_function))
+		{
+			if (other.m_joinable)
+			{
+				ppu_log.fatal("Attempted to move a running iOS PPU compile thread");
+				std::abort();
+			}
+		}
+
+		~ios_compile_thread()
+		{
+			join_fail_closed();
+		}
+
+		bool start() noexcept
+		{
+			if (m_joinable)
+			{
+				ppu_log.fatal("Attempted to start an active iOS PPU compile thread");
+				std::abort();
+			}
+
+			pthread_attr_t attributes;
+			const int init_error = pthread_attr_init(&attributes);
+			if (init_error)
+			{
+				ppu_log.error("Failed to initialize iOS PPU pthread attributes (%d); using inline fallback", init_error);
+				return false;
+			}
+
+			int setup_error = pthread_attr_setstacksize(&attributes, 0x800000);
+			if (!setup_error)
+			{
+				setup_error = pthread_attr_set_qos_class_np(&attributes, QOS_CLASS_USER_INTERACTIVE, 0);
+			}
+
+			if (setup_error)
+			{
+				if (pthread_attr_destroy(&attributes) != 0)
+				{
+					ppu_log.error("Failed to destroy unusable iOS PPU pthread attributes");
+				}
+				ppu_log.error("Failed to configure iOS PPU compile thread (%d); using inline fallback", setup_error);
+				return false;
+			}
+
+			const int create_error = pthread_create(&m_thread, &attributes, &ios_compile_thread::run, this);
+			const int destroy_error = pthread_attr_destroy(&attributes);
+			if (create_error)
+			{
+				ppu_log.error("Failed to create iOS PPU compile thread (%d); using inline fallback", create_error);
+				return false;
+			}
+
+			m_joinable = true;
+			if (destroy_error)
+			{
+				ppu_log.error("Failed to destroy active iOS PPU pthread attributes (%d)", destroy_error);
+			}
+			return true;
+		}
+
+		void run_inline()
+		{
+			if (m_joinable)
+			{
+				ppu_log.fatal("Attempted to run an active iOS PPU compile thread inline");
+				std::abort();
+			}
+			m_function();
+		}
+
+		void join() noexcept
+		{
+			join_fail_closed();
+		}
+	};
+
+	struct ios_ppu_compilation_cleanup
+	{
+		bool restore_name;
+		std::string original_name;
+		void* workers = nullptr;
+		void (*join_workers)(void*) noexcept = nullptr;
+	};
+
+	template <typename Worker>
+	void join_ios_ppu_workers(void* opaque) noexcept
+	{
+		auto& workers = *static_cast<std::vector<Worker>*>(opaque);
+		for (Worker& worker : workers)
+		{
+			worker.join();
+		}
+	}
+
+	void finish_ios_ppu_compilation(void* opaque) noexcept
+	{
+		auto& cleanup = *static_cast<ios_ppu_compilation_cleanup*>(opaque);
+		if (cleanup.join_workers)
+		{
+			cleanup.join_workers(cleanup.workers);
+		}
+		if (cleanup.restore_name && thread_ctrl::get_current())
+		{
+			thread_ctrl::set_name(std::move(cleanup.original_name));
+		}
+		g_watchdog_hold_ctr--;
+	}
+
+	struct ios_ppu_file_budget_cleanup
+	{
+		atomic_t<u32>* limit;
+		u32* reserved;
+	};
+
+	void restore_ios_ppu_file_budget(void* opaque) noexcept
+	{
+		auto& cleanup = *static_cast<ios_ppu_file_budget_cleanup*>(opaque);
+		const u32 reserved = std::exchange(*cleanup.reserved, 0);
+		if (reserved && !cleanup.limit->fetch_add(reserved))
+		{
+			cleanup.limit->notify_all();
+		}
+	}
+
+	bool should_log_ios_ppu_cache_miss(u64& occurrence)
+	{
+		static atomic_t<u64> total_occurrences = 0;
+		occurrence = ++total_occurrences;
+		return occurrence <= 64 || (occurrence & (occurrence - 1)) == 0;
+	}
+
+	thread_local bool is_ios_sprx_precompile_worker = false;
+
+	class ios_sprx_precompile_scope final
+	{
+		const bool m_previous = is_ios_sprx_precompile_worker;
+
+	public:
+		ios_sprx_precompile_scope()
+		{
+			is_ios_sprx_precompile_worker = true;
+		}
+
+		~ios_sprx_precompile_scope()
+		{
+			is_ios_sprx_precompile_worker = m_previous;
+		}
+	};
+}
+#endif
 
 // Should be of the same type
 using spu_rdata_t = decltype(ppu_thread::rdata);
@@ -3755,6 +3973,20 @@ extern void ppu_precompile(std::vector<std::string>& dir_queue, std::vector<ppu_
 	std::sort(dir_queue.begin(), dir_queue.end());
 	dir_queue.erase(std::unique(dir_queue.begin(), dir_queue.end()), dir_queue.end());
 
+#ifdef RPCS3_IOS
+	const usz source_dir_count = dir_queue.size();
+	ppu_log.notice("iOS PPU precompile begin: %u source path(s), fast=%d", ::size32(dir_queue), is_fast_compilation);
+	const usz logged_source_count = std::min<usz>(source_dir_count, 8);
+	for (usz index = 0; index < logged_source_count; index++)
+	{
+		ppu_log.notice("iOS PPU precompile source[%u]: %s", index, dir_queue[index]);
+	}
+	if (logged_source_count < source_dir_count)
+	{
+		ppu_log.notice("iOS PPU precompile source list truncated: %u additional path(s)", source_dir_count - logged_source_count);
+	}
+#endif
+
 	const std::string firmware_sprx_path = vfs::get("/dev_flash/sys/external/");
 
 	struct file_info
@@ -3941,6 +4173,11 @@ extern void ppu_precompile(std::vector<std::string>& dir_queue, std::vector<ppu_
 		total_files_size += info.file_size;
 	}
 
+#ifdef RPCS3_IOS
+	ppu_log.notice("iOS PPU precompile scan complete: %u source path(s), %u expanded path(s), %u queued executable(s), %llu MiB",
+		source_dir_count, ::size32(dir_queue), ::size32(file_queue), total_files_size / rpcs3::ios::process_memory_mib);
+#endif
+
 	g_progr_ftotal_bits += total_files_size;
 
 	*progress_dialog = get_localized_string(localized_string_id::PROGRESS_DIALOG_COMPILING_PPU_MODULES);
@@ -3959,6 +4196,16 @@ extern void ppu_precompile(std::vector<std::string>& dir_queue, std::vector<ppu_
 
 	const u32 software_thread_limit = std::min<u32>(rpcs3::utils::get_max_threads(), ::size32(file_queue));
 	const u32 cpu_thread_limit = utils::get_thread_count() > 8u ? std::max<u32>(utils::get_thread_count(), 2) - 1 : utils::get_thread_count(); // One LLVM thread less
+	const u32 available_worker_count = std::min<u32>(software_thread_limit, cpu_thread_limit);
+
+#ifdef RPCS3_IOS
+	const u64 ios_precompile_headroom = rpcs3::ios::available_process_memory_headroom();
+	const u32 ios_precompile_limit = rpcs3::ios::get_adaptive_llvm_compile_thread_limit(
+		::utils::get_thread_count(), g_cfg.core.llvm_threads, ios_precompile_headroom);
+	const u32 worker_count = std::min<u32>(available_worker_count, ios_precompile_limit);
+#else
+	const u32 worker_count = available_worker_count;
+#endif
 
 	std::vector<u128> decrypt_klics;
 
@@ -4006,14 +4253,21 @@ extern void ppu_precompile(std::vector<std::string>& dir_queue, std::vector<ppu_
 		}
 	}
 
-	named_thread_group workers("SPRX Worker ", std::min<u32>(software_thread_limit, cpu_thread_limit), [&]
+	auto sprx_worker = [&]
 	{
+#ifdef RPCS3_IOS
+		ios_sprx_precompile_scope precompile_scope;
+#endif
 		jit_write_guard jit_guard;
 
 		// Set low priority
 		thread_ctrl::scoped_priority low_prio(-1);
 		u32 inc_fdone = 1;
 		u32 restore_mem = 0;
+#ifdef RPCS3_IOS
+		ios_ppu_file_budget_cleanup budget_cleanup{&file_size_limit, &restore_mem};
+		pthread_cleanup_push(&restore_ios_ppu_file_budget, &budget_cleanup);
+#endif
 
 		for (usz func_i = fnext++; func_i < file_queue.size(); func_i = fnext++, g_progr_fdone += std::exchange(inc_fdone, 1))
 		{
@@ -4216,6 +4470,9 @@ extern void ppu_precompile(std::vector<std::string>& dir_queue, std::vector<ppu_
 			inc_fdone = 0;
 		}
 
+#ifdef RPCS3_IOS
+		pthread_cleanup_pop(1);
+#else
 		if (restore_mem)
 		{
 			if (!file_size_limit.fetch_add(restore_mem))
@@ -4223,10 +4480,45 @@ extern void ppu_precompile(std::vector<std::string>& dir_queue, std::vector<ppu_
 				file_size_limit.notify_all();
 			}
 		}
-	});
+#endif
+	};
 
-	// Join every thread
+#ifdef RPCS3_IOS
+	ppu_log.notice("iOS SPRX precompile dispatch: %u queued executable(s), %u worker limit, %u MiB headroom",
+		::size32(file_queue), worker_count, ios_precompile_headroom / rpcs3::ios::process_memory_mib);
+
+	using ios_sprx_thread = ios_compile_thread<decltype(sprx_worker)>;
+	std::vector<ios_sprx_thread> ios_sprx_workers;
+	ios_sprx_workers.reserve(worker_count);
+	u32 direct_worker_count = 0;
+	u32 inline_fallback_count = 0;
+	pthread_cleanup_push(&join_ios_ppu_workers<ios_sprx_thread>, &ios_sprx_workers);
+	for (u32 index = 0; index < worker_count; index++)
+	{
+		ios_sprx_workers.emplace_back(fmt::format("SPRX Worker %u", index + 1), sprx_worker);
+		if (ios_sprx_workers.back().start())
+		{
+			direct_worker_count++;
+		}
+		else
+		{
+			inline_fallback_count++;
+			ios_sprx_workers.back().run_inline();
+		}
+	}
+
+	for (ios_sprx_thread& worker : ios_sprx_workers)
+	{
+		worker.join();
+	}
+	pthread_cleanup_pop(0);
+
+	ppu_log.notice("iOS SPRX precompile worker phase ended: %u direct worker(s) joined, %u inline fallback(s), stopped=%d",
+		direct_worker_count, inline_fallback_count, Emu.IsStopped());
+#else
+	named_thread_group workers("SPRX Worker ", worker_count, std::move(sprx_worker));
 	workers.join();
+#endif
 
 #ifdef RPCS3_IOS
 	if (const u64 released = rpcs3::ios::relieve_process_memory_pressure())
@@ -4363,6 +4655,10 @@ extern void ppu_precompile(std::vector<std::string>& dir_queue, std::vector<ppu_
 	});
 
 	exec_worker();
+
+#ifdef RPCS3_IOS
+	ppu_log.notice("iOS PPU precompile end: %u queued executable(s), stopped=%d", ::size32(file_queue), Emu.IsStopped());
+#endif
 }
 
 extern void ppu_initialize()
@@ -5245,6 +5541,14 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 
 		if (check_only)
 		{
+#ifdef RPCS3_IOS
+			u64 occurrence = 0;
+			if (should_log_ios_ppu_cache_miss(occurrence))
+			{
+				ppu_log.notice("iOS PPU cache miss #%llu: path='%s', cache='%s', object='%s', fragments_scanned=%u, check_only=1",
+					occurrence, info.path, cache_path, obj_name, module_counter);
+			}
+#endif
 			return true;
 		}
 
@@ -5257,6 +5561,18 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 		// Fill workload list for compilation
 		workload.emplace_back(std::move(obj_name), std::move(part));
 	}
+
+#ifdef RPCS3_IOS
+	if (!check_only && !workload.empty())
+	{
+		u64 occurrence = 0;
+		if (should_log_ios_ppu_cache_miss(occurrence))
+		{
+			ppu_log.notice("iOS PPU cache miss #%llu: path='%s', cache='%s', first_object='%s', fragments=%u, missing=%u, check_only=0",
+				occurrence, info.path, cache_path, workload.front().first, module_counter, ::size32(workload));
+		}
+	}
+#endif
 
 	if (check_only)
 	{
@@ -5282,19 +5598,22 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 
 #ifdef RPCS3_IOS
 		// The generic named-thread wait stalled on physical iOS 15 even after all
-		// workers completed. Use short-lived std::threads with pthread joins, and
-		// reduce parallelism when LLVM's transient allocations consume headroom.
+		// workers completed. Use short-lived pthread workers with explicit joins
+		// and 8 MiB stacks, and reduce parallelism when LLVM consumes headroom.
 		const u64 ios_headroom = rpcs3::ios::available_process_memory_headroom();
-		const u32 ios_compile_limit = rpcs3::ios::get_adaptive_llvm_compile_thread_limit(
+		const u32 ios_adaptive_compile_limit = rpcs3::ios::get_adaptive_llvm_compile_thread_limit(
 			::utils::get_thread_count(), g_cfg.core.llvm_threads, ios_headroom);
+		// The outer SPRX pool already consumes the adaptive budget. Keep each
+		// nested module on its owning worker instead of multiplying that budget.
+		const u32 ios_compile_limit = is_ios_sprx_precompile_worker ? 1 : ios_adaptive_compile_limit;
 		const u32 thread_count = std::min<u32>(::size32(workload), ios_compile_limit) - 1;
 #else
 		const u32 thread_count = std::max<u32>(std::min<u32>(::size32(workload), rpcs3::utils::get_max_threads()), 1) - 1;
 #endif
 
 #ifdef RPCS3_IOS
-		ppu_log.notice("iOS LLVM compilation: %u module(s), %u direct worker(s), %u MiB headroom",
-			::size32(workload), thread_count + 1, ios_headroom / rpcs3::ios::process_memory_mib);
+		ppu_log.notice("iOS LLVM compilation dispatch: %u module(s), %u total-worker limit, %u MiB headroom, nested SPRX=%d",
+			::size32(workload), thread_count + 1, ios_headroom / rpcs3::ios::process_memory_mib, is_ios_sprx_precompile_worker);
 #endif
 
 		struct thread_index_allocator
@@ -5344,8 +5663,26 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 
 			thread_op(thread_op&& other) noexcept = default;
 
+			void cleanup_after_exit() noexcept
+			{
+				if (core_lock.owns_lock())
+				{
+					core_lock.unlock();
+				}
+			}
+
+#ifdef RPCS3_IOS
+			static void abandon(void* opaque) noexcept
+			{
+				static_cast<thread_op*>(opaque)->cleanup_after_exit();
+			}
+#endif
+
 			void operator()()
 			{
+#ifdef RPCS3_IOS
+				pthread_cleanup_push(&thread_op::abandon, this);
+#endif
 				// Set low priority
 				thread_ctrl::scoped_priority low_prio(-1);
 
@@ -5372,11 +5709,30 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 				}
 
 				core_lock.unlock();
+#ifdef RPCS3_IOS
+				pthread_cleanup_pop(0);
+#endif
 			}
 		};
 
-		// Prevent watchdog thread from terminating
+		const bool current_is_named = thread_ctrl::get_current() != nullptr;
+		const auto old_name = current_is_named ? thread_ctrl::get_name() : std::string{};
+
+		// Prevent watchdog thread from terminating.
 		g_watchdog_hold_ctr++;
+#ifdef RPCS3_IOS
+		ios_ppu_compilation_cleanup thread_cleanup{current_is_named, old_name};
+		pthread_cleanup_push(&finish_ios_ppu_compilation, &thread_cleanup);
+#else
+		const utils::deferred_op restore_thread_state([&]
+		{
+			if (current_is_named)
+			{
+				thread_ctrl::set_name(old_name);
+			}
+			g_watchdog_hold_ctr--;
+		});
+#endif
 
 		const std::string worker_group_name = fmt::format("PPUW.%u.", ++g_fxo->get<thread_index_allocator>().index);
 		const auto try_lock_thread = [&](u32 thread_index, thread_op& op)
@@ -5404,17 +5760,28 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 		};
 
 #ifdef RPCS3_IOS
-		std::vector<std::thread> ios_workers;
+		using ios_ppu_worker = ios_compile_thread<thread_op>;
+		std::vector<ios_ppu_worker> ios_workers;
+		thread_cleanup.workers = &ios_workers;
+		thread_cleanup.join_workers = &join_ios_ppu_workers<ios_ppu_worker>;
 		ios_workers.reserve(thread_count);
+		u32 direct_worker_count = 0;
+		u32 inline_fallback_count = 0;
 		for (u32 thread_index = 0; thread_index < thread_count; thread_index++)
 		{
 			thread_op worker_op(&work_cv, &work_done, workload, cpu, info, cache_path, g_fxo->get<jit_core_allocator>().sem);
 			if (try_lock_thread(thread_index, worker_op))
 			{
-				ios_workers.emplace_back([op = std::move(worker_op)]() mutable
+				ios_workers.emplace_back(worker_group_name + std::to_string(thread_index + 1), std::move(worker_op));
+				if (ios_workers.back().start())
 				{
-					op();
-				});
+					direct_worker_count++;
+				}
+				else
+				{
+					inline_fallback_count++;
+					ios_workers.back().run_inline();
+				}
 			}
 		}
 #else
@@ -5423,23 +5790,32 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 			, try_lock_thread);
 #endif
 
-		const auto old_name = thread_ctrl::get_name();
-		thread_ctrl::set_name(worker_group_name + std::to_string(thread_count + 1));
+		if (current_is_named)
+		{
+			thread_ctrl::set_name(worker_group_name + std::to_string(thread_count + 1));
+		}
 
 		thread_op cur_op(&work_cv, &work_done, workload, cpu, info, cache_path, g_fxo->get<jit_core_allocator>().sem);
+#ifdef RPCS3_IOS
+		bool current_worker_ran = false;
+#endif
 
 		if (try_lock_thread(thread_count, cur_op))
 		{
-			// Recycle current thread: reduce overall thrread count
+			// Recycle current thread to reduce the overall thread count.
+#ifdef RPCS3_IOS
+			current_worker_ran = true;
+#endif
 			cur_op();
 		}
 
 #ifdef RPCS3_IOS
-		for (std::thread& worker : ios_workers)
+		for (ios_ppu_worker& worker : ios_workers)
 		{
 			worker.join();
 		}
-		ppu_log.notice("iOS parallel PPU compilation complete; direct workers joined");
+		ppu_log.notice("iOS parallel PPU worker phase ended: %u direct worker(s) joined, %u inline fallback(s), current worker ran=%d, stopped=%d",
+			direct_worker_count, inline_fallback_count, current_worker_ran, Emu.IsStopped());
 #else
 		threads.join();
 #endif
@@ -5449,10 +5825,9 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 		// this physical-device stall is isolated. Normal iOS memory-pressure
 		// handling remains active during emulation.
 		ppu_log.notice("iOS PPU compile finalization complete; continuing directly to module linking");
+		pthread_cleanup_pop(1);
 #endif
 
-		thread_ctrl::set_name(old_name);
-		g_watchdog_hold_ctr--;
 	}
 
 	// Initialize compiler instance
