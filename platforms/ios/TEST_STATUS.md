@@ -2255,3 +2255,32 @@ cache-reuse gates.
   input, flip, Stop, immediate relaunch, and a second title remain correct.
   This protects liveness after a guest-side stall; it does not repair the guest
   mutex or prove higher settled FPS in U1/RDR.
+
+## One-to-one blit interpolation candidate (post-V0.26)
+
+- SOURCE: isolated commit `8a729951e`, semantically backported from upstream
+  `32b711cdb` into the equivalent pre-refactor texture-cache branch.
+- ROOT RISK: the memory-source blit path could honor a linear-filter request
+  even when the guest operation was an exact 1:1 copy. Sampling adjacent texels
+  in that case can blur or smear moving images, matching the reported RDR car
+  and train presentation without implying a general shader failure.
+- FIX READY: after a memory source is resolved, a copy with absolute X and Y
+  scale both equal to one disables interpolation. Any real scaling retains the
+  caller's filter. Render-target sources, including resolution-scaled sources,
+  remain excluded and preserve their existing interpolation behavior.
+- SAFETY BOUNDARY: 16/32-bit format conversion still uses typeless metadata;
+  mirrored 1:1 scans still use their existing coordinate transform; DMA/null
+  copies do not consume the flag. The final GL/Vulkan blitter is the only
+  affected consumer. No cache identity, clipping, format, or destination
+  selection changed.
+- PASS STATIC/BUILD: independent read-only review found no issue;
+  `git diff --check`, the complete bounded iOS contract runner, and the
+  incremental two-worker arm64 core build pass. The combined unsigned core is
+  `77,496,088` bytes, SHA-256
+  `1dec6ab09436ba6fcfe896ab6f1815b77241cb50b80a5b4aa5195d03a72d0f45`,
+  UUID `70FA71F1-B238-3A63-88D0-6DB5CCDA6945`.
+- REQUIRED PHYSICAL: compare the exact RDR moving-car and train sequence to
+  V0.26 after a clean graphics cache, then use U1 and U3 as visual controls.
+  Require sharper 1:1 motion with no pixel shimmer, missing filtering during
+  real scaling, color regression, block artifacts, or crash. This candidate
+  makes no settled-FPS claim.

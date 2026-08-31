@@ -267,6 +267,19 @@ path, correlate the warning with resumed vblank/FPS, then verify Stop,
 immediate relaunch, and a second title. Any lost non-vblank behavior rejects the
 candidate.
 
+### One-to-one blit interpolation candidate
+
+Post-V0.26 commit `8a729951e` disables linear interpolation only for exact 1:1
+memory-source copies, matching upstream `32b711cdb`. Guest-scaled operations
+and render-target sources retain filtering. This directly targets the reported
+RDR moving-car/train blur without changing shaders, formats, cache identity, or
+the direct-Metal roadmap.
+
+Use the same RDR sequence for V0.26 versus candidate A/B, with U1 and U3 as
+visual controls. Retain only if 1:1 motion is sharper without pixel shimmer or
+degrading legitimately scaled content. Do not report an FPS improvement from a
+sampling correction.
+
 ## Required evidence
 
 Every candidate records source commit, IPA SHA-256, bundle version/build,
