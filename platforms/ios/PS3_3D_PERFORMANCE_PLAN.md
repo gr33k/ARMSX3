@@ -223,6 +223,36 @@ warm U1/RDR scenes, compare PPU/SPU load, frame-time distribution, thermals,
 audio, and Stop behavior to V0.26. Retain it only if synchronization pressure
 falls without page-protection faults, new stalls, or gameplay regressions.
 
+### Post-stall audio refill candidate
+
+Post-V0.26 commit `e1d70c9f4` increases callback-ring capacity from 20 ms to
+60 ms above the unchanged configured target and counts whole-block push
+failures. This preserves up to 40 ms more recovery burst after an RSX or JIT
+stall without deliberately raising normal queued latency. At 48 kHz, each
+formerly silent 256-sample loss is 5.33 ms and can explain the reported
+periodic knock.
+
+Treat the new warning as telemetry, not a cosmetic suppression mechanism.
+Capture it beside frame, compiler, and queue timings in U1/RDR/U2/U3. If drops
+continue, fix the producer stall; do not keep enlarging the ring. Reject the
+candidate if steady-state latency, drift, fast audio, or Stop behavior worsens.
+
+### Tiled blit-bound renderer candidate
+
+Post-V0.26 commit `8bb0deb0f` isolates and hardens upstream `37848abbc` so a
+heuristic destination cache rectangle cannot straddle a GCM tile. The local
+version uses a floor full-row cap, carries that cap through every later height
+expansion, and falls back before cache mutation when a partial-row payload
+cannot be represented safely. Focused contracts cover the two boundary defects
+found during independent review of the donor patch.
+
+This is a renderer-correctness candidate for U2/U3 transient rectangles and
+warping, not a broad performance claim. Compare fresh graphics-cache and warm
+launches against V0.26, record whether the CPU/tile fallback is exercised, and
+reject any missing transfer, color regression, crash, or teardown slowdown.
+Only after this isolated result is physically attributable should the larger
+pitch-compatibility or interpolation candidates be layered on it.
+
 ## Required evidence
 
 Every candidate records source commit, IPA SHA-256, bundle version/build,

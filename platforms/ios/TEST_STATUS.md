@@ -2160,3 +2160,66 @@ cache-reuse gates.
   recording FPS, PPU/SPU/RSX/other CPU, thermals, memory, audio, and graphics.
   Require no page-protection fault, new hang, input regression, or worse
   Stop/relaunch. Static and donor evidence do not prove an iPhone FPS gain.
+
+## Post-stall audio refill candidate (post-V0.26)
+
+- SOURCE: isolated commit `e1d70c9f4`, selectively backported from the audio
+  portions of upstream `14e740513`. Unrelated upstream changes were excluded.
+- ROOT RISK: the callback ring previously retained only 20 ms above the
+  configured target. After a renderer or compiler stall, a refill burst could
+  silently lose an entire 256-sample block. At 48 kHz that is 5.33 ms and is a
+  concrete match for the periodic knock/click reported during heavy 3D loads.
+- FIX READY: ring capacity now retains 60 ms above the unchanged target, giving
+  a stalled producer 40 ms more burst headroom without increasing the normal
+  steady-state queue target. A whole-block push failure is counted and emits a
+  rate-limited warning on the first and then every 64th drop instead of being
+  silent.
+- SAFETY BOUNDARY: sample format, downmix, resampling, time-stretch target,
+  backend callback cadence, and ordinary latency policy are unchanged. The
+  additional capacity is not a claim that RSX/PPU stalls are fixed, and a drop
+  warning is evidence of starvation rather than permission to mask it.
+- PASS STATIC/BUILD: `git diff --check`, the complete bounded iOS contract
+  runner, and the incremental two-worker arm64 iOS core build pass. The
+  combined post-V0.26 core identity after the tiled-blit candidate below is
+  `77,495,936` bytes, SHA-256
+  `76130a8fe2a4c5d1ba7d244b8a2a63be4a6f2f750db6524d34cdd2f4763dd369`,
+  UUID `2AD96B4E-B4BE-3980-AAAC-AE317D74AB94`.
+- REQUIRED PHYSICAL: in the same U1, RDR, U2/U3, and Sonic load transitions,
+  capture the new drop warning, queued milliseconds, FPS, and audible output.
+  Require no added steady-state latency, drift, fast audio, static, or teardown
+  regression. Absence of a warning alone is not proof of clean audio.
+
+## Tiled blit-bound renderer candidate (post-V0.26)
+
+- SOURCE: isolated commit `8bb0deb0f`, based on upstream `37848abbc` and
+  hardened after independent review. The broader texture-cache refactor and
+  pitch-compatibility series remain excluded so this result stays attributable.
+- ROOT RISK: the old blit-size heuristic could create a destination cache
+  section beyond the active GCM tile. That can alias a neighboring tile and is
+  a plausible source of stale rectangles, transient white/green blocks, or
+  warped regions in U2/U3; it is not a generic FPS fix.
+- FIX READY: representable destination sections are clamped to full rows that
+  fit before the tile boundary. The cap is carried through the 720-line and
+  matching-source-width expansions so neither can re-expand across the tile.
+  Multiplication and end-address calculations use widened arithmetic.
+- CORRECTNESS FALLBACK: when the payload fits only as a partial final row and
+  no full rectangular cache section can satisfy both payload coverage and tile
+  containment, the GPU/cache path returns before lock acquisition or cache
+  mutation. NV3089 then uses its established CPU/tile copy fallback; the
+  transfer is not silently discarded.
+- UPSTREAM EDGE REPAIR: read-only review found that upstream ceiling division
+  could overrun a non-pitch-aligned tile tail and that its later 720 minimum
+  could undo a valid clamp. Both findings are covered by focused contracts for
+  exact fit, floor clamp, partial tails, unrepresentable payloads, sub-720
+  tiles, widened multiplication, and zero pitch. A second review found no
+  remaining code issue.
+- PASS STATIC/BUILD: `git diff --check`, two independent complete iOS contract
+  runs, and a bounded two-worker arm64 iOS 15 core build pass. The active
+  combined core is `77,495,936` bytes, SHA-256
+  `76130a8fe2a4c5d1ba7d244b8a2a63be4a6f2f750db6524d34cdd2f4763dd369`,
+  UUID `2AD96B4E-B4BE-3980-AAAC-AE317D74AB94`.
+- REQUIRED PHYSICAL: compare U2 and U3 menus plus live 3D against V0.26 using a
+  rebuilt graphics cache, then inspect RDR/U1 for regressions. Instrument or
+  capture fallback frequency before attributing a performance cost. Require no
+  green/pink cast, new rectangles, missing transfers, crash, or worse
+  Stop/relaunch; a build cannot prove renderer correctness.
