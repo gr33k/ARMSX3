@@ -28,6 +28,7 @@
 
 #ifdef RPCS3_IOS
 #include "ios/IOSExitspawnDiscPathPolicy.h"
+#include "ios/RPCS3IOSSession.h"
 #include "Loader/ISO.h"
 #endif
 
@@ -433,22 +434,21 @@ void lv2_exitspawn(ppu_thread& ppu, std::vector<std::string>& argv, std::vector<
 		if (disc.empty() && !Emu.GetTitleID().empty())
 			disc = vfs::get(Emu.GetDir());
 
-		std::string guest_path = argv[0];
+		std::string executable_lookup = argv[0];
 #ifdef RPCS3_IOS
 		const std::string disc_game_path = vfs::get("/dev_bdvd/PS3_GAME");
-		const std::string resolved_guest_path = rpcs3::ios::resolve_exitspawn_disc_path(
-			guest_path,
+		const auto resolved_paths = rpcs3::ios::resolve_exitspawn_paths(
+			argv[0],
 			Emu.IsChildProcess(),
 			disc_game_path.starts_with(iso_device::virtual_device_name));
-		if (resolved_guest_path != guest_path)
+		if (resolved_paths.executable_lookup != resolved_paths.guest_argv0)
 		{
-			sys_process.notice("iOS NETISO exitspawn executable redirect: '%s' -> '%s'",
-				guest_path, resolved_guest_path);
-			guest_path = resolved_guest_path;
-			argv[0] = guest_path;
+			sys_process.notice("iOS NETISO exitspawn executable lookup redirect: '%s' -> '%s' (guest argv[0] preserved)",
+				resolved_paths.guest_argv0, resolved_paths.executable_lookup);
+			executable_lookup = resolved_paths.executable_lookup;
 		}
 #endif
-		std::string path = vfs::get(guest_path);
+		std::string path = vfs::get(executable_lookup);
 		std::string hdd1 = vfs::get("/dev_hdd1/");
 
 		const u128 klic = g_fxo->get<loaded_npdrm_keys>().last_key();
@@ -465,6 +465,10 @@ void lv2_exitspawn(ppu_thread& ppu, std::vector<std::string>& argv, std::vector<
 		}
 
 		idm_capture->set_reading_state();
+		u64 frontend_session_generation = 0;
+#ifdef RPCS3_IOS
+		frontend_session_generation = rpcs3::ios::current_guest_session_generation();
+#endif
 
 		auto func = [is_real_reboot, old_size = g_fxo->get<lv2_memory_container>().size, idm_capture](u32 sdk_suggested_mem) mutable
 		{
@@ -494,9 +498,17 @@ void lv2_exitspawn(ppu_thread& ppu, std::vector<std::string>& argv, std::vector<
 			ensure(g_fxo->init<lv2_memory_container>(std::min(old_size - total_size, sdk_suggested_mem) + total_size));
 		};
 
-		Emu.after_kill_callback = [func = std::move(func), argv = std::move(argv), envp = std::move(envp), data = std::move(data),
+		auto after_kill_callback = [func = std::move(func), frontend_session_generation, argv = std::move(argv), envp = std::move(envp), data = std::move(data),
 			disc = std::move(disc), path = std::move(path), hdd1 = std::move(hdd1), old_config = Emu.GetUsedConfig(), old_db_config = Emu.GetUsedDatabaseConfig(), klic]() mutable
 		{
+#ifdef RPCS3_IOS
+			if (!rpcs3::ios::owns_current_guest_session_generation(frontend_session_generation))
+			{
+				sys_process.notice("Cancelled stale iOS exitspawn callback before child boot (generation=%llu)",
+					static_cast<unsigned long long>(frontend_session_generation));
+				return;
+			}
+#endif
 			Emu.argv = std::move(argv);
 			Emu.envp = std::move(envp);
 			Emu.data = std::move(data);
@@ -515,9 +527,24 @@ void lv2_exitspawn(ppu_thread& ppu, std::vector<std::string>& argv, std::vector<
 
 			if (res != game_boot_result::no_errors)
 			{
+#ifdef RPCS3_IOS
+				rpcs3::ios::handle_continuous_boot_failure(frontend_session_generation);
+#endif
 				sys_process.fatal("Failed to boot from exitspawn! (path=\"%s\", error=%s)", path, res);
 			}
 		};
+
+#ifdef RPCS3_IOS
+		if (!rpcs3::ios::install_continuous_boot_callback(
+			frontend_session_generation, std::move(after_kill_callback)))
+		{
+			sys_process.notice("Cancelled stale iOS exitspawn callback before publication (generation=%llu)",
+				static_cast<unsigned long long>(frontend_session_generation));
+			return;
+		}
+#else
+		Emu.after_kill_callback = std::move(after_kill_callback);
+#endif
 
 		signal_system_cache_can_stay();
 

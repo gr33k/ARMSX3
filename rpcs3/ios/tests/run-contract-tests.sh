@@ -26,6 +26,12 @@ mkdir -p "${OUTPUT_ROOT}"
 
 "${CXX_COMPILER}" -std=c++20 -Wall -Wextra -Werror \
     -I "${SOURCE_ROOT}" -I "${SOURCE_ROOT}/rpcs3" \
+    "${SCRIPT_DIR}/IOSGuestSessionPolicyTests.cpp" \
+    -o "${OUTPUT_ROOT}/IOSGuestSessionPolicyTests"
+"${OUTPUT_ROOT}/IOSGuestSessionPolicyTests"
+
+"${CXX_COMPILER}" -std=c++20 -Wall -Wextra -Werror \
+    -I "${SOURCE_ROOT}" -I "${SOURCE_ROOT}/rpcs3" \
     "${SCRIPT_DIR}/RPCS3IOSResolutionTests.cpp" \
     -o "${OUTPUT_ROOT}/RPCS3IOSResolutionTests"
 "${OUTPUT_ROOT}/RPCS3IOSResolutionTests"

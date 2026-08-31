@@ -15,6 +15,7 @@
 #include "RPCS3IOSRuntimePatches.h"
 #include "RPCS3IOSSaveDialog.h"
 #include "RPCS3IOSResolution.h"
+#include "RPCS3IOSSession.h"
 #include "RPCS3IOSSettings.h"
 #include "RPCS3IOSZcullAccuracy.h"
 #include "FirmwareInstaller.h"
@@ -22,6 +23,7 @@
 #include "GameUpdateManifest.h"
 #include "IOSGSFrame.h"
 #include "IOSGameProfilePolicy.h"
+#include "IOSGuestSessionPolicy.h"
 #include "NetISODevice.h"
 #include "TrophyLibrary.h"
 #include "Emu/Io/IOS/IOSPadHandler.h"
@@ -105,6 +107,7 @@ std::mutex g_api_mutex;
 std::mutex g_stop_mutex;
 std::mutex g_progress_mutex;
 std::mutex g_netiso_mutex;
+std::mutex g_guest_session_mutex;
 rpcs3::ios::lifecycle g_lifecycle;
 rpcs3::ios::error_store g_last_error;
 rpcs3_ios_config g_config{};
@@ -115,6 +118,10 @@ bool g_emu_started = false;
 std::atomic_bool g_accept_display_surfaces = false;
 std::atomic_bool g_accept_pad_state = false;
 std::atomic_bool g_guest_session_claimed = false;
+u64 g_guest_session_generation = 0;
+rpcs3::ios::guest_session_phase g_guest_session_phase =
+	rpcs3::ios::guest_session_phase::idle;
+u32 g_guest_boot_operations = 0;
 rpcs3::ios::display_surface_registry g_display_surface;
 std::shared_ptr<rpcn::rpcn_client> g_rpcn_client;
 bool g_rpcn_config_loaded = false;
@@ -162,6 +169,16 @@ boot_progress_snapshot capture_boot_progress()
 
 rpcs3_ios_emulation_state current_emulation_state() noexcept
 {
+	{
+		std::lock_guard lock(g_guest_session_mutex);
+		if (g_guest_session_phase == rpcs3::ios::guest_session_phase::stop_requested ||
+			g_guest_session_phase == rpcs3::ios::guest_session_phase::cleanup_queued ||
+			g_guest_session_phase == rpcs3::ios::guest_session_phase::cleanup_armed)
+		{
+			return RPCS3_IOS_EMULATION_STATE_STOPPING;
+		}
+	}
+
 	switch (Emu.GetStatus(false))
 	{
 	case system_state::stopped:
@@ -214,26 +231,64 @@ void set_error(std::string message)
 class guest_session_claim
 {
 	bool m_rollback = false;
+	u64 m_generation = 0;
 
 public:
 	bool acquire() noexcept
 	{
-		bool expected = false;
-		m_rollback = g_guest_session_claimed.compare_exchange_strong(
-			expected, true, std::memory_order_acq_rel);
-		return m_rollback;
+		std::lock_guard lock(g_guest_session_mutex);
+		if (g_guest_session_claimed.load(std::memory_order_acquire) ||
+			g_guest_session_phase != rpcs3::ios::guest_session_phase::idle)
+		{
+			return false;
+		}
+
+		g_guest_session_generation = rpcs3::ios::next_guest_session_generation(
+			g_guest_session_generation);
+		m_generation = g_guest_session_generation;
+		m_rollback = true;
+		g_guest_session_phase = rpcs3::ios::guest_session_phase::active;
+		g_guest_session_claimed.store(true, std::memory_order_release);
+		return true;
 	}
 
-	void retain() noexcept
+	bool owns() const noexcept
 	{
+		std::lock_guard lock(g_guest_session_mutex);
+		return m_rollback && rpcs3::ios::can_continue_guest_session(
+			g_guest_session_claimed.load(std::memory_order_acquire),
+			g_guest_session_phase,
+			g_guest_session_generation,
+			m_generation);
+	}
+
+	bool retain() noexcept
+	{
+		std::lock_guard lock(g_guest_session_mutex);
+		if (!m_rollback || !rpcs3::ios::can_continue_guest_session(
+			g_guest_session_claimed.load(std::memory_order_acquire),
+			g_guest_session_phase,
+			g_guest_session_generation,
+			m_generation))
+		{
+			return false;
+		}
 		m_rollback = false;
+		return true;
 	}
 
 	~guest_session_claim()
 	{
 		if (m_rollback)
 		{
-			g_guest_session_claimed.store(false, std::memory_order_release);
+			std::lock_guard lock(g_guest_session_mutex);
+			if (g_guest_session_claimed.load(std::memory_order_acquire) &&
+				g_guest_session_phase == rpcs3::ios::guest_session_phase::active &&
+				g_guest_session_generation == m_generation)
+			{
+				g_guest_session_claimed.store(false, std::memory_order_release);
+				g_guest_session_phase = rpcs3::ios::guest_session_phase::idle;
+			}
 		}
 	}
 };
@@ -298,6 +353,304 @@ void emit_log(int32_t level, std::string_view message)
 	const std::string terminated{message};
 	g_config.log_callback(g_config.user_context, level, terminated.c_str());
 }
+
+struct guest_session_stop_request
+{
+	u64 generation = 0;
+	bool accepted = false;
+};
+
+guest_session_stop_request request_guest_session_stop(
+	u64 expected_generation,
+	bool require_owner) noexcept
+{
+	std::lock_guard lock(g_guest_session_mutex);
+	const bool owns_claim = rpcs3::ios::can_continue_guest_session(
+		g_guest_session_claimed.load(std::memory_order_acquire),
+		g_guest_session_phase,
+		g_guest_session_generation,
+		expected_generation);
+	if (require_owner && !owns_claim)
+	{
+		return {};
+	}
+	if (g_guest_session_phase == rpcs3::ios::guest_session_phase::stop_requested ||
+		g_guest_session_phase == rpcs3::ios::guest_session_phase::cleanup_queued ||
+		g_guest_session_phase == rpcs3::ios::guest_session_phase::cleanup_armed)
+	{
+		return {g_guest_session_generation, true};
+	}
+
+	g_guest_session_generation = rpcs3::ios::next_guest_session_generation(
+		g_guest_session_generation);
+	g_guest_session_phase = rpcs3::ios::request_guest_session_stop_phase(
+		g_guest_session_phase);
+	// Keep the gate closed until main-thread teardown has consumed every old
+	// callback. This also closes Stop-before-acquire and stopped-state races.
+	g_guest_session_claimed.store(true, std::memory_order_release);
+	return {g_guest_session_generation, true};
+}
+
+bool prepare_guest_session_stop_dispatch(u64 generation, bool& should_dispatch) noexcept
+{
+	std::lock_guard lock(g_guest_session_mutex);
+	should_dispatch = false;
+	if (!g_guest_session_claimed.load(std::memory_order_acquire) ||
+		g_guest_session_generation != generation)
+	{
+		return false;
+	}
+	if (rpcs3::ios::should_queue_guest_session_cleanup(g_guest_session_phase))
+	{
+		g_guest_session_phase = rpcs3::ios::queue_guest_session_cleanup_phase(
+			g_guest_session_phase);
+		should_dispatch = true;
+		return true;
+	}
+	return g_guest_session_phase == rpcs3::ios::guest_session_phase::cleanup_queued ||
+		g_guest_session_phase == rpcs3::ios::guest_session_phase::cleanup_armed;
+}
+
+void roll_back_guest_session_stop_dispatch(u64 generation) noexcept
+{
+	std::lock_guard lock(g_guest_session_mutex);
+	if (g_guest_session_claimed.load(std::memory_order_acquire) &&
+		g_guest_session_generation == generation &&
+		(g_guest_session_phase == rpcs3::ios::guest_session_phase::cleanup_queued ||
+			g_guest_session_phase == rpcs3::ios::guest_session_phase::cleanup_armed))
+	{
+		g_guest_session_phase = rpcs3::ios::roll_back_guest_session_cleanup_phase(
+			g_guest_session_phase);
+	}
+}
+
+bool arm_guest_session_stop_cleanup(u64 generation) noexcept
+{
+	std::lock_guard lock(g_guest_session_mutex);
+	if (!g_guest_session_claimed.load(std::memory_order_acquire) ||
+		g_guest_session_generation != generation)
+	{
+		return false;
+	}
+	if (g_guest_session_phase == rpcs3::ios::guest_session_phase::cleanup_armed)
+	{
+		return true;
+	}
+	if (!rpcs3::ios::should_arm_guest_session_cleanup(g_guest_session_phase))
+	{
+		return false;
+	}
+	g_guest_session_phase = rpcs3::ios::arm_guest_session_cleanup_phase(
+		g_guest_session_phase);
+	return true;
+}
+
+bool finish_guest_session_stop(u64 generation) noexcept
+{
+	std::lock_guard lock(g_guest_session_mutex);
+	if (!g_guest_session_claimed.load(std::memory_order_acquire) ||
+		g_guest_session_phase != rpcs3::ios::guest_session_phase::cleanup_armed ||
+		g_guest_session_generation != generation)
+	{
+		return false;
+	}
+	g_guest_session_claimed.store(false, std::memory_order_release);
+	g_guest_session_phase = rpcs3::ios::finish_guest_session_cleanup_phase(
+		g_guest_session_phase);
+	return true;
+}
+
+bool guest_boot_operation_in_flight() noexcept
+{
+	std::lock_guard lock(g_guest_session_mutex);
+	return rpcs3::ios::guest_session_cleanup_must_wait(g_guest_boot_operations);
+}
+
+void run_guest_session_stop_on_main_thread(u64 generation) noexcept
+{
+	if (!arm_guest_session_stop_cleanup(generation))
+	{
+		return;
+	}
+	if (guest_boot_operation_in_flight())
+	{
+		emit_log(4, "Guest cleanup is waiting for the in-flight boot operation");
+		return;
+	}
+
+	// This is serialized with Emulator::Kill's callback exchange by the
+	// frontend main-thread queue. Never mutate after_kill_callback elsewhere.
+	Emu.after_kill_callback = nullptr;
+	Emu.DeactivateBigPictureMode();
+	Emu.SetContinuousMode(false);
+	Emu.SetForceBoot(false);
+	rpcs3::ios::shared_pad_feedback().clear();
+
+	if (Emu.GetStatus(false) == system_state::stopped)
+	{
+		Emu.Kill(false);
+		if (finish_guest_session_stop(generation))
+		{
+			emit_log(4, "Completed stopped-state guest session cleanup");
+		}
+		return;
+	}
+
+	try
+	{
+		// RPCS3 captures the current emulation identifier synchronously here;
+		// async=true then runs its guarded stop worker without a late-call race.
+		Emu.GracefulShutdown(false, true);
+	}
+	catch (const std::exception& error)
+	{
+		set_error(error.what());
+		emit_log(1, "Guest session shutdown failed; forcing termination");
+		Emu.Kill(false);
+		if (Emu.GetStatus(false) == system_state::stopped)
+		{
+			finish_guest_session_stop(generation);
+		}
+	}
+	catch (...)
+	{
+		set_error("Unknown exception while stopping the guest session");
+		emit_log(1, "Guest session shutdown failed; forcing termination");
+		Emu.Kill(false);
+		if (Emu.GetStatus(false) == system_state::stopped)
+		{
+			finish_guest_session_stop(generation);
+		}
+	}
+}
+
+bool schedule_guest_session_stop(u64 generation) noexcept
+{
+	bool should_dispatch = false;
+	if (!prepare_guest_session_stop_dispatch(generation, should_dispatch))
+	{
+		return false;
+	}
+	if (!should_dispatch)
+	{
+		return true;
+	}
+
+	try
+	{
+		Emu.CallFromMainThread([generation]()
+		{
+			run_guest_session_stop_on_main_thread(generation);
+		}, nullptr, false);
+		return true;
+	}
+	catch (const std::exception& error)
+	{
+		set_error(error.what());
+	}
+	catch (...)
+	{
+		set_error("Unable to schedule guest session cleanup on the main thread");
+	}
+	roll_back_guest_session_stop_dispatch(generation);
+	return false;
+}
+
+bool schedule_armed_guest_session_stop(u64 generation) noexcept
+{
+	try
+	{
+		Emu.CallFromMainThread([generation]()
+		{
+			run_guest_session_stop_on_main_thread(generation);
+		}, nullptr, false);
+		return true;
+	}
+	catch (...)
+	{
+		set_error("Unable to resume deferred guest cleanup on the main thread");
+		roll_back_guest_session_stop_dispatch(generation);
+		return false;
+	}
+}
+
+void schedule_terminal_guest_session_check() noexcept
+{
+	try
+	{
+		Emu.CallFromMainThread([]()
+		{
+			if (Emu.GetStatus(false) == system_state::stopped)
+			{
+				rpcs3::ios::handle_emulation_stopped();
+			}
+		}, nullptr, false);
+	}
+	catch (...)
+	{
+		// Leave ownership closed; explicit Stop can retry serialized cleanup.
+		set_error("Unable to schedule terminal guest cleanup on the main thread");
+	}
+}
+
+class guest_boot_operation_guard
+{
+	bool m_active = false;
+
+public:
+	guest_boot_operation_guard() noexcept
+	{
+		std::lock_guard lock(g_guest_session_mutex);
+		if (!g_guest_session_claimed.load(std::memory_order_acquire) &&
+			g_guest_session_phase == rpcs3::ios::guest_session_phase::idle)
+		{
+			g_guest_boot_operations++;
+			m_active = true;
+		}
+	}
+
+	bool accepted() const noexcept
+	{
+		return m_active;
+	}
+
+	~guest_boot_operation_guard()
+	{
+		if (!m_active)
+		{
+			return;
+		}
+
+		u64 deferred_stop_generation = 0;
+		bool check_terminal_stop = false;
+		{
+			std::lock_guard lock(g_guest_session_mutex);
+			ensure(g_guest_boot_operations > 0);
+			g_guest_boot_operations--;
+			if (g_guest_boot_operations == 0 &&
+				g_guest_session_claimed.load(std::memory_order_acquire))
+			{
+				if (g_guest_session_phase == rpcs3::ios::guest_session_phase::cleanup_armed)
+				{
+					deferred_stop_generation = g_guest_session_generation;
+				}
+				else if (g_guest_session_phase == rpcs3::ios::guest_session_phase::active)
+				{
+					check_terminal_stop = true;
+				}
+			}
+		}
+
+		if (deferred_stop_generation)
+		{
+			schedule_armed_guest_session_stop(deferred_stop_generation);
+		}
+		else if (check_terminal_stop && Emu.GetStatus(false) == system_state::stopped)
+		{
+			schedule_terminal_guest_session_check();
+		}
+	}
+};
 
 class callback_log_listener final : public logs::listener
 {
@@ -865,7 +1218,7 @@ EmuCallbacks make_callbacks()
 	callbacks.on_run = [](bool) {};
 	callbacks.on_pause = []() {};
 	callbacks.on_resume = []() {};
-	callbacks.on_stop = []() {};
+	callbacks.on_stop = []() { rpcs3::ios::handle_emulation_stopped(); };
 	callbacks.on_ready = []() {};
 	callbacks.on_missing_fw = []() { emit_log(5, "PlayStation 3 firmware is not installed yet"); };
 	callbacks.on_emulation_stop_no_response = [](std::shared_ptr<atomic_t<bool>>, int)
@@ -1016,7 +1369,7 @@ rpcs3_ios_status validate_config(const rpcs3_ios_config* config)
 {
 	if (const auto result = rpcs3::ios::validate_config_contract(config); result != RPCS3_IOS_OK)
 	{
-		set_error("Invalid ABI version, structure size, or sandbox path");
+		set_error("Invalid ABI version, structure size, main-thread callback, or sandbox path");
 		return result;
 	}
 
@@ -1215,6 +1568,119 @@ void prepare_big_picture_game_boot() noexcept
 {
 	prepare_rpcn_for_guest_boot();
 	Emu.SetForceBoot(true);
+}
+
+std::uint64_t current_guest_session_generation() noexcept
+{
+	std::lock_guard lock(g_guest_session_mutex);
+	return g_guest_session_claimed.load(std::memory_order_acquire) &&
+		g_guest_session_phase == guest_session_phase::active
+		? g_guest_session_generation
+		: 0;
+}
+
+bool owns_current_guest_session_generation(std::uint64_t expected_generation) noexcept
+{
+	std::lock_guard lock(g_guest_session_mutex);
+	return can_continue_guest_session(
+		g_guest_session_claimed.load(std::memory_order_acquire),
+		g_guest_session_phase,
+		g_guest_session_generation,
+		expected_generation);
+}
+
+bool install_continuous_boot_callback(
+	std::uint64_t expected_generation,
+	std::function<void()> callback) noexcept
+{
+	std::lock_guard lock(g_guest_session_mutex);
+	if (!can_continue_guest_session(
+		g_guest_session_claimed.load(std::memory_order_acquire),
+		g_guest_session_phase,
+		g_guest_session_generation,
+		expected_generation))
+	{
+		return false;
+	}
+	Emu.after_kill_callback = std::move(callback);
+	return true;
+}
+
+void handle_continuous_boot_failure(std::uint64_t expected_generation) noexcept
+{
+	const auto request = request_guest_session_stop(expected_generation, true);
+	if (!request.accepted)
+	{
+		return;
+	}
+	const bool cancelled_netiso = cancel_active_netiso_mount();
+	const bool scheduled = schedule_guest_session_stop(request.generation);
+
+	set_error(scheduled
+		? "A child executable failed to boot; serialized guest cleanup was scheduled"
+		: "A child executable failed to boot; cleanup scheduling failed and the launch gate remains closed");
+	emit_log(2, fmt::format(
+		"Child executable boot failed; scheduled serialized cleanup (scheduled=%d, NETISO cancelled=%d, generation=%llu)",
+		static_cast<int>(scheduled), static_cast<int>(cancelled_netiso),
+		static_cast<unsigned long long>(request.generation)));
+}
+
+void handle_emulation_stopped() noexcept
+{
+	const bool has_followup_callback = static_cast<bool>(Emu.after_kill_callback);
+	bool released_claim = false;
+	bool explicit_stop = false;
+	std::uint64_t generation = 0;
+	guest_session_phase release_phase = guest_session_phase::idle;
+	{
+		std::lock_guard lock(g_guest_session_mutex);
+		if (!g_guest_session_claimed.load(std::memory_order_acquire))
+		{
+			return;
+		}
+		if (guest_session_cleanup_must_wait(g_guest_boot_operations))
+		{
+			return;
+		}
+		if (!should_release_guest_session_on_stop(
+			g_guest_session_phase, has_followup_callback))
+		{
+			return;
+		}
+		generation = g_guest_session_generation;
+		release_phase = g_guest_session_phase;
+		explicit_stop = release_phase == guest_session_phase::cleanup_armed;
+	}
+
+	// on_stop runs on the serialized frontend main-thread lane. Clear every
+	// session mode before publishing idle, including unexpected child crashes.
+	Emu.DeactivateBigPictureMode();
+	Emu.SetContinuousMode(false);
+	Emu.SetForceBoot(false);
+
+	// Keep ownership closed while cancelling the old mount, but never nest an
+	// emulator or NETISO operation inside the guest-session mutex.
+	const bool cancelled_netiso = cancel_active_netiso_mount();
+	{
+		std::lock_guard lock(g_guest_session_mutex);
+		if (g_guest_session_claimed.load(std::memory_order_acquire) &&
+			g_guest_session_generation == generation &&
+			g_guest_session_phase == release_phase)
+		{
+			g_guest_session_claimed.store(false, std::memory_order_release);
+			g_guest_session_phase = guest_session_phase::idle;
+			released_claim = true;
+		}
+	}
+
+	if (released_claim)
+	{
+		shared_pad_feedback().clear();
+		emit_log(4, fmt::format(
+			"Released guest session after %s stop (NETISO cancelled=%d)",
+			explicit_stop ? "requested" : "terminal",
+			static_cast<int>(cancelled_netiso)));
+	}
 }
 }
 
@@ -4294,6 +4760,12 @@ extern "C" rpcs3_ios_status rpcs3_ios_boot_big_picture_mode(void) noexcept
 		set_error("Attach a valid iOS Metal display surface before booting Big Picture Mode");
 		return RPCS3_IOS_INVALID_STATE;
 	}
+	guest_boot_operation_guard boot_operation;
+	if (!boot_operation.accepted())
+	{
+		set_error("A guest stop or another boot operation is already in progress");
+		return RPCS3_IOS_INVALID_STATE;
+	}
 	guest_session_claim session_claim;
 	if (!acquire_guest_session(session_claim))
 	{
@@ -4305,13 +4777,22 @@ extern "C" rpcs3_ios_status rpcs3_ios_boot_big_picture_mode(void) noexcept
 		Emu.DeactivateBigPictureMode();
 		Emu.SetForceBoot(false);
 		emit_log(4, "Booting Big Picture Mode with the iOS game library");
+		if (!session_claim.owns())
+		{
+			set_error("Big Picture Mode boot was cancelled by Stop Emulation");
+			return RPCS3_IOS_BOOT_FAILED;
+		}
 		if (!Emu.BootBigPictureMode())
 		{
 			set_error("Big Picture Mode boot failed");
 			return RPCS3_IOS_BOOT_FAILED;
 		}
 
-		session_claim.retain();
+		if (!session_claim.retain())
+		{
+			set_error("Big Picture Mode started after its guest session was cancelled");
+			return RPCS3_IOS_BOOT_FAILED;
+		}
 		emit_log(4, "Big Picture Mode boot request completed");
 		return RPCS3_IOS_OK;
 	}
@@ -4343,6 +4824,12 @@ extern "C" rpcs3_ios_status rpcs3_ios_boot_vsh(void) noexcept
 		set_error("Attach a valid iOS Metal display surface before booting XMB");
 		return RPCS3_IOS_INVALID_STATE;
 	}
+	guest_boot_operation_guard boot_operation;
+	if (!boot_operation.accepted())
+	{
+		set_error("A guest stop or another boot operation is already in progress");
+		return RPCS3_IOS_INVALID_STATE;
+	}
 
 	try
 	{
@@ -4362,6 +4849,12 @@ extern "C" rpcs3_ios_status rpcs3_ios_boot_vsh(void) noexcept
 		prepare_rpcn_for_guest_boot();
 		Emu.DeactivateBigPictureMode();
 		Emu.SetForceBoot(true);
+		if (!session_claim.owns())
+		{
+			Emu.SetForceBoot(false);
+			set_error("XMB boot was cancelled by Stop Emulation");
+			return RPCS3_IOS_BOOT_FAILED;
+		}
 		const game_boot_result result = Emu.BootGame(vsh_path);
 		if (result != game_boot_result::no_errors)
 		{
@@ -4370,7 +4863,11 @@ extern "C" rpcs3_ios_status rpcs3_ios_boot_vsh(void) noexcept
 			return RPCS3_IOS_BOOT_FAILED;
 		}
 
-		session_claim.retain();
+		if (!session_claim.retain())
+		{
+			set_error("XMB started after its guest session was cancelled");
+			return RPCS3_IOS_BOOT_FAILED;
+		}
 		emit_log(4, "PlayStation 3 XMB boot request completed");
 		return RPCS3_IOS_OK;
 	}
@@ -4416,6 +4913,12 @@ extern "C" rpcs3_ios_status rpcs3_ios_boot_game(const char* title_id) noexcept
 		set_error("Attach a valid iOS Metal display surface before booting a game");
 		return RPCS3_IOS_INVALID_STATE;
 	}
+	guest_boot_operation_guard boot_operation;
+	if (!boot_operation.accepted())
+	{
+		set_error("A guest stop or another boot operation is already in progress");
+		return RPCS3_IOS_INVALID_STATE;
+	}
 
 	try
 	{
@@ -4435,6 +4938,12 @@ extern "C" rpcs3_ios_status rpcs3_ios_boot_game(const char* title_id) noexcept
 		prepare_rpcn_for_guest_boot();
 		Emu.DeactivateBigPictureMode();
 		Emu.SetForceBoot(true);
+		if (!session_claim.owns())
+		{
+			Emu.SetForceBoot(false);
+			set_error("Installed game boot was cancelled by Stop Emulation");
+			return RPCS3_IOS_BOOT_FAILED;
+		}
 		const game_boot_result result = Emu.BootGame(game->path, game->title_id);
 		if (result != game_boot_result::no_errors)
 		{
@@ -4443,7 +4952,11 @@ extern "C" rpcs3_ios_status rpcs3_ios_boot_game(const char* title_id) noexcept
 			return RPCS3_IOS_BOOT_FAILED;
 		}
 
-		session_claim.retain();
+		if (!session_claim.retain())
+		{
+			set_error("Installed game started after its guest session was cancelled");
+			return RPCS3_IOS_BOOT_FAILED;
+		}
 		emit_effective_mobile_profile_settings(game->title_id);
 		emit_log(4, fmt::format("Installed game boot request completed: %s", game->title_id));
 		return RPCS3_IOS_OK;
@@ -4485,6 +4998,12 @@ extern "C" rpcs3_ios_status rpcs3_ios_boot_netiso_game(const char* remote_path) 
 		set_error("Connect a NETISO server before booting a remote game");
 		return RPCS3_IOS_NETISO_NOT_CONFIGURED;
 	}
+	guest_boot_operation_guard boot_operation;
+	if (!boot_operation.accepted())
+	{
+		set_error("A guest stop or another boot operation is already in progress");
+		return RPCS3_IOS_INVALID_STATE;
+	}
 
 	try
 	{
@@ -4511,6 +5030,13 @@ extern "C" rpcs3_ios_status rpcs3_ios_boot_netiso_game(const char* remote_path) 
 		prepare_rpcn_for_guest_boot();
 		Emu.DeactivateBigPictureMode();
 		Emu.SetForceBoot(true);
+		if (!session_claim.owns())
+		{
+			Emu.SetForceBoot(false);
+			cancel_active_netiso_mount();
+			set_error("NETISO game boot was cancelled by Stop Emulation");
+			return RPCS3_IOS_BOOT_FAILED;
+		}
 		const game_boot_result result = Emu.BootGame(metadata.virtual_path, metadata.title_id);
 		if (result != game_boot_result::no_errors)
 		{
@@ -4520,7 +5046,11 @@ extern "C" rpcs3_ios_status rpcs3_ios_boot_netiso_game(const char* remote_path) 
 			return RPCS3_IOS_BOOT_FAILED;
 		}
 
-		session_claim.retain();
+		if (!session_claim.retain())
+		{
+			set_error("NETISO game started after its guest session was cancelled");
+			return RPCS3_IOS_BOOT_FAILED;
+		}
 		emit_effective_mobile_profile_settings(metadata.title_id);
 		emit_log(4, fmt::format("NETISO game boot request completed: %s", metadata.title_id));
 		return RPCS3_IOS_OK;
@@ -4738,26 +5268,19 @@ extern "C" rpcs3_ios_status rpcs3_ios_stop_emulation(void) noexcept
 
 	try
 	{
-		// Cancel first so a blocked remote read or server-side VISO open cannot
-		// hold BootGame and the serial core queue through every socket timeout.
-		const bool cancelled_netiso = cancel_active_netiso_mount();
-		// An explicit wrapper stop leaves the full-screen session. It must not
-		// trigger upstream's automatic game-to-Big-Picture return callback.
-		g_guest_session_claimed.store(false, std::memory_order_release);
-		Emu.DeactivateBigPictureMode();
-		Emu.SetForceBoot(false);
-		if (Emu.GetStatus(false) == system_state::stopped)
+		const auto request = request_guest_session_stop(0, false);
+		if (!request.accepted)
 		{
-			if (cancelled_netiso)
-			{
-				emit_log(4, "Cancelled stale NETISO mount after emulation stopped");
-			}
-			return RPCS3_IOS_OK;
+			set_error("Unable to reserve guest session cleanup");
+			return RPCS3_IOS_STOP_FAILED;
+		}
+		const bool cancelled_netiso = cancel_active_netiso_mount();
+		if (!schedule_guest_session_stop(request.generation))
+		{
+			return RPCS3_IOS_STOP_FAILED;
 		}
 
 		emit_log(4, "Stopping the current PlayStation 3 emulation session");
-		Emu.GracefulShutdown(false, true);
-		rpcs3::ios::shared_pad_feedback().clear();
 		if (cancelled_netiso)
 		{
 			emit_log(4, "Cancelled active NETISO mount during stop");
@@ -4798,7 +5321,13 @@ extern "C" rpcs3_ios_status rpcs3_ios_shutdown(void) noexcept
 	}
 	g_accept_display_surfaces = false;
 	g_accept_pad_state = false;
-	g_guest_session_claimed = false;
+	{
+		std::lock_guard session_lock(g_guest_session_mutex);
+		g_guest_session_claimed.store(false, std::memory_order_release);
+		g_guest_session_generation = rpcs3::ios::next_guest_session_generation(
+			g_guest_session_generation);
+		g_guest_session_phase = rpcs3::ios::guest_session_phase::idle;
+	}
 	rpcs3::ios::shared_pad_states().clear();
 	rpcs3::ios::shared_pad_feedback().clear();
 	try

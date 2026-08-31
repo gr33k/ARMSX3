@@ -53,6 +53,10 @@ int main()
 	config.struct_size = sizeof(config);
 	config.application_support_path = "/tmp/rpcs3-support";
 	config.cache_path = "/tmp/rpcs3-cache";
+	config.main_thread_callback = [](void*, rpcs3_ios_main_thread_task task, void* context)
+	{
+		task(context);
+	};
 	assert(validate_config_contract(&config) == RPCS3_IOS_OK);
 	config.cache_path = "relative";
 	assert(validate_config_contract(&config) == RPCS3_IOS_INVALID_ARGUMENT);
@@ -95,6 +99,9 @@ int main()
 	assert(validate_config_contract(&config) == RPCS3_IOS_INVALID_ARGUMENT);
 	config.application_support_path = "/tmp/rpcs3-support";
 	config.cache_path = nullptr;
+	assert(validate_config_contract(&config) == RPCS3_IOS_INVALID_ARGUMENT);
+	config.cache_path = "/tmp/rpcs3-cache";
+	config.main_thread_callback = nullptr;
 	assert(validate_config_contract(&config) == RPCS3_IOS_INVALID_ARGUMENT);
 
 	display_surface_registry surfaces;

@@ -37,4 +37,21 @@ inline std::string resolve_exitspawn_disc_path(
 		? redirect_exitspawn_disc_path(path)
 		: std::string(path);
 }
+
+struct exitspawn_path_resolution
+{
+	std::string guest_argv0;
+	std::string executable_lookup;
+};
+
+inline exitspawn_path_resolution resolve_exitspawn_paths(
+	std::string_view path,
+	bool is_child_process,
+	bool has_virtual_iso_disc)
+{
+	return {
+		std::string(path),
+		resolve_exitspawn_disc_path(path, is_child_process, has_virtual_iso_disc),
+	};
+}
 }

@@ -126,6 +126,8 @@ typedef void (*rpcs3_ios_download_progress_callback)(
     uint64_t completed,
     uint64_t total);
 typedef void (*rpcs3_ios_main_thread_task)(void* task_context);
+// The dispatcher must run task inline when already on the iOS main thread;
+// otherwise it must enqueue task on that thread without blocking it.
 typedef void (*rpcs3_ios_main_thread_callback)(
     void* user_context,
     rpcs3_ios_main_thread_task task,
