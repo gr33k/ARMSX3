@@ -2782,3 +2782,38 @@ cache-reuse gates.
   `rpcs3/ios/tests/run-contract-tests.sh` suite pass, including NETISO
   cancellation; `git diff --check` passes. Build/package and physical progress
   beyond the space dialog remain open.
+
+#### V0.31 audited package
+
+- SOURCE/BUILD: exact streamed-install source commit
+  `c1c83822d14cb9742bf9b4cc7c7c9e70bb3dbf72` compiled and linked for iOS 15
+  arm64 with two workers. The package-version correction is commit
+  `c1958beb7379d4d5d9231a4a27de448a03ca5815`. The complete bounded contract
+  suite and `git diff --check` pass.
+- REJECTED PREPACKAGE: the first V0.31 archive correctly failed independent
+  readback because `CFBundleVersion` was still `29`. It was not transferred or
+  promoted. The plist was corrected, committed, pushed, and the app/package was
+  rebuilt before repeating every audit.
+- ACCEPTED PACKAGE: `ARMSX3-iOS-Core-Test-v0.31.ipa` is version `0.31.0`, build
+  `30`, 31,871,227 bytes, and SHA-256
+  `31bc04c313c3f98379836c4f4a2c20a98eccdf89f98fa6b210cf9e6f88f1e232`.
+- INDEPENDENT READBACK: a fresh temporary extraction passed ZIP integrity,
+  nine archived regular files, absence of `__MACOSX`, strict deep app signature
+  and standalone core signature verification, and private-path scanning. App
+  UUID is `69D7A59B-7C33-3246-B726-57DD65356555`; core UUID is
+  `9AB5C1EE-ED1F-398D-A54C-5C2987775344`. The unsigned core SHA-256 is
+  `c517cb213a8e3d9003526786eee106cdd84bfb85419936502210c08fb89e46be`;
+  extracted signed-core SHA-256 is
+  `e978f7288a8b784c808de3e1e23c4eb886d6a9c21af8830f4dbeb38d2747716a`.
+- TARGET/CONTRACT: app and core are arm64 Mach-O binaries targeting iOS 15.0.
+  Readback confirms ABI 34, the exact GTA streamed-install mount marker, the
+  five-value sandbox-capacity telemetry marker, and no iOS 17.4-only `os_sync`
+  imports. Signature readback confirms `get-task-allow`, JIT, unsigned
+  executable memory, Extended Virtual Addressing, and increased-memory-limit
+  entitlements under the existing TrollStore bundle identity.
+- OPEN PHYSICAL GATE: package correctness is proven; streamed GTA install is
+  not. Install this exact SHA with TrollStore, launch BLES01807, and require the
+  streamed-install mount line plus successful stats for the RPF files and
+  progress beyond the space dialog. Capture the five capacity values from app
+  startup. Then Stop/relaunch GTA and launch one unrelated NETISO title to
+  reject stale mount or session poisoning.
