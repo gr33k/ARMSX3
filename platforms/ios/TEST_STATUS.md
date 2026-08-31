@@ -2120,3 +2120,43 @@ cache-reuse gates.
   MTRSX off, sequential NETISO failure/recovery, background/foreground, Stop,
   and immediate second-title launch. Package, compile progress, and menu output
   are not gameplay or performance proof.
+
+## PPU range-lock wake candidate (post-V0.26)
+
+- SOURCE: isolated commit `65758e455`, selectively backported from upstream
+  `27819fba8`. Reverted barrier-bypass, timed-backoff, notifier-park, and
+  reservation-table experiments were not imported.
+- ROOT CAUSE: `vm::writer_lock` can stamp every registered PPU with
+  `cpu_flag::memory` while SPU reservation writes hold the global exclusive
+  range-lock word. The passive PPU path spun 100 times and then yielded a full
+  scheduler quantum, but the release path never notified that word. Under
+  repeated short SPU writer intervals, a PPU could sleep through each all-clear
+  window and unnecessarily extend guest synchronization stalls.
+- FIX READY: writer release now notifies only when the whole exclusive-range
+  word transitions to zero, which is the sole state that can release a passive
+  PPU. After the unchanged short spin, the PPU waits on the observed word value
+  instead of yielding blind. The `50'000` `atomic_wait_timeout` value is 50
+  microseconds and is retained as a lost-notification safety net, not a pacing
+  delay.
+- CORRECTNESS BOUNDARY: all existing DATA and PROTECTION exclusion remains in
+  place. The patch changes neither the protected range nor the writer-lock
+  lifetime and does not use the generic 16-byte barrier bypass that previously
+  produced `SEGV_ACCERR`. A value change before the wait returns immediately.
+- PASS STATIC/BUILD: `git diff --check`, the complete bounded iOS contract
+  runner including NETISO cancellation, and an incremental two-worker arm64
+  iOS 15 core link pass. The unsigned core is `77,495,496` bytes, SHA-256
+  `69f877d3390062eaede7314311904691bb952aa0e181a2d8848006ee4b9a27ca`,
+  UUID `8CBB9D4B-1A5D-3021-B333-038914B797A9`. Clang reports the upstream
+  eight-byte `atomic_t::wait` API as deprecated; this is a compile warning, not
+  a failed link, and changing wait primitives without device evidence is
+  intentionally deferred.
+- EXCLUDED TITLE-SPECIFIC CHANGE: upstream `6c4b63905` admits one verified
+  Sonic '06 `cellSync` byte-pattern hash to `PUTLLC16`. It is safe and
+  fail-closed for that exact hash, but no evidence connects it to Sonic
+  Generations, U1, RDR, or U3, so it is not included or advertised as a broad
+  performance fix.
+- REQUIRED PHYSICAL: package only with the next independently audited
+  candidate. Compare the exact warm U1 and RDR scenes against V0.26 while
+  recording FPS, PPU/SPU/RSX/other CPU, thermals, memory, audio, and graphics.
+  Require no page-protection fault, new hang, input regression, or worse
+  Stop/relaunch. Static and donor evidence do not prove an iPhone FPS gain.

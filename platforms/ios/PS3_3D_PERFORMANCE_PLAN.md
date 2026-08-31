@@ -209,6 +209,20 @@ an FPS claim. Physical acceptance requires the Sonic Generations no-present
 load and, if available, the measured Ratchet index-ring load, followed by the
 same U1/RDR gameplay and U3 correctness gates. Preserve V0.24 as rollback.
 
+### Global range-lock wake candidate
+
+Post-V0.26 commit `65758e455` keeps the existing PPU/SPU memory-protection
+barrier intact but replaces passive PPUs' blind scheduler yield with a wait on
+the exclusive range-lock word. Writer release notifies only when the whole word
+reaches zero; the 50-microsecond timeout is a safety poll rather than a guessed
+backoff. This targets measured barrier amplification without weakening DATA or
+PROTECTION exclusion.
+
+Treat it as a CPU-contention candidate, not a renderer or FPS fix. On the same
+warm U1/RDR scenes, compare PPU/SPU load, frame-time distribution, thermals,
+audio, and Stop behavior to V0.26. Retain it only if synchronization pressure
+falls without page-protection faults, new stalls, or gameplay regressions.
+
 ## Required evidence
 
 Every candidate records source commit, IPA SHA-256, bundle version/build,
