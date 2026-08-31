@@ -1067,6 +1067,50 @@ V0.20 signed PS3 3D profiler artifact:
   samples pass collection, run U3 -> clean stop -> U1 to measure retained
   memory/device state. Do not mix sequential-title pressure into the isolated
   performance baseline.
+- PASS PHYSICAL / EXACT IDENTITY AND PROFILER: the connected iPhone14,3 on
+  iOS 15.3 ran exact version `0.20.0` build `19`. U1 title `BCES00065` held
+  approximately `60 FPS` in its menu/video path at `1017-1517 MiB`, with
+  stable NETISO (`36 MiB`, zero reconnects) and zero sampled shader/pipeline
+  compiles. The profiler therefore distinguishes the fast presentation path
+  from real gameplay as intended.
+- FAIL PHYSICAL / REPEATABLE U1 TERMINATION: two isolated U1 launches returned
+  to iOS after entering real 3D. The first gameplay transition fell through
+  `28 FPS` at `1837 MiB` to `6 FPS` at `3373 MiB` with only `723 MiB` process
+  headroom. The warm-cache rerun loaded the cached PPU object, maintained a
+  clean NETISO connection, and still fell from `18 FPS` at `2098 MiB` through
+  `7.9`, `4`, `6`, `10`, and `2 FPS` samples while reaching `3367 MiB` and
+  `729 MiB` headroom. UIKit memory warnings, texture-cache eviction, and
+  GameController daemon interruption accompanied both failures. No new Jetsam
+  or top-level crash report was present immediately after the second failure,
+  so this is a repeatable memory-pressure termination, not a formally proven
+  Jetsam event.
+- FAIL PHYSICAL / SIMULTANEOUS GPU, SPU, AND MEMORY PRESSURE: settled live-3D
+  samples measured normalized SPU CPU at `49-66%` of six logical cores and
+  actual Metal command execution near `1129 ms` in a one-second interval. The
+  process emitted severe pressure at `1087 MiB` headroom with the Vulkan
+  allocator at `164%`, then exceeded `3.3 GiB`. RSX reached roughly `1876-2425`
+  draws per sampled frame and repeatedly found width/height-swapped texture
+  interpretations at the same guest addresses. Shader conversion, MSL compile,
+  and Metal pipeline compile counters remained zero throughout the sampled
+  gameplay. This rules out NETISO and first-use shader compilation as the
+  immediate crash cause and makes bounded RSX/unified-memory recovery the first
+  V0.21 gate; SPU saturation and direct Metal remain parallel performance work.
+- FAIL PHYSICAL / V0.20 WAKE PRESSURE: the exact report
+  `ARMSX3iOS.wakeups_resource-2026-08-30-214515.ips` names version `0.20.0`
+  build `19`, PID `23524`, core UUID
+  `DC8E8EB5-4B4D-322B-A0A4-25256D23AA47`, and `45,001` wakeups in `43`
+  seconds (`1042/sec`) against iOS's `150/sec` limit. Symbolization against the
+  exact packaged core again resolves `ios_thread_worker::run` through
+  `run_recoverable_llvm`, MCJIT object emission, machine scheduling, and greedy
+  register allocation. Its `21:44:31-21:45:14` interval primarily covers boot
+  and compilation; it must not be misreported as the warm gameplay wake rate.
+- V0.21 REQUIRED CHANGE: prevent the measured memory climb before the process
+  reaches the approximately `4.1 GiB` allowance, without restoring V0.10/V0.11's
+  destructive every-frame texture eviction loop. Record texture, render-target,
+  system, scratch, and swapchain allocation pools at pressure transitions, run
+  at most one synchronized inactive-texture eviction per pressure episode, and
+  require recovery hysteresis before another destructive pass. Re-run the same
+  warm U1 scene before spending device time on RDR or U3.
 
 V0.2 artifact:
 

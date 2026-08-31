@@ -21,6 +21,26 @@ V0.19 established the current floor:
 These results prove presentation alone is not the bottleneck and do not prove
 that a Metal backend alone can reach the target.
 
+V0.20 isolated the first stability lane on the same physical device:
+
+- A warm U1 launch reused its cached PPU object and held 60 FPS in menus, while
+  NETISO remained idle and shader/pipeline compile counters stayed at zero.
+- Live 3D still terminated twice after process memory rose above 3.3 GiB.
+  Immediately before failure, process headroom fell to 723-729 MiB and UIKit
+  issued memory warnings.
+- A representative gameplay sample measured normalized SPU CPU at 66% of six
+  logical cores and actual Metal execution at 1129 ms per one-second interval.
+  RSX rendered roughly 1876 draws in that frame and the Vulkan allocator later
+  reported 164% pressure.
+- The exact v0.20 wake report measured 1042 wakeups/sec and symbolized to the
+  PPU LLVM/MCJIT scheduler, but its interval primarily covers boot compilation;
+  it is not a measured warm-gameplay wake rate.
+
+V0.21 must first keep that same U1 scene alive with bounded memory. It may not
+restore V0.10/V0.11's repeated synchronized eviction loop. Once stable, the
+same profiler will determine the independent SPU and renderer gains; neither
+track is allowed to hide behind menu FPS.
+
 Two symbolized v0.19 iOS resource reports also establish a CPU/JIT floor:
 
 - iOS measured 781 and 897 wakeups/sec against its reported 150/sec limit.
