@@ -47,6 +47,7 @@ namespace vk
 		rpcs3::ios::process_memory_pressure process_severity = rpcs3::ios::process_memory_pressure::low;
 		rsx::problem_severity combined_severity = rsx::problem_severity::low;
 		rsx::problem_severity last_reclaim_severity = rsx::problem_severity::low;
+		bool destructive_reclaim_completed = false;
 		std::chrono::steady_clock::time_point next_report{};
 		std::chrono::steady_clock::time_point next_reclaim{};
 		std::chrono::steady_clock::time_point next_heap_relief{};
@@ -271,6 +272,11 @@ namespace vk
 		g_ios_process_memory_pressure.process_severity = rpcs3::ios::get_process_memory_pressure(
 			process_headroom,
 			g_ios_process_memory_pressure.process_severity);
+		if (rpcs3::ios::should_rearm_destructive_reclaim(
+			g_ios_process_memory_pressure.process_severity))
+		{
+			g_ios_process_memory_pressure.destructive_reclaim_completed = false;
+		}
 		const auto process_severity = to_problem_severity(g_ios_process_memory_pressure.process_severity);
 #else
 		constexpr auto process_severity = rsx::problem_severity::low;
@@ -305,6 +311,11 @@ namespace vk
 				load_severity = rsx::problem_severity::moderate;
 			}
 
+			// Desktop drivers can report a fragmented budget while RPCS3's tracked
+			// allocations are still small. MoltenVK's iOS heap usage already includes
+			// unified-memory pressure outside those tracked allocations, so applying
+			// this desktop downgrade would disable the platform's soft pressure limit.
+#ifndef RPCS3_IOS
 			if (vmm_load > 75.f)
 			{
 				// Query actual usage for comparison. Maybe we just have really fragmented memory...
@@ -333,15 +344,14 @@ namespace vk
 
 				if (load_severity >= rsx::problem_severity::moderate)
 				{
-#ifndef RPCS3_IOS
 				// NOTE: For some reason fmt::format with a sized float followed by percentage sign causes random crashing.
 				// This is a bug unrelated to this, but explains why we're going with integral percentages here.
 				const auto application_memory_load = (local_memory_usage * 100) / mem_info.device_local_total_bytes;
 				rsx_log.warning("Actual device memory used by internal allocations is %lluM (%llu%%)", local_memory_usage / 0x100000, application_memory_load);
 				rsx_log.warning("Video memory usage is at %d%%. Will attempt to reclaim some resources.", static_cast<int>(vmm_load));
-#endif
 				}
 			}
+#endif
 		}
 
 		load_severity = std::max(load_severity, process_severity);
@@ -353,6 +363,7 @@ namespace vk
 			// One fatal frame-boundary pass is safer than waiting for Jetsam to
 			// reduce the process-local allowance below its emergency threshold.
 			load_severity = rsx::problem_severity::fatal;
+			g_ios_process_memory_pressure.destructive_reclaim_completed = false;
 			g_ios_process_memory_pressure.next_reclaim = {};
 		}
 
@@ -365,12 +376,23 @@ namespace vk
 		{
 			const auto mem_info = get_current_renderer()->get_memory_mapping();
 			const auto local_memory_usage = vmm_get_application_memory_usage_impl(mem_info.device_local);
+			const auto system_pool = vmm_get_application_pool_usage_impl(VMM_ALLOCATION_POOL_SYSTEM);
+			const auto surface_pool = vmm_get_application_pool_usage_impl(VMM_ALLOCATION_POOL_SURFACE_CACHE);
+			const auto texture_pool = vmm_get_application_pool_usage_impl(VMM_ALLOCATION_POOL_TEXTURE_CACHE);
+			const auto swapchain_pool = vmm_get_application_pool_usage_impl(VMM_ALLOCATION_POOL_SWAPCHAIN);
+			const auto scratch_pool = vmm_get_application_pool_usage_impl(VMM_ALLOCATION_POOL_SCRATCH);
 			rsx_log.warning(
-				"iOS memory pressure is %s: process headroom %llu MiB, Vulkan allocator %d%%, internal allocations %llu MiB; cache reclaim active",
+				"iOS memory pressure is %s: headroom %llu MiB, Vulkan allocator %d%%, tracked %llu MiB "
+				"(system=%llu, surfaces=%llu, textures=%llu, swapchain=%llu, scratch=%llu); cache reclaim active",
 				memory_severity_name(load_severity),
 				process_headroom / rpcs3::ios::process_memory_mib,
 				static_cast<int>(vmm_load),
-				local_memory_usage / rpcs3::ios::process_memory_mib);
+				local_memory_usage / rpcs3::ios::process_memory_mib,
+				system_pool / rpcs3::ios::process_memory_mib,
+				surface_pool / rpcs3::ios::process_memory_mib,
+				texture_pool / rpcs3::ios::process_memory_mib,
+				swapchain_pool / rpcs3::ios::process_memory_mib,
+				scratch_pool / rpcs3::ios::process_memory_mib);
 			g_ios_process_memory_pressure.next_report = now + std::chrono::seconds(5);
 		}
 		else if (severity_changed && previous_severity >= rsx::problem_severity::moderate)
@@ -410,6 +432,13 @@ namespace vk
 
 #ifdef RPCS3_IOS
 		const auto now = std::chrono::steady_clock::now();
+		const auto requested_reclaim_pressure = to_process_memory_pressure(load_severity);
+		const auto bounded_reclaim_pressure = rpcs3::ios::get_bounded_reclaim_pressure(
+			requested_reclaim_pressure,
+			g_ios_process_memory_pressure.destructive_reclaim_completed);
+		const auto reclaim_severity = to_problem_severity(bounded_reclaim_pressure);
+		const bool running_destructive_reclaim =
+			bounded_reclaim_pressure == rpcs3::ios::process_memory_pressure::fatal;
 		const bool severity_escalated =
 			load_severity > g_ios_process_memory_pressure.last_reclaim_severity;
 		if (load_severity >= rsx::problem_severity::fatal &&
@@ -429,11 +458,23 @@ namespace vk
 			return;
 		}
 
-		vmm_handle_memory_pressure(load_severity);
+		if (running_destructive_reclaim)
+		{
+			g_ios_process_memory_pressure.destructive_reclaim_completed = true;
+			rsx_log.warning(
+				"iOS pressure episode is running one synchronized inactive-texture eviction");
+		}
+
+		const bool cache_relieved = vmm_handle_memory_pressure(reclaim_severity);
+		if (running_destructive_reclaim)
+		{
+			rsx_log.warning(
+				"iOS pressure episode completed its bounded destructive reclaim (cache relieved=%s)",
+				cache_relieved ? "yes" : "no");
+		}
 		g_ios_process_memory_pressure.last_reclaim_severity = load_severity;
 		const auto interval = std::chrono::milliseconds(
-			rpcs3::ios::get_memory_reclaim_interval_ms(
-				to_process_memory_pressure(load_severity)));
+			rpcs3::ios::get_memory_reclaim_interval_ms(bounded_reclaim_pressure));
 		g_ios_process_memory_pressure.next_reclaim = now + interval;
 #else
 		vmm_handle_memory_pressure(load_severity);

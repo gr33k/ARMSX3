@@ -47,12 +47,12 @@ namespace rpcs3::ios
 	// fixed device-wide limit. Enter pressure states immediately, but require an
 	// additional 256 MiB before relaxing them so cache reclamation cannot flap at
 	// a threshold from one frame to the next.
-	inline constexpr std::uint64_t process_headroom_moderate_enter = 1536 * process_memory_mib;
-	inline constexpr std::uint64_t process_headroom_moderate_exit = 1792 * process_memory_mib;
-	inline constexpr std::uint64_t process_headroom_severe_enter = 1024 * process_memory_mib;
-	inline constexpr std::uint64_t process_headroom_severe_exit = 1280 * process_memory_mib;
-	inline constexpr std::uint64_t process_headroom_fatal_enter = 768 * process_memory_mib;
-	inline constexpr std::uint64_t process_headroom_fatal_exit = 1024 * process_memory_mib;
+	inline constexpr std::uint64_t process_headroom_moderate_enter = 2048 * process_memory_mib;
+	inline constexpr std::uint64_t process_headroom_moderate_exit = 2304 * process_memory_mib;
+	inline constexpr std::uint64_t process_headroom_severe_enter = 1536 * process_memory_mib;
+	inline constexpr std::uint64_t process_headroom_severe_exit = 1792 * process_memory_mib;
+	inline constexpr std::uint64_t process_headroom_fatal_enter = 1280 * process_memory_mib;
+	inline constexpr std::uint64_t process_headroom_fatal_exit = 1536 * process_memory_mib;
 	inline constexpr std::uint64_t texture_cache_quota_moderate = 384 * process_memory_mib;
 	inline constexpr std::uint64_t texture_cache_quota_severe = 256 * process_memory_mib;
 	inline constexpr std::uint64_t texture_cache_quota_fatal = 128 * process_memory_mib;
@@ -89,6 +89,23 @@ namespace rpcs3::ios
 		}
 
 		return 5000;
+	}
+
+	// A fatal reclaim drains the Metal queue and invalidates inactive textures.
+	// Run it once per pressure episode, then keep using the cheaper severe path
+	// until headroom recovers through the severe-state hysteresis band.
+	constexpr process_memory_pressure get_bounded_reclaim_pressure(
+		process_memory_pressure requested,
+		bool destructive_reclaim_completed)
+	{
+		return requested == process_memory_pressure::fatal && destructive_reclaim_completed
+			? process_memory_pressure::severe
+			: requested;
+	}
+
+	constexpr bool should_rearm_destructive_reclaim(process_memory_pressure process_pressure)
+	{
+		return process_pressure <= process_memory_pressure::moderate;
 	}
 
 	constexpr process_memory_pressure get_process_memory_pressure(

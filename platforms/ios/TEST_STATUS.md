@@ -1111,6 +1111,14 @@ V0.20 signed PS3 3D profiler artifact:
   at most one synchronized inactive-texture eviction per pressure episode, and
   require recovery hysteresis before another destructive pass. Re-run the same
   warm U1 scene before spending device time on RDR or U3.
+- OBSERVED / MINOR LOADER POLISH: Bejeweled's pre-game shader-loading artwork
+  appears off-center while other titles look centered. Source inspection proves
+  the base `PIC1` poster uses equal aspect-preserving padding, but a separate
+  `PIC0` overlay is intentionally anchored at the two-thirds point by upstream
+  `message_dialog::update_custom_background()`. This is loader composition, not
+  gameplay viewport drift. Capture Bejeweled's exact assets before deciding on
+  a loader-only centering override; do not globally shift gameplay or every
+  title's artwork in V0.21.
 
 V0.2 artifact:
 

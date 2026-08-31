@@ -8,12 +8,13 @@ namespace vk
 	inline constexpr std::uint64_t vram_budget_mib = 0x100000ull;
 
 #ifdef RPCS3_IOS
-	// MoltenVK exposes unified system memory as device-local memory. Leaving the
-	// desktop VRAM limit in charge lets RSX consume most of the process's jetsam
-	// allowance before its normal cache-pressure heuristics engage.
+	// MoltenVK exposes unified system memory as device-local memory. Use a bounded
+	// 20% share so the A15 enters pressure near 1.5 GiB while higher-RAM devices
+	// can retain proportionally larger caches. Process headroom remains the final
+	// authority because iOS can grant less than the physical-memory total.
 	inline constexpr std::uint64_t ios_vram_budget_min = 1024 * vram_budget_mib;
-	inline constexpr std::uint64_t ios_vram_budget_max = 2048 * vram_budget_mib;
-	inline constexpr std::uint64_t ios_vram_budget_divisor = 4;
+	inline constexpr std::uint64_t ios_vram_budget_max = 3072 * vram_budget_mib;
+	inline constexpr std::uint64_t ios_vram_budget_divisor = 5;
 #endif
 
 	constexpr std::uint64_t get_requested_vram_allocation_limit(
