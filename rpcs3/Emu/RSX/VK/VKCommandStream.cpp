@@ -57,7 +57,7 @@ namespace vk
 		// Offloader is guaranteed to never call this for async flushes.
 		vk::descriptors::flush();
 
-		if (!flush && g_cfg.video.multithreaded_rsx)
+		if (!flush && g_fxo->get<rsx::dma_manager>().can_offload())
 		{
 			auto packet = new queue_submit_t(submit_info);
 			g_fxo->get<rsx::dma_manager>().backend_ctrl(rctrl_queue_submit, packet);

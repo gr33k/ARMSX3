@@ -76,6 +76,9 @@ namespace rsx
 		void backend_ctrl(u32 request_code, void* args);
 
 		// Synchronization
+		// The setting alone is insufficient when the worker has not started.
+		bool can_offload() const;
+		bool is_offloader_running() const;
 		bool is_current_thread() const;
 		bool sync() const;
 		void join();

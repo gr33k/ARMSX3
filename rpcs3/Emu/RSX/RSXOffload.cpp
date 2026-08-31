@@ -23,12 +23,7 @@ namespace rsx
 
 		void operator ()()
 		{
-			if (!g_cfg.video.multithreaded_rsx)
-			{
-				// Abort if disabled
-				return;
-			}
-
+			// Per-title settings may enable MTRSX after this worker starts.
 			current_thread_ = thread_ctrl::get_current();
 			ensure(current_thread_);
 
@@ -102,7 +97,7 @@ namespace rsx
 	// General transport
 	void dma_manager::copy(void *dst, std::vector<u8>& src, u32 length) const
 	{
-		if (length <= max_immediate_transfer_size || !g_cfg.video.multithreaded_rsx)
+		if (length <= max_immediate_transfer_size || !can_offload())
 		{
 			std::memcpy(dst, src.data(), length);
 		}
@@ -115,7 +110,7 @@ namespace rsx
 
 	void dma_manager::copy(void *dst, void *src, u32 length) const
 	{
-		if (length <= max_immediate_transfer_size || !g_cfg.video.multithreaded_rsx)
+		if (length <= max_immediate_transfer_size || !can_offload())
 		{
 			const u32 vm_addr = vm::try_get_addr(src).first;
 			rsx::reservation_lock<true, 1> rsx_lock(vm_addr, length, g_cfg.video.strict_rendering_mode && vm_addr);
@@ -131,7 +126,7 @@ namespace rsx
 	// Vertex utilities
 	void dma_manager::emulate_as_indexed(void *dst, rsx::primitive_type primitive, u32 count)
 	{
-		if (!g_cfg.video.multithreaded_rsx)
+		if (!can_offload())
 		{
 			write_index_array_for_non_indexed_non_native_primitive_to_buffer(
 				static_cast<char*>(dst), primitive, count);
@@ -150,6 +145,16 @@ namespace rsx
 
 		m_thread->m_enqueued_count++;
 		m_thread->m_work_queue.push(request_code, args);
+	}
+
+	bool dma_manager::can_offload() const
+	{
+		return g_cfg.video.multithreaded_rsx && is_offloader_running();
+	}
+
+	bool dma_manager::is_offloader_running() const
+	{
+		return m_thread && m_thread->current_thread_ != nullptr;
 	}
 
 	// Synchronization

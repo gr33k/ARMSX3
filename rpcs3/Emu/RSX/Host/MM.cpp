@@ -110,7 +110,7 @@ namespace rsx
 
 	void mm_flush_lazy()
 	{
-		if (!g_cfg.video.multithreaded_rsx)
+		if (!g_fxo->get<rsx::dma_manager>().can_offload())
 		{
 			mm_flush();
 			return;
