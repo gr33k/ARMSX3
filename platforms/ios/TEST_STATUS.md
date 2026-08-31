@@ -2072,3 +2072,51 @@ cache-reuse gates.
   audio/haptics, and successful immediate launch of a second title. Capture
   either abandonment diagnostic if exercised; absence during normal Stop is
   expected and not failure.
+
+## V0.26 combined candidate (2026-08-31)
+
+- SOURCE: packaged executable revision
+  `c152000dcf678444238779e0e490bd0bf67c2a0f`. Relative to V0.25, this adds
+  the ARM64 reservation-line vector copy, complete fail-closed MTRSX producer
+  gating with race-free liveness, and stop-aware Vulkan submit/GPU-fence waits.
+  Vulkan/MoltenVK remains the selected game renderer; the native Metal probe is
+  unchanged and remains a stopped-core diagnostic only.
+- PASS PACKAGE: `ARMSX3-iOS-Core-Test-v0.26.ipa` is version `0.26.0`, build
+  `25`, `31,865,895` bytes, SHA-256
+  `c846c16862c690678e6c8ab97d94ef1cb1ae417187e1bae42c5eee95073e4457`.
+- PASS METADATA REGENERATION: pre-sign readback caught the plist template still
+  hardcoding build `24` despite Xcode's build setting being `25`; no bad IPA was
+  accepted. Commit `c152000dc` aligns the template and registers it as a CMake
+  configure dependency. Touching the template now provably forces CMake
+  regeneration, and final app readback reports exactly `0.26.0 (25)`.
+- PASS INDEPENDENT READBACK: a fresh temporary extraction passed ZIP integrity,
+  absence of `__MACOSX` payloads, `codesign --verify --deep --strict`, and
+  standalone core signature verification. The package contains ten regular
+  payload files. App and core are arm64 Mach-O binaries targeting iOS 15.0;
+  the app links `@rpath/libRPCS3Core.dylib`, requires arm64 plus Metal, and
+  declares both iPhone and iPad families.
+- PASS ENTITLEMENTS: the extracted app independently reports JIT, unsigned
+  executable memory, Extended Virtual Addressing, increased memory limit, and
+  `get-task-allow` true under the TrollStore application identifier.
+- PASS CORE IDENTITY: the signed embedded core and unsigned build product share
+  UUID `48E70305-AFB8-3F0E-A517-8230486FDC73`. The unsigned core is
+  `77,495,552` bytes with SHA-256
+  `9a7a9bb2791c6637e5e8ef87802a1e1d4358e935c850af0468c78ed3a141ecca`;
+  the independently extracted signed core SHA-256 is
+  `46c937160395f588b9db8cc2d0f838e281788d16deaa8015b8044b72c72c7a88`.
+  ABI 34, build-info, and native-Metal-probe exports are present, as are the
+  named ring-growth, three-second GPU-fence, stop-abandonment, and MTRSX
+  liveness symbols.
+- PASS TRANSFER/ROLLBACK: repository and iCloud V0.26 copies are byte-identical.
+  V0.23 remains SHA `e2664a68...ffe8b`, V0.24 remains SHA
+  `0cc6f4f6...e1148`, and V0.25 remains SHA `32ad1ab5...c738c7`; none was
+  overwritten or deleted.
+- REQUIRED PHYSICAL ORDER: install this exact SHA and start with a known-good
+  local Bejeweled 3 or DuckTales launch/Stop/relaunch. Then run the exact U1 and
+  RDR gameplay scenes used for prior FPS comparisons while confirming effective
+  MTRSX on and an active `RSX Offloader`; capture FPS floor/average/peak,
+  PPU/SPU/RSX/other CPU, memory, audio, and graphics. Test GTA V child handoff,
+  Sonic Generations cache completion and heap growth, U3 colors/blocks with
+  MTRSX off, sequential NETISO failure/recovery, background/foreground, Stop,
+  and immediate second-title launch. Package, compile progress, and menu output
+  are not gameplay or performance proof.
