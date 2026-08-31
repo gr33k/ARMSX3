@@ -51,6 +51,15 @@ generation, fail closed for every other title/source, and be removed before the
 remote device is cancelled. This contract is independent of whether the bytes
 come from standard `ps3netsrv` or a future EmuHub streaming backend.
 
+For local firmware/game writes and guest free-space queries, iOS capacity is
+the greater of immediate `statfs` availability and Foundation's
+`NSURLVolumeAvailableCapacityForImportantUsageKey`. A failed Foundation query
+falls back to `statfs`; it never invents capacity. Local writes retain a 1-GiB
+safety reserve, and guest-visible free space retains the RPCS3 compatibility
+cap just below 40 GiB even when the device can reclaim more. This avoids false
+low-space failures on purgeable iOS storage without promising the guest the
+phone's entire physical capacity.
+
 Only one externally launched guest session may be active. RPCS3 can replace a
 title's boot executable with a child SELF without ending that session, so the
 app retains ownership across those handoffs and rejects another title until

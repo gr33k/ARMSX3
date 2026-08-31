@@ -47,6 +47,31 @@ void enable_display_sleep(bool enable) noexcept
 #endif
 }
 
+std::uint64_t important_usage_storage_capacity(std::string_view path) noexcept
+{
+	@autoreleasepool
+	{
+		NSString* storage_path = [[NSString alloc]
+			initWithBytes:path.data()
+			length:path.size()
+			encoding:NSUTF8StringEncoding];
+		if (!storage_path.length)
+		{
+			return 0;
+		}
+
+		NSNumber* capacity = nil;
+		NSURL* storage_url = [NSURL fileURLWithPath:storage_path isDirectory:YES];
+		if (![storage_url getResourceValue:&capacity
+			forKey:NSURLVolumeAvailableCapacityForImportantUsageKey
+			error:nil])
+		{
+			return 0;
+		}
+		return capacity.unsignedLongLongValue;
+	}
+}
+
 std::string preferred_language_identifier()
 {
 	@autoreleasepool

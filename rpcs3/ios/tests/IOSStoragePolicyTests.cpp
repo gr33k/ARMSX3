@@ -7,6 +7,10 @@ int main()
 {
 	using namespace rpcs3::ios::storage;
 
+	static_assert(effective_available_bytes(3ull << 30, 0) == (3ull << 30));
+	static_assert(effective_available_bytes(3ull << 30, 2ull << 30) == (3ull << 30));
+	static_assert(effective_available_bytes(3ull << 30, 93ull << 30) == (93ull << 30));
+
 	static_assert(writable_bytes(0) == 0);
 	static_assert(writable_bytes(safety_reserve_bytes) == 0);
 	static_assert(writable_bytes(safety_reserve_bytes + 1) == 1);

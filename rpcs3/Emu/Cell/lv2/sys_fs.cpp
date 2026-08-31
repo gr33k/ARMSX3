@@ -4,6 +4,7 @@
 
 #ifdef RPCS3_IOS
 #include "ios/IOSStoragePolicy.h"
+#include "ios/RPCS3IOSPlatform.h"
 #endif
 #include "sys_memory.h"
 #include "util/asm.hpp"
@@ -2378,9 +2379,18 @@ error_code sys_fs_fcntl(ppu_thread& ppu, u32 fd, u32 op, vm::ptr<void> _arg, u32
 		u64 available = 40ull * 1024 * 1024 * 1024 - 1;
 #ifdef RPCS3_IOS
 		fs::device_stat device{};
-		available = fs::statfs(rpcs3::utils::get_hdd0_dir(), device)
-			? rpcs3::ios::storage::guest_reported_bytes(device.avail_free)
-			: 0;
+		const std::string hdd0_path = rpcs3::utils::get_hdd0_dir();
+		if (fs::statfs(hdd0_path, device))
+		{
+			const u64 effective = rpcs3::ios::storage::effective_available_bytes(
+				device.avail_free,
+				rpcs3::ios::important_usage_storage_capacity(hdd0_path));
+			available = rpcs3::ios::storage::guest_reported_bytes(effective);
+		}
+		else
+		{
+			available = 0;
+		}
 #endif
 
 		arg->out_block_size = mp->block_size;
@@ -3291,9 +3301,17 @@ error_code sys_fs_disk_free(ppu_thread& ppu, vm::cptr<char> path, vm::ptr<u64> t
 	{
 #ifdef RPCS3_IOS
 		fs::device_stat device{};
-		available = fs::statfs(local_path, device)
-			? rpcs3::ios::storage::guest_reported_bytes(device.avail_free)
-			: 0;
+		if (fs::statfs(local_path, device))
+		{
+			const u64 effective = rpcs3::ios::storage::effective_available_bytes(
+				device.avail_free,
+				rpcs3::ios::important_usage_storage_capacity(local_path));
+			available = rpcs3::ios::storage::guest_reported_bytes(effective);
+		}
+		else
+		{
+			available = 0;
+		}
 #else
 		available = (40ull * 1024 * 1024 * 1024 - mp->sector_size); // Read explanation in cellHddGameCheck
 #endif

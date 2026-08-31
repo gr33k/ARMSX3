@@ -22,6 +22,7 @@
 
 #ifdef RPCS3_IOS
 #include "ios/IOSStoragePolicy.h"
+#include "ios/RPCS3IOSPlatform.h"
 #endif
 
 #include <span>
@@ -31,13 +32,16 @@ LOG_CHANNEL(cellGame);
 static s32 guest_hdd_free_size_kib()
 {
 #ifdef RPCS3_IOS
+	const std::string hdd0_path = rpcs3::utils::get_hdd0_dir();
 	fs::device_stat device{};
-	if (!fs::statfs(rpcs3::utils::get_hdd0_dir(), device))
+	if (!fs::statfs(hdd0_path, device))
 	{
 		return 0;
 	}
 
-	return rpcs3::ios::storage::guest_reported_kib(device.avail_free);
+	const u64 available = rpcs3::ios::storage::effective_available_bytes(
+		device.avail_free, rpcs3::ios::important_usage_storage_capacity(hdd0_path));
+	return rpcs3::ios::storage::guest_reported_kib(available);
 #else
 	return 40 * 1024 * 1024 - 256;
 #endif

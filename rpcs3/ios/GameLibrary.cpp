@@ -4,6 +4,7 @@
 #include "GameFolderContract.h"
 #include "GamePatchContract.h"
 #include "IOSPipelineCachePolicy.h"
+#include "RPCS3IOSPlatform.h"
 #include "IOSStoragePolicy.h"
 
 #include "Utilities/StrFmt.h"
@@ -35,9 +36,13 @@ namespace rpcs3::ios
 {
 namespace
 {
-u64 available_install_bytes(const fs::device_stat& device) noexcept
+u64 available_install_bytes(
+	std::string_view path,
+	const fs::device_stat& device) noexcept
 {
-	return storage::writable_bytes(device.avail_free);
+	const u64 available = storage::effective_available_bytes(
+		device.avail_free, important_usage_storage_capacity(path));
+	return storage::writable_bytes(available);
 }
 
 game_package_install_result invalid_package(std::string detail)
@@ -1125,7 +1130,7 @@ game_package_install_result install_game_package(
 		return installation_failed(
 			"Unable to determine free space for package installation", title_id, title);
 	}
-	const u64 available_bytes = available_install_bytes(device);
+	const u64 available_bytes = available_install_bytes(hdd0_path, device);
 	if (available_bytes < required_size)
 	{
 		return installation_failed(fmt::format(
@@ -1295,7 +1300,7 @@ game_iso_install_result install_game_iso(
 	{
 		return iso_installation_failed("Unable to determine free space for ISO installation");
 	}
-	const u64 available_bytes = available_install_bytes(device);
+	const u64 available_bytes = available_install_bytes(root, device);
 	if (available_bytes < total_size)
 	{
 		return iso_installation_failed(fmt::format(
@@ -1464,7 +1469,7 @@ game_zip_install_result install_game_zip(
 	{
 		return zip_installation_failed("Unable to determine free space for ZIP installation");
 	}
-	const u64 available_bytes = available_install_bytes(device);
+	const u64 available_bytes = available_install_bytes(root, device);
 	if (available_bytes < required_size)
 	{
 		return zip_installation_failed(fmt::format(
@@ -1635,7 +1640,7 @@ game_folder_install_result install_game_folder(
 		return folder_installation_failed(
 			"Unable to determine free space for folder installation", title_id, title);
 	}
-	const u64 available_bytes = available_install_bytes(device);
+	const u64 available_bytes = available_install_bytes(root, device);
 	if (available_bytes < required_size)
 	{
 		return folder_installation_failed(fmt::format(

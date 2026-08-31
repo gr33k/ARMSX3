@@ -1,6 +1,8 @@
 #include "stdafx.h"
 
 #include "FirmwareInstaller.h"
+#include "IOSStoragePolicy.h"
+#include "RPCS3IOSPlatform.h"
 
 #include "Crypto/key_vault.h"
 #include "Crypto/unself.h"
@@ -92,11 +94,13 @@ firmware_install_result install_firmware(const std::string& path, const firmware
 	{
 		return installation_failed("Unable to determine free space for the firmware installation");
 	}
-	if (device.avail_free < update_files_size)
+	const u64 available_bytes = storage::effective_available_bytes(
+		device.avail_free, important_usage_storage_capacity(dev_flash));
+	if (available_bytes < update_files_size)
 	{
 		return installation_failed(fmt::format(
 			"Not enough free space to install the firmware (need at least %u more bytes)",
-			update_files_size - device.avail_free));
+			update_files_size - available_bytes));
 	}
 
 	tar_object update_files(update_files_file);
