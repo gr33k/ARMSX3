@@ -1777,3 +1777,30 @@ cache-reuse gates.
   then compare CPU P/S, RSX/Metal pressure, frame pacing, FPS, audio, thermals,
   and Stop/relaunch. The static removal of wasted reads is proven; a gameplay
   or FPS gain is not yet claimed.
+
+## PPU cached-reservation repair (post-V0.24)
+
+- SOURCE: isolated commit `4f68677b7`, carrying the final two-line behavior
+  from upstream `ca3b755fd` after its temporary diagnostic probe was removed by
+  `2e65c8b21`. No failure counters or hot-path diagnostic logging were added.
+- ROOT CAUSE: a successful conditional store advances the 128-byte line's
+  reservation counter by 128 and then caches that line for the next LARX. The
+  cached reload deliberately preserves `ppu.rtime`, but the success path did
+  not advance it, leaving the thread exactly one increment behind. Subsequent
+  same-line conditional stores could therefore fail indefinitely despite
+  unchanged data and no competing writer.
+- FIX READY: after a successful store caches `ppu.raddr`, `ppu.rtime` now
+  advances by 128 before the live reservation address is cleared. Failure,
+  notification, non-cached, and SPU reservation paths are unchanged.
+- PASS STATIC/BUILD: the final diff is one comment plus one arithmetic update;
+  `git diff --check`, the complete bounded iOS contract runner, and the
+  incremental two-worker arm64 iOS 15 core build pass. The resulting unsigned
+  core has SHA-256
+  `69d17d32b99d881f0ebc16e180c4fb03b76e3d19608ed6c91a809599ba2372e7`
+  and UUID `31FCBC20-08E3-3D57-8337-AA6C6B5FB930`.
+- REQUIRED PHYSICAL: an affected same-line reservation loop must progress
+  rather than accumulate endless STCX failures. If Assassin's Creed is
+  available, exercise its `cellSpursAddUrgentCommand` startup path used to
+  establish the upstream failure. Also rerun U1/RDR and require no atomic,
+  startup, save, input, or Stop/relaunch regression. No title fix or FPS gain is
+  claimed before physical evidence.
