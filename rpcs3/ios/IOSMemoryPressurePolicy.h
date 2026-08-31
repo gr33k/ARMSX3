@@ -14,6 +14,7 @@ namespace rpcs3::ios
 
 	inline constexpr std::uint64_t process_memory_mib = 0x100000ull;
 	inline constexpr std::uint32_t automatic_llvm_compile_threads = 3;
+	inline constexpr std::uint32_t automatic_llvm_compile_threads_high_headroom = 4;
 	inline constexpr std::uint32_t savestate_compression_threads = 3;
 
 	// LLVM compilation has a large transient working set. On iOS, a zero
@@ -56,6 +57,37 @@ namespace rpcs3::ios
 	inline constexpr std::uint64_t texture_cache_quota_moderate = 384 * process_memory_mib;
 	inline constexpr std::uint64_t texture_cache_quota_severe = 256 * process_memory_mib;
 	inline constexpr std::uint64_t texture_cache_quota_fatal = 128 * process_memory_mib;
+
+	// Cold PPU/SPU compilation can use one additional worker while the process
+	// still has ample headroom. Runtime-discovered modules automatically fall
+	// back before their LLVM allocations can compete with the live guest/RSX
+	// working set. Explicit user limits remain honored inside the same pressure
+	// caps.
+	constexpr std::uint32_t get_adaptive_llvm_compile_thread_limit(
+		std::uint32_t available_threads,
+		std::uint32_t configured_threads,
+		std::uint64_t available_memory_bytes)
+	{
+		const std::uint32_t hardware_limit = available_threads ? available_threads : 1;
+		const std::uint32_t requested_threads = configured_threads
+			? configured_threads
+			: automatic_llvm_compile_threads_high_headroom;
+		const std::uint32_t compile_limit = requested_threads < hardware_limit
+			? requested_threads
+			: hardware_limit;
+
+		if (available_memory_bytes <= process_headroom_severe_exit)
+		{
+			return 1;
+		}
+
+		if (available_memory_bytes <= process_headroom_moderate_exit)
+		{
+			return compile_limit < 2 ? compile_limit : 2;
+		}
+
+		return compile_limit;
+	}
 
 	// The iOS VRAM budget is a proactive unified-memory target, not a hard heap
 	// ceiling. Physical V0.10 evidence showed that treating allocator overshoot as

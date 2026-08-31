@@ -23,6 +23,7 @@
 #include <algorithm>
 #include <cstring>
 #include <optional>
+#include <thread>
 #include <unordered_set>
 
 #include "util/v128.hpp"
@@ -1023,7 +1024,17 @@ void spu_cache::initialize(bool build_existing_cache)
 			total_funcs = build_existing_cache ? ::narrow<u32>(add_count) : 0;
 		}
 
+#ifdef RPCS3_IOS
+		const u64 ios_headroom = rpcs3::ios::available_process_memory_headroom();
+		worker_count = std::min<u32>(
+			rpcs3::ios::get_adaptive_llvm_compile_thread_limit(
+				::utils::get_thread_count(), g_cfg.core.llvm_threads, ios_headroom),
+			::narrow<u32>(add_count));
+		spu_log.notice("iOS SPU cache: %u function(s), %u direct worker(s), %u MiB headroom",
+			::narrow<u32>(add_count), worker_count, ios_headroom / rpcs3::ios::process_memory_mib);
+#else
 		worker_count = std::min<u32>(rpcs3::utils::get_max_threads(), ::narrow<u32>(add_count));
+#endif
 	}
 
 	atomic_t<u32> pending_progress = 0;
@@ -1036,7 +1047,7 @@ void spu_cache::initialize(bool build_existing_cache)
 		progress_dialog.emplace(get_localized_string(localized_string_id::PROGRESS_DIALOG_BUILDING_SPU_CACHE));
 	}
 
-	named_thread_group workers("SPU Worker ", worker_count, [&]() -> uint
+	auto build_worker = [&]() -> uint
 	{
 #ifdef __APPLE__
 		// Apple Silicon W^X: enable JIT write mode for this worker and
@@ -1374,21 +1385,52 @@ void spu_cache::initialize(bool build_existing_cache)
 		}
 
 		return result;
-	});
+	};
+
+#ifdef RPCS3_IOS
+	// Physical iOS 15 can leave named_thread_group completion waiting after the
+	// LLVM workers have finished. Use direct pthread-backed std::threads, as the
+	// physically proven PPU path does, and retain per-worker results for logs.
+	std::vector<uint> worker_results(worker_count);
+	std::vector<std::thread> workers;
+	workers.reserve(worker_count);
+	for (u32 worker_index = 0; worker_index < worker_count; worker_index++)
+	{
+		workers.emplace_back([&, worker_index]
+		{
+			worker_results[worker_index] = build_worker();
+			spu_log.notice("iOS SPU Runtime: Worker %u completed with %u programs.",
+				worker_index + 1, worker_results[worker_index]);
+		});
+	}
+#else
+	named_thread_group workers("SPU Worker ", worker_count, build_worker);
+#endif
 
 	u32 built_total = 0;
 
 	// Join (implicitly) and print individual results
+#ifdef RPCS3_IOS
+	for (std::thread& worker : workers)
+	{
+		worker.join();
+	}
+
+	for (u32 i = 0; i < worker_results.size(); i++)
+	{
+		spu_log.notice("SPU Runtime: Worker %u built %u programs.", i + 1, worker_results[i]);
+		built_total += worker_results[i];
+	}
+
+	// Do not synchronously sweep every malloc zone between the 99% progress
+	// update and guest startup. Normal frame-boundary pressure handling remains
+	// active and can reclaim caches without blocking this boot handoff.
+	spu_log.notice("iOS SPU cache finalization complete; direct workers joined");
+#else
 	for (u32 i = 0; i < workers.size(); i++)
 	{
 		spu_log.notice("SPU Runtime: Worker %u built %u programs.", i + 1, workers[i]);
 		built_total += workers[i];
-	}
-
-#ifdef RPCS3_IOS
-	if (const u64 released = rpcs3::ios::relieve_process_memory_pressure())
-	{
-		spu_log.notice("iOS released %llu MiB of transient SPU compilation memory", released / rpcs3::ios::process_memory_mib);
 	}
 #endif
 

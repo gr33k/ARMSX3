@@ -1602,3 +1602,33 @@ cache-reuse gates.
   advance through the Duplex intro, and require the exitspawn redirect notice
   followed by actual GTA executable boot. A logo, intro, black Loading screen,
   or successful wrapper process alone remains a failure.
+
+## Sonic Generations compilation failure (V0.22 physical)
+
+- FAIL PHYSICAL / INITIAL BOOT: the exact installed V0.22 candidate reached
+  `99% Building SPU cache` and stopped advancing. Stop/relaunch skipped the
+  completed preload PPU phase, proving that useful cache data persisted, but
+  did not qualify a clean first boot.
+- FAIL PHYSICAL / RESTART: after relaunch, Sonic briefly produced FPS, then
+  repeatedly returned to `0 FPS` while lower-left `Compiling PPU modules`
+  notices appeared. A final clean relaunch reproduced the cycle with a black
+  screen and no audio, so the user stopped testing V0.22. No iPhone process log
+  was captured because only the iPad enumerated over USB, so the module hashes
+  are unknown; do not claim that one identical object was repeatedly compiled.
+- ROOT-CAUSE CANDIDATE / SPU FINALIZATION: the SPU cache path still used both
+  completion mechanisms already removed from the physically stalled PPU path:
+  implicit `named_thread_group` joins on iOS 15 and a synchronous
+  `malloc_zone_pressure_relief()` sweep between 99% and guest startup.
+- FIX READY: iOS SPU cache construction now uses direct `std::thread` workers,
+  records each worker's completion before deterministic joins, and proceeds
+  directly to guest startup without a synchronous allocator sweep. PPU and SPU
+  compilation use one worker at severe headroom, at most two under moderate
+  headroom, and up to four only with more than 2304 MiB available. Generic
+  gameplay thread limits and non-iOS behavior are unchanged.
+- PASS STATIC/BUILD: focused adaptive-memory contracts, the complete bounded
+  iOS contract suite, `git diff --check`, and the incremental two-worker arm64
+  `RPCS3Core` build all pass with the real SPU/PPU integration.
+- REQUIRED PHYSICAL: install the next exact signed IPA, run Sonic from a cold
+  title cache through SPU 100% and first gameplay, then relaunch twice. Require
+  no 99% finalization stall, no recurring compile/FPS-zero cycle after caches
+  settle, and explicit worker-complete/finalization log markers.

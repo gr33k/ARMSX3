@@ -5276,17 +5276,9 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 		// The generic named-thread wait stalled on physical iOS 15 even after all
 		// workers completed. Use short-lived std::threads with pthread joins, and
 		// reduce parallelism when LLVM's transient allocations consume headroom.
-		u32 ios_compile_limit = rpcs3::ios::get_llvm_compile_thread_limit(
-			rpcs3::utils::get_max_threads(), g_cfg.core.llvm_threads);
 		const u64 ios_headroom = rpcs3::ios::available_process_memory_headroom();
-		if (ios_headroom <= rpcs3::ios::process_headroom_severe_exit)
-		{
-			ios_compile_limit = 1;
-		}
-		else if (ios_headroom <= rpcs3::ios::process_headroom_moderate_exit)
-		{
-			ios_compile_limit = std::min<u32>(ios_compile_limit, 2);
-		}
+		const u32 ios_compile_limit = rpcs3::ios::get_adaptive_llvm_compile_thread_limit(
+			::utils::get_thread_count(), g_cfg.core.llvm_threads, ios_headroom);
 		const u32 thread_count = std::min<u32>(::size32(workload), ios_compile_limit) - 1;
 #else
 		const u32 thread_count = std::max<u32>(std::min<u32>(::size32(workload), rpcs3::utils::get_max_threads()), 1) - 1;

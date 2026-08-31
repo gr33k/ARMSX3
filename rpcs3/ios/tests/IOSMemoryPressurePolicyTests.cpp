@@ -8,6 +8,7 @@ using rpcs3::ios::process_memory_pressure;
 int main()
 {
 	using rpcs3::ios::get_llvm_compile_thread_limit;
+	using rpcs3::ios::get_adaptive_llvm_compile_thread_limit;
 	using rpcs3::ios::get_bounded_reclaim_pressure;
 	using rpcs3::ios::get_memory_reclaim_interval_ms;
 	using rpcs3::ios::get_process_memory_pressure;
@@ -22,6 +23,12 @@ int main()
 	static_assert(get_llvm_compile_thread_limit(10, 6) == 6);
 	static_assert(get_llvm_compile_thread_limit(4, 12) == 4);
 	static_assert(get_llvm_compile_thread_limit(0, 0) == 1);
+	static_assert(get_adaptive_llvm_compile_thread_limit(6, 0, 2'304 * process_memory_mib + 1) == 4);
+	static_assert(get_adaptive_llvm_compile_thread_limit(2, 0, 4'096 * process_memory_mib) == 2);
+	static_assert(get_adaptive_llvm_compile_thread_limit(8, 6, 4'096 * process_memory_mib) == 6);
+	static_assert(get_adaptive_llvm_compile_thread_limit(8, 6, 2'304 * process_memory_mib) == 2);
+	static_assert(get_adaptive_llvm_compile_thread_limit(8, 6, 1'792 * process_memory_mib) == 1);
+	static_assert(get_adaptive_llvm_compile_thread_limit(0, 0, 4'096 * process_memory_mib) == 1);
 	static_assert(get_savestate_compression_thread_limit(0) == 1);
 	static_assert(get_savestate_compression_thread_limit(1) == 1);
 	static_assert(get_savestate_compression_thread_limit(2) == 1);
