@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 3.28)
 
 project(ARMSX3iOS LANGUAGES C CXX OBJC OBJCXX)
 
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/app/Info.plist.in"
+)
+
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
     message(FATAL_ERROR "ARMSX3iOS must be configured with -DCMAKE_SYSTEM_NAME=iOS")
 endif()
