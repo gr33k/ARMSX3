@@ -1804,3 +1804,38 @@ cache-reuse gates.
   establish the upstream failure. Also rerun U1/RDR and require no atomic,
   startup, save, input, or Stop/relaunch regression. No title fix or FPS gain is
   claimed before physical evidence.
+
+## Runtime log-amplification candidate (post-V0.24)
+
+- SOURCE: upstream SPU commit `e36d962b0`, upstream PPU commit `00811e493`, and
+  scoped mmapper commit `bb07a2f70`. The mmapper commit carries only the four
+  production log-level changes from `22ec027fa`; its always-on timing counters
+  and profiler globals are deliberately excluded.
+- UPSTREAM MEASURED BASIS: one 15-minute Prototype session attributed 49,644 of
+  56,881 lines to per-block/per-instruction SPU diagnostics, peaking at 2,473
+  lines in one second. A Portal 2 session produced a 1.26 GB log dominated by
+  one notice per relative relocation. A Sonic '06 session measured mmapper
+  syscall chatter at 395 lines/second sustained. These measurements motivate
+  the change but are not claimed as current iPhone results.
+- FIX READY / SPU: routine block compilation, fallthrough/filler discovery,
+  loop and trampoline simplification, pattern analysis, and nonconstant MFC
+  fallback messages move to trace. Invalid MFC sizes and unknown commands remain
+  errors, and trace logging can still be enabled for focused diagnosis.
+- FIX READY / PPU: ignored relative, ignored 64-bit, and repeated relocations
+  are counted and reported once per module with the first address retained,
+  instead of formatting and queuing one message per relocation.
+- FIX READY / MMAPPER: allocate, free, search-and-map, and successful-address
+  messages on the measured streaming path move from warning/notice to trace.
+  VM locks, thread suspension, mapping behavior, and memory accounting are
+  unchanged.
+- PASS STATIC/BUILD: exact level review confirms genuine MFC faults remain at
+  error level. `git diff --check`, the complete bounded iOS contract runner,
+  and the incremental two-worker arm64 iOS 15 core build pass. The resulting
+  unsigned core has SHA-256
+  `a10aa29db2957106e37d4e6a31d3a64596a960257f2cea707b050a018a984599`
+  and UUID `D8298EB8-B4BC-38B6-8E5A-DB2359F7521E`.
+- REQUIRED PHYSICAL: cold-boot a title with substantial PPU/SPU compilation and
+  a streaming title, capture line counts/rates and compile/start latency, then
+  compare a warm second launch. Require lower routine log volume with genuine
+  failures still visible, no new compile loop or hang, and no regression in
+  gameplay, audio, memory, or Stop/relaunch. No performance gain is claimed yet.
