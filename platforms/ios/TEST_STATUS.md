@@ -1692,3 +1692,47 @@ cache-reuse gates.
   FPS result exists yet. Run Sonic first, GTA V second, then controlled U1 and
   RDR comparisons. A successful install, boot screen, menu, or compilation
   stage is not acceptance.
+
+## V0.24 native Metal presentation foundation (2026-08-31)
+
+- SOURCE: clean-room implementation commit
+  `9276901f1a13683ccb6942d4f18e5a419f0ec010`. ABI 34 adds one stopped-core
+  diagnostic export without changing the selected game renderer, cache keys,
+  shader translation, RSX command processing, or title settings.
+- CLEAN-ROOM BOUNDARY: the implementation was authored against public Apple
+  Metal and QuartzCore APIs. No ARMSX2/PCSX2 Metal source was copied because
+  licensing compatibility between those GPL-3.0-or-later files and this fork's
+  current licensing was not established.
+- FIX READY: the core validates the attached `CAMetalLayer`, reuses its device,
+  creates a native command queue, compiles original MSL vertex and fragment
+  functions, creates a render pipeline, clears and draws one colored triangle,
+  presents the drawable, and waits at most five seconds for completion. The ABI
+  returns drawable dimensions and format, GPU duration, registry ID, maximum
+  buffer length, unified-memory state, and device name.
+- PASS STATIC CONTRACT: ABI 34, build-info capability, append-only status 49,
+  and the 176-byte result structure are compile-time checked. The complete
+  bounded iOS contract runner passes, including NETISO cancellation.
+- PASS BUILD/IDENTITY: the two-worker arm64 iOS 15 `RPCS3Core` build and
+  one-worker UIKit app build pass. The app-embedded and standalone unsigned
+  cores are byte-identical with SHA-256
+  `202419786ad02459bbbd5356885d5c9ef16094b77f31b5ecb29deb996bb7ef17`
+  and UUID `AA35A824-63CB-3F65-AF7F-BCEF986C9F1E`. The core exports
+  `rpcs3_ios_run_metal_presentation_probe`, and the app reports version
+  `0.24.0` build `23` for both iPhone and iPad.
+- SCOPE / NO FALSE CLAIM: a passing triangle proves that this device can use
+  the app's real display layer for native MSL compilation, pipeline creation,
+  command encoding, GPU execution, drawable presentation, and timing readback.
+  It does not prove a direct-Metal RSX backend, game rendering, correctness,
+  stability, or any FPS improvement; gameplay still uses Vulkan through
+  MoltenVK in this candidate.
+- REQUIRED PHYSICAL PROBE: with emulation stopped, tap `Metal Probe`. Require a
+  dark clear plus clean cyan/gold/green triangle, a `Native Metal PASS` result
+  containing the actual device, nonzero drawable dimensions, and no timeout or
+  crash. Then launch a known-good Vulkan title to prove the diagnostic did not
+  poison the existing renderer session.
+- REQUIRED NEXT ENGINEERING GATE: translate one bounded RSX operation class
+  through an independently authored Metal backend behind an explicit test-only
+  selector, compare pixels and synchronization against Vulkan, and preserve an
+  immediate Vulkan rollback. Do not call the backend usable until controlled U1
+  and RDR scenes pass visual, FPS, memory, thermals, audio, input, and repeated
+  Stop/relaunch qualification on physical hardware.
