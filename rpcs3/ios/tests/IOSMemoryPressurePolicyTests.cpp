@@ -17,6 +17,7 @@ int main()
 	using rpcs3::ios::get_soft_vram_memory_pressure;
 	using rpcs3::ios::has_safe_savestate_headroom;
 	using rpcs3::ios::should_rearm_destructive_reclaim;
+	using rpcs3::ios::should_run_additional_destructive_reclaim;
 
 	static_assert(get_llvm_compile_thread_limit(10, 0) == 3);
 	static_assert(get_llvm_compile_thread_limit(2, 0) == 2);
@@ -67,6 +68,22 @@ int main()
 	static_assert(!should_rearm_destructive_reclaim(process_memory_pressure::severe));
 	static_assert(should_rearm_destructive_reclaim(process_memory_pressure::moderate));
 	static_assert(should_rearm_destructive_reclaim(process_memory_pressure::low));
+	static_assert(!should_run_additional_destructive_reclaim(
+		process_memory_pressure::fatal, 768 * process_memory_mib, false, 1, true));
+	static_assert(!should_run_additional_destructive_reclaim(
+		process_memory_pressure::fatal, 768 * process_memory_mib, true, 1, false));
+	static_assert(!should_run_additional_destructive_reclaim(
+		process_memory_pressure::severe, 768 * process_memory_mib, true, 1, true));
+	static_assert(!should_run_additional_destructive_reclaim(
+		process_memory_pressure::fatal, 768 * process_memory_mib + 1, true, 1, true));
+	static_assert(should_run_additional_destructive_reclaim(
+		process_memory_pressure::fatal, 768 * process_memory_mib, true, 1, true));
+	static_assert(!should_run_additional_destructive_reclaim(
+		process_memory_pressure::fatal, 384 * process_memory_mib + 1, true, 2, true));
+	static_assert(should_run_additional_destructive_reclaim(
+		process_memory_pressure::fatal, 384 * process_memory_mib, true, 2, true));
+	static_assert(!should_run_additional_destructive_reclaim(
+		process_memory_pressure::fatal, 0, true, 3, true));
 
 	static_assert(!has_safe_savestate_headroom(1536 * process_memory_mib));
 	static_assert(has_safe_savestate_headroom(1536 * process_memory_mib + 1));

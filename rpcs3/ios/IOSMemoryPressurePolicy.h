@@ -57,6 +57,10 @@ namespace rpcs3::ios
 	inline constexpr std::uint64_t texture_cache_quota_moderate = 384 * process_memory_mib;
 	inline constexpr std::uint64_t texture_cache_quota_severe = 256 * process_memory_mib;
 	inline constexpr std::uint64_t texture_cache_quota_fatal = 128 * process_memory_mib;
+	inline constexpr std::uint64_t process_headroom_emergency_reclaim = 768 * process_memory_mib;
+	inline constexpr std::uint64_t process_headroom_critical_reclaim = 384 * process_memory_mib;
+	inline constexpr std::uint32_t destructive_reclaim_cooldown_ms = 15'000;
+	inline constexpr std::uint8_t destructive_reclaim_limit = 3;
 
 	// Cold PPU/SPU compilation can use one additional worker while the process
 	// still has ample headroom. Runtime-discovered modules automatically fall
@@ -138,6 +142,32 @@ namespace rpcs3::ios
 	constexpr bool should_rearm_destructive_reclaim(process_memory_pressure process_pressure)
 	{
 		return process_pressure <= process_memory_pressure::moderate;
+	}
+
+	// A long-running title can stay in fatal process pressure while replacing
+	// hundreds of MiB of textures between scenes. Permit two additional hard
+	// passes at successively lower headroom, but only after a caller-enforced
+	// cooldown and never more than three times in one pressure episode.
+	constexpr bool should_run_additional_destructive_reclaim(
+		process_memory_pressure process_pressure,
+		std::uint64_t available_bytes,
+		bool destructive_reclaim_completed,
+		std::uint8_t destructive_reclaim_count,
+		bool cooldown_elapsed)
+	{
+		if (process_pressure != process_memory_pressure::fatal ||
+			!destructive_reclaim_completed ||
+			!cooldown_elapsed ||
+			destructive_reclaim_count == 0 ||
+			destructive_reclaim_count >= destructive_reclaim_limit)
+		{
+			return false;
+		}
+
+		const std::uint64_t threshold = destructive_reclaim_count == 1
+			? process_headroom_emergency_reclaim
+			: process_headroom_critical_reclaim;
+		return available_bytes <= threshold;
 	}
 
 	constexpr process_memory_pressure get_process_memory_pressure(

@@ -25,6 +25,7 @@ struct mobile_title_profile
 	bool read_color_buffers = false;
 	bool accurate_rsx_reservation_access = false;
 	bool disable_async_texture_streaming = false;
+	bool disable_hardware_texel_remapping = false;
 
 	constexpr explicit operator bool() const noexcept
 	{
@@ -87,6 +88,10 @@ constexpr mobile_title_profile mobile_profile_for_title(std::string_view title_i
 			2,
 			true,
 			0,
+			true,
+			false,
+			false,
+			false,
 			true,
 		};
 	}

@@ -917,22 +917,27 @@ std::string database_config_for_guest_boot(const std::string& title_id)
 	{
 		merged.video.vk.asynchronous_texture_streaming.set(false);
 	}
+	if (profile.disable_hardware_texel_remapping)
+	{
+		merged.video.disable_hardware_texel_remapping.set(true);
+	}
 	if (profile.stub_ppu_traps)
 	{
 		merged.core.stub_ppu_traps.set(profile.stub_ppu_traps);
 	}
 
 	emit_log(4, fmt::format(
-		"Prepared iOS title profile for {}: Resolution Scale = {}%, Shader Compiler Threads = {}, Multithreaded RSX = {}, Stub PPU Traps = {}, Write Color Buffers = {}, Read Color Buffers = {}, Accurate RSX Reservation Access = {}, Async Texture Streaming = {}",
+		"IOS_PROFILE prepared title=%s resolution=%u shader_workers=%u mtrsx=%d stub_ppu_traps=%d wcb=%d rcb=%d accurate_rsx=%d async_textures=%d shader_color_remap=%d",
 		title_id,
-		merged.video.resolution_scale_percent.get(),
-		merged.video.shader_compiler_threads_count.get(),
-		merged.video.multithreaded_rsx.get(),
-		merged.core.stub_ppu_traps.get(),
-		merged.video.write_color_buffers.get(),
-		merged.video.read_color_buffers.get(),
-		merged.core.rsx_accurate_res_access.get(),
-		merged.video.vk.asynchronous_texture_streaming.get()));
+		static_cast<unsigned>(merged.video.resolution_scale_percent.get()),
+		static_cast<unsigned>(merged.video.shader_compiler_threads_count.get()),
+		merged.video.multithreaded_rsx.get() ? 1 : 0,
+		static_cast<int>(merged.core.stub_ppu_traps.get()),
+		merged.video.write_color_buffers.get() ? 1 : 0,
+		merged.video.read_color_buffers.get() ? 1 : 0,
+		merged.core.rsx_accurate_res_access.get() ? 1 : 0,
+		merged.video.vk.asynchronous_texture_streaming.get() ? 1 : 0,
+		merged.video.disable_hardware_texel_remapping.get() ? 1 : 0));
 	return merged.to_string();
 }
 
@@ -944,16 +949,17 @@ void emit_effective_mobile_profile_settings(std::string_view title_id)
 	}
 
 	emit_log(4, fmt::format(
-		"Effective iOS title settings for {}: Resolution Scale = {}%, Shader Compiler Threads = {}, Multithreaded RSX = {}, Stub PPU Traps = {}, Write Color Buffers = {}, Read Color Buffers = {}, Accurate RSX Reservation Access = {}, Async Texture Streaming = {}",
+		"IOS_PROFILE effective title=%s resolution=%u shader_workers=%u mtrsx=%d stub_ppu_traps=%d wcb=%d rcb=%d accurate_rsx=%d async_textures=%d shader_color_remap=%d",
 		title_id,
-		g_cfg.video.resolution_scale_percent.get(),
-		g_cfg.video.shader_compiler_threads_count.get(),
-		g_cfg.video.multithreaded_rsx.get(),
-		g_cfg.core.stub_ppu_traps.get(),
-		g_cfg.video.write_color_buffers.get(),
-		g_cfg.video.read_color_buffers.get(),
-		g_cfg.core.rsx_accurate_res_access.get(),
-		g_cfg.video.vk.asynchronous_texture_streaming.get()));
+		static_cast<unsigned>(g_cfg.video.resolution_scale_percent.get()),
+		static_cast<unsigned>(g_cfg.video.shader_compiler_threads_count.get()),
+		g_cfg.video.multithreaded_rsx.get() ? 1 : 0,
+		static_cast<int>(g_cfg.core.stub_ppu_traps.get()),
+		g_cfg.video.write_color_buffers.get() ? 1 : 0,
+		g_cfg.video.read_color_buffers.get() ? 1 : 0,
+		g_cfg.core.rsx_accurate_res_access.get() ? 1 : 0,
+		g_cfg.video.vk.asynchronous_texture_streaming.get() ? 1 : 0,
+		g_cfg.video.disable_hardware_texel_remapping.get() ? 1 : 0));
 }
 
 rpcs3_ios_status validate_game_settings_target(const char* title_id, rpcs3::ios::installed_game* installed_game = nullptr)

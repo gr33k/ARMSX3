@@ -48,8 +48,11 @@ namespace vk
 		rsx::problem_severity combined_severity = rsx::problem_severity::low;
 		rsx::problem_severity last_reclaim_severity = rsx::problem_severity::low;
 		bool destructive_reclaim_completed = false;
+		u8 destructive_reclaim_count = 0;
+		u64 latest_process_headroom = umax;
 		std::chrono::steady_clock::time_point next_report{};
 		std::chrono::steady_clock::time_point next_reclaim{};
+		std::chrono::steady_clock::time_point next_destructive_reclaim{};
 		std::chrono::steady_clock::time_point next_heap_relief{};
 	} g_ios_process_memory_pressure;
 
@@ -268,7 +271,9 @@ namespace vk
 
 #ifdef RPCS3_IOS
 		const u64 process_headroom = rpcs3::ios::available_process_memory_headroom();
+		const auto now = std::chrono::steady_clock::now();
 		const bool system_memory_warning = rpcs3::ios::consume_process_memory_warning();
+		g_ios_process_memory_pressure.latest_process_headroom = process_headroom;
 		g_ios_process_memory_pressure.process_severity = rpcs3::ios::get_process_memory_pressure(
 			process_headroom,
 			g_ios_process_memory_pressure.process_severity);
@@ -276,6 +281,23 @@ namespace vk
 			g_ios_process_memory_pressure.process_severity))
 		{
 			g_ios_process_memory_pressure.destructive_reclaim_completed = false;
+			g_ios_process_memory_pressure.destructive_reclaim_count = 0;
+			g_ios_process_memory_pressure.next_destructive_reclaim = {};
+		}
+		else if (rpcs3::ios::should_run_additional_destructive_reclaim(
+			g_ios_process_memory_pressure.process_severity,
+			process_headroom,
+			g_ios_process_memory_pressure.destructive_reclaim_completed,
+			g_ios_process_memory_pressure.destructive_reclaim_count,
+			now >= g_ios_process_memory_pressure.next_destructive_reclaim))
+		{
+			g_ios_process_memory_pressure.destructive_reclaim_completed = false;
+			g_ios_process_memory_pressure.next_reclaim = {};
+			rsx_log.warning(
+				"iOS process headroom armed staged destructive reclaim %u/%u at %llu MiB",
+				static_cast<unsigned>(g_ios_process_memory_pressure.destructive_reclaim_count + 1),
+				static_cast<unsigned>(rpcs3::ios::destructive_reclaim_limit),
+				process_headroom / rpcs3::ios::process_memory_mib);
 		}
 		const auto process_severity = to_problem_severity(g_ios_process_memory_pressure.process_severity);
 #else
@@ -368,7 +390,6 @@ namespace vk
 		}
 
 		const auto previous_severity = std::exchange(g_ios_process_memory_pressure.combined_severity, load_severity);
-		const auto now = std::chrono::steady_clock::now();
 		const bool severity_changed = previous_severity != load_severity;
 		const bool report_due = now >= g_ios_process_memory_pressure.next_report;
 
@@ -461,8 +482,20 @@ namespace vk
 		if (running_destructive_reclaim)
 		{
 			g_ios_process_memory_pressure.destructive_reclaim_completed = true;
+			if (g_ios_process_memory_pressure.destructive_reclaim_count <
+				rpcs3::ios::destructive_reclaim_limit)
+			{
+				++g_ios_process_memory_pressure.destructive_reclaim_count;
+			}
+			g_ios_process_memory_pressure.next_destructive_reclaim = now +
+				std::chrono::milliseconds(rpcs3::ios::destructive_reclaim_cooldown_ms);
 			rsx_log.warning(
-				"iOS pressure episode is running one synchronized inactive-texture eviction");
+				"iOS pressure episode is running synchronized inactive-texture eviction %u/%u "
+				"at %llu MiB headroom",
+				static_cast<unsigned>(g_ios_process_memory_pressure.destructive_reclaim_count),
+				static_cast<unsigned>(rpcs3::ios::destructive_reclaim_limit),
+				g_ios_process_memory_pressure.latest_process_headroom /
+					rpcs3::ios::process_memory_mib);
 		}
 
 		const bool cache_relieved = vmm_handle_memory_pressure(reclaim_severity);
