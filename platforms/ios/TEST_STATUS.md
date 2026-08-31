@@ -2223,3 +2223,35 @@ cache-reuse gates.
   capture fallback frequency before attributing a performance cost. Require no
   green/pink cast, new rectangles, missing transfers, crash, or worse
   Stop/relaunch; a build cannot prove renderer correctness.
+
+## Full-queue vblank liveness candidate (post-V0.26)
+
+- SOURCE: isolated commit `f8fd9dae1`, selectively backported from upstream
+  `c78913cfd`. Local differences are a shorter rationale and diagnostics on the
+  first drop as well as every 1024th drop.
+- ROOT CAUSE: `send_event()` retried `CELL_EBUSY` every 100 microseconds with
+  no bound. If the guest interrupt thread stopped draining its 32-event queue,
+  the periodic vblank producer became the waiter and stopped generating all
+  future ticks, allowing the display pipeline to remain at zero FPS even after
+  the original guest delay ended.
+- FIX READY: only a full-queue event containing exclusively primary and/or the
+  two supported secondary-head vblank bits is dropped. Those periodic bits are
+  already explicitly loss/duplicate-tolerant in the existing `CELL_EAGAIN`
+  assertion. Queue, flip, user, unmapped-memory, reserved, and every mixed event
+  retain the original retry behavior.
+- REPLAY/STOP BOUNDARY: a stale vblank-only replay can be dropped and setup
+  retried once; non-vblank replay remains blocking. The early return can bypass
+  the old stop check only for a disposable periodic tick. No event is falsely
+  marked delivered, and no non-vblank bit is added to or removed from
+  `unsent_gcm_events` differently.
+- PASS STATIC/BUILD: independent read-only review found no issue;
+  `git diff --check`, the complete bounded iOS contract runner, and the
+  incremental two-worker arm64 core build pass. The combined unsigned core is
+  `77,496,088` bytes, SHA-256
+  `26f0fab419217781bb9d58f9fbd8c710925d315b296dee360a4a6febdf679020`,
+  UUID `85B65975-D68E-308D-93F4-E879EE5995B2`.
+- REQUIRED PHYSICAL: reproduce a title or failure path that fills the event
+  queue, capture the first-drop warning with vblank/FPS recovery, and prove
+  input, flip, Stop, immediate relaunch, and a second title remain correct.
+  This protects liveness after a guest-side stall; it does not repair the guest
+  mutex or prove higher settled FPS in U1/RDR.

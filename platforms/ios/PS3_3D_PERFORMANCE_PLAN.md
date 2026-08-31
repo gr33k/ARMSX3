@@ -253,6 +253,20 @@ reject any missing transfer, color regression, crash, or teardown slowdown.
 Only after this isolated result is physically attributable should the larger
 pitch-compatibility or interpolation candidates be layered on it.
 
+### Full-queue vblank liveness candidate
+
+Post-V0.26 commit `f8fd9dae1` prevents a full 32-event guest queue from
+stranding the periodic vblank producer. Only primary/secondary vblank-only
+events can be dropped; all flip, queue, user, unmapped-memory, and mixed events
+keep their original retry semantics. The first and every 1024th drop provide a
+low-volume runtime marker.
+
+This is a zero-FPS recovery guard, not a fix for the guest interrupt-thread
+mutex and not a settled-performance claim. Exercise a reproducible full-queue
+path, correlate the warning with resumed vblank/FPS, then verify Stop,
+immediate relaunch, and a second title. Any lost non-vblank behavior rejects the
+candidate.
+
 ## Required evidence
 
 Every candidate records source commit, IPA SHA-256, bundle version/build,
