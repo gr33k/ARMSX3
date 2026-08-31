@@ -2004,3 +2004,71 @@ cache-reuse gates.
   title from clean launch through gameplay and immediate Stop/relaunch. Require
   no reservation/SPURS regression, no new crash or hang, and unchanged or
   better frame/audio behavior before promotion.
+
+## MTRSX liveness and fail-closed handoff candidate (post-V0.25)
+
+- SOURCE: producer guard commit `fd61206d0` plus liveness hardening commit
+  `38af7ccb7`, selectively reconstructed from upstream `ae4f26c39`,
+  `8ae45a74b`, and `889b82675`. The upstream MM line-ending rewrite and
+  title-specific shader diagnostics were excluded.
+- ROOT RISK: the setting says MTRSX is requested; it does not prove a worker is
+  alive to drain its queue. The old copy, index-emulation, Vulkan-submit, and
+  lazy host-memory paths could all enqueue from the setting alone. If startup
+  failed or the worker exited, the processed count and submit-flushed flag
+  could never advance, leaving flip, Stop, and relaunch waiting permanently.
+- FIX READY / COMPLETE COVERAGE: both copy overloads, index emulation, Vulkan
+  queue submission, and lazy host-memory flush now use one `can_offload()`
+  predicate. If no worker is accepting work, each producer uses its existing
+  synchronous path instead of dropping or stranding a job. The generic backend
+  callback is reached only through those guarded sites.
+- ARM64 LIVENESS SAFETY: worker identity is published through an atomic pointer
+  and cleared on normal exit. `can_offload()` additionally requires the named
+  thread's atomic state to remain `created`, so a stale pointer after a fault or
+  finish cannot authorize new work. Fault recovery uses the same checked
+  identity rather than racing a plain pointer.
+- iOS LIFECYCLE BOUNDARY: database, custom, and mobile-profile settings are
+  applied in `System.cpp` before RSX calls `dma_manager::init()`. iOS settings
+  APIs also reject mutation during emulation. Therefore an MTRSX-disabled iOS
+  title retains the prior early worker exit and does not inherit upstream's
+  always-live 5 ms wake loop. U1, U2, RDR, and GTA V profiles already enable
+  MTRSX before worker creation; U3 intentionally remains serialized.
+- PASS STATIC/BUILD: every current enqueue site was audited, `git diff --check`,
+  the complete bounded iOS contract runner including NETISO cancellation, and
+  the two-worker arm64 iOS 15 core build pass. The combined unsigned core after
+  the wait hardening below is `77,495,552` bytes, SHA-256
+  `9a7a9bb2791c6637e5e8ef87802a1e1d4358e935c850af0468c78ed3a141ecca`,
+  UUID `48E70305-AFB8-3F0E-A517-8230486FDC73`.
+- REQUIRED PHYSICAL: on fresh app launches of U1 and RDR, require the `RSX
+  Offloader` thread to be present while effective settings report MTRSX on.
+  Capture settled FPS, RSX/other CPU, frame waits, audio, memory, and Stop time
+  in the same repeatable scenes. Then prove U3 remains free of green/pink or
+  block corruption with MTRSX off. No static result proves an FPS increase.
+
+## Stop-aware Vulkan wait candidate (post-V0.25)
+
+- SOURCE: isolated commit `2610e3cfa`, based on the generic portions of
+  upstream `36c4820b8` and `2310d51fd`. Librashader/upscaler changes were not
+  included because they are unrelated to the selected game-renderer path.
+- ROOT RISK: `fence::wait_flush()` spun forever if an asynchronous submit was
+  never flushed, while the zero-timeout GPU-fence path eventually called
+  `vkWaitForFences(..., UINT64_MAX)`. Either condition could trap the RSX
+  thread after a renderer or driver failure, preventing Emulation Join, Stop,
+  immediate relaunch, and orderly app shutdown.
+- FIX READY: normal flushed/submitted fences retain their existing hot paths.
+  A pathological submit-flush spin periodically checks thread abort and stopped
+  state. After the existing 512 hot GPU polls, an indefinite fence wait now
+  uses 100 ms driver-wait slices, reports one diagnostic at three seconds, and
+  returns `VK_TIMEOUT` only once emulation is stopping.
+- SAFETY BOUNDARY: this is teardown escape, not live GPU recovery. It does not
+  mark an unfinished fence successful or reclaim its ring snapshot; the
+  generation-safe allocator path clears timeout authority. No renderer reset,
+  pipeline-cache invalidation, or ordinary synchronization ordering changed.
+- PASS STATIC/BUILD: `git diff --check`, the complete bounded iOS contract
+  runner, and a warning-clean incremental arm64 iOS 15 core rebuild pass. Core
+  identity is the combined SHA/size/UUID recorded in the MTRSX section above.
+- REQUIRED PHYSICAL: Stop during a known-good title, during NETISO failure,
+  while shader/PPU/SPU work is active, and during a reproduced zero-FPS RSX
+  stall. Require prompt return to the launcher, no Jetsam or crash, no retained
+  audio/haptics, and successful immediate launch of a second title. Capture
+  either abandonment diagnostic if exercised; absence during normal Stop is
+  expected and not failure.
