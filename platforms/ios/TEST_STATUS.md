@@ -1976,3 +1976,31 @@ cache-reuse gates.
   checks. Finish with input, background/foreground, Stop, immediate relaunch,
   and sequential-title teardown. No install, menu, compile progress, probe, or
   package result substitutes for title-specific gameplay evidence.
+
+## ARM64 SPU reservation-line copy candidate (post-V0.25)
+
+- SOURCE: isolated commit `2fca893c9`, selectively backported from upstream
+  `9b3331698`. Only the two ARM64 reservation-copy branches were retained; the
+  donor's 399-line Borderlands/SPURS diagnostic payload was deliberately
+  excluded. X64 and other architectures remain source-identical.
+- FIX READY: `mov_rdata` and `mov_rdata_nt` now move each 128-byte SPU
+  reservation line through eight explicit 16-byte NEON values instead of
+  delegating copy granularity to `std::memcpy`. These paths snapshot GETLLAR
+  data and refill guest local store while other emulated threads may be active.
+- MACHINE-CODE READBACK: the linked arm64 iOS core contains four `ldp qN, qN`
+  pairs followed by four `stp qN, qN` pairs covering offsets `0x00` through
+  `0x70`, followed directly by `ret`; there is no libc copy call in the
+  emitted function.
+- PASS STATIC/BUILD: `git diff --check`, the complete bounded iOS contract
+  runner including NETISO cancellation, and the two-worker arm64 iOS 15 core
+  build pass. The resulting unsigned core has SHA-256
+  `d835b01fb41711762694a1ce104c8c10738a0c2859e8ac224d770952e5439ae2`
+  and UUID `BC645A7C-3475-34BC-95A4-DCEF20B23767`.
+- EVIDENCE BOUNDARY: upstream measured no Borderlands 2 behavior change from
+  this copy correction. It is retained as an ARM64 correctness/hot-path
+  cleanup, not an FPS or hang fix, and does not by itself justify replacing
+  the audited V0.25 package.
+- REQUIRED PHYSICAL: after a later combined package, compare an SPU-heavy
+  title from clean launch through gameplay and immediate Stop/relaunch. Require
+  no reservation/SPURS regression, no new crash or hang, and unchanged or
+  better frame/audio behavior before promotion.
