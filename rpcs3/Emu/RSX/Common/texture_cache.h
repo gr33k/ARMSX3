@@ -3619,6 +3619,12 @@ namespace rsx
 				cached_src->add_ref();
 				vram_texture = cached_src->get_raw_texture();
 				typeless_info.src_context = cached_src->get_context();
+
+				// A 1:1 memory copy must not inherit linear filtering from the blit request.
+				if (is_copy_op)
+				{
+					interpolate = false;
+				}
 			}
 			else
 			{
