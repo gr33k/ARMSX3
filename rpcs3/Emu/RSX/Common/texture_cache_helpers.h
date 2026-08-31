@@ -3,6 +3,7 @@
 #include "../rsx_utils.h"
 #include "simple_array.hpp"
 #include "TextureUtils.h"
+#include "blit_target_bounds_policy.h"
 
 namespace rsx
 {
@@ -67,6 +68,7 @@ namespace rsx
 		u32 offset;
 		u32 width;
 		u32 height;
+		bool valid = true;
 	};
 
 	struct texture_cache_search_options
@@ -171,8 +173,11 @@ namespace rsx
 			address_range32 dst_range,
 			u32 dst_pitch,
 			const sizeu src_dimensions,
-			const sizeu dst_dimensions)
+			const sizeu dst_dimensions_,
+			const GCM_tile_reference& dst_tile)
 		{
+			auto dst_dimensions = dst_dimensions_;
+			u32 maximum_height = umax;
 			if (get_location(dst_range.start) == CELL_GCM_LOCATION_LOCAL)
 			{
 				// Check if this is a blit to the output buffer
@@ -211,6 +216,32 @@ namespace rsx
 				}
 			}
 
+			if (dst_tile)
+			{
+				const auto tile_range = utils::address_range32::start_length(dst_tile.base_address, dst_tile.tile->size);
+				if (dst_range.inside(tile_range))
+				{
+					const u64 available_length = (static_cast<u64>(tile_range.end) + 1u) - dst_range.start;
+					const auto constrained = constrain_blit_target_height(
+						dst_dimensions.height,
+						dst_range.length(),
+						dst_pitch,
+						available_length);
+					if (!constrained.representable)
+					{
+						return { false, 0, 0, 0, false };
+					}
+
+					dst_dimensions.height = constrained.height;
+					maximum_height = constrained.maximum_height;
+				}
+			}
+
+			const auto cap_height = [maximum_height](u32 height)
+			{
+				return cap_blit_target_height(height, maximum_height);
+			};
+
 			if (src_is_render_target)
 			{
 				// Attempt to optimize...
@@ -218,18 +249,19 @@ namespace rsx
 				{
 					// Optimizations table based on common width/height pairings. If we guess wrong, the upload resolver will fix it anyway
 					// TODO: Add more entries based on empirical data
-					const auto optimal_height = std::max(dst_dimensions.height, 720u);
-					return { false, 0, dst_dimensions.width, optimal_height };
+					const auto min_fitted_height = utils::aligned_div(dst_range.length(), dst_pitch);
+					const auto optimal_height = std::max(std::min(dst_dimensions.height, min_fitted_height), 720u);
+					return { false, 0, dst_dimensions.width, cap_height(optimal_height) };
 				}
 
 				if (dst_dimensions.width == src_dimensions.width)
 				{
 					const auto optimal_height = std::max(dst_dimensions.height, src_dimensions.height);
-					return { false, 0, dst_dimensions.width, optimal_height };
+					return { false, 0, dst_dimensions.width, cap_height(optimal_height) };
 				}
 			}
 
-			return { false, 0, dst_dimensions.width, dst_dimensions.height };
+			return { false, 0, dst_dimensions.width, cap_height(dst_dimensions.height) };
 		}
 
 		template<typename commandbuffer_type, typename section_storage_type, typename copy_region_type, typename surface_store_list_type>
