@@ -7546,8 +7546,10 @@ public:
 		const bool perm_or_zero_only = known_idx.Zero[6];
 		const bool consts_only = known_idx.One[7];
 		const bool consts_never_msb = known_idx.Zero[5];
+#ifndef ARCH_ARM64
 		const bool consts_never_allones = known_idx.One[5];
 		const bool idx_selects_single = known_idx.extractBits(1, 4).isConstant();
+#endif
 
 		const auto a = get_vr<u8[16]>(op.ra);
 		const auto b = get_vr<u8[16]>(op.rb);
@@ -7563,7 +7565,7 @@ public:
 		const bool b_is_splat = b_is_const && b_data == v128::from8p(b_data._u8[0]);
 
 
-		auto get_swap_from_const = [this](v128 data, bool is_splat) {
+		[[maybe_unused]] auto get_swap_from_const = [this](v128 data, bool is_splat) {
 			// Splats are their own byteswap
 			if (!is_splat)
 				std::reverse(std::begin(data._bytes), std::end(data._bytes));
@@ -7571,15 +7573,29 @@ public:
 			return make_const_vector(data, get_type<u8[16]>());
 		};
 
+#ifdef ARCH_ARM64
+		// Non-splat constant folding and KnownBits single-source selection can miscompile
+		// SHUFB special indices on ARM64. Splats remain safe because byteswap is identity.
+		if (a_is_splat)
+			a_swap.value = a.value;
+
+		if (b_is_splat)
+			b_swap.value = b.value;
+#else
 		if (a_is_const)
 			a_swap.value = get_swap_from_const(a_data, a_is_splat);
 
 		if (b_is_const)
 			b_swap.value = get_swap_from_const(b_data, b_is_splat);
+#endif
 
 		// Shuffle index reversal is equivalent to a byteswap
 		value_t<u8[16]> av, bv, cv;
+#ifdef ARCH_ARM64
+		if ((a_was_swapped || a_is_splat) && (b_was_swapped || b_is_splat))
+#else
 		if ((a_was_swapped || a_is_const) && (b_was_swapped || b_is_const))
+#endif
 		{
 			av = eval(a_swap);
 			bv = eval(b_swap);
@@ -7592,10 +7608,16 @@ public:
 			cv = eval(c ^ 0xf);
 		}
 
-		// When single source, either indicated by KnownBits or both are the same
+		// When single source, either indicated by KnownBits or both are the same.
+#ifdef ARCH_ARM64
+		const std::optional<value_t<u8[16]>> single_src = (op.ra == op.rb && !m_interp_magn)
+			? std::make_optional(known_idx.One[4] ? bv : av)
+			: std::nullopt;
+#else
 		const std::optional<value_t<u8[16]>> single_src = (idx_selects_single || (op.ra == op.rb && !m_interp_magn))
 			? std::make_optional(known_idx.One[4] ? bv : av)
 			: std::nullopt;
+#endif
 
 		const bool only_src_is_splat = known_idx.One[4] ? b_is_splat : a_is_splat;
 
