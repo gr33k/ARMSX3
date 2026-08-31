@@ -1663,3 +1663,32 @@ cache-reuse gates.
   headroom, visual correctness, audio, thermals, and Stop/relaunch. Promotion
   requires lower wait/CPU pressure without worse FPS, input latency, stalls,
   artifacts, or shutdown behavior; no performance gain is claimed yet.
+
+## V0.23 combined candidate (2026-08-31)
+
+- SOURCE: executable source revision
+  `9a834b3efcc3605d2eaf762a38fd625d8664be97`. It contains the V0.22 NETISO
+  recovery checkpoint, GTA V child-executable handoff repair, Sonic SPU-cache
+  finalization repair, adaptive PPU/SPU boot compilation, and the mobile RSX
+  wait/QoS experiment documented above.
+- PASS PACKAGE: `ARMSX3-iOS-Core-Test-v0.23.ipa` is version `0.23.0`, build
+  `22`, `31,859,970` bytes, SHA-256
+  `e2664a68f74620db43739099482fa3fc733656fac613ed2f721e12fe4bc249e3`.
+- PASS INDEPENDENT READBACK: fresh ZIP extraction passed integrity and deep
+  strict signature verification. The app and core are arm64 Mach-O binaries,
+  both target iOS 15.0, the app links `@rpath/libRPCS3Core.dylib`, and device
+  families are iPhone plus iPad. JIT, unsigned executable memory, Extended
+  Virtual Addressing, increased memory, and debug entitlements all read back
+  true from the extracted package.
+- PASS CORE IDENTITY: the embedded core and build product share UUID
+  `1B0F3B4C-CD95-38C3-A5C9-B32DC2584447`; the extracted core exports ABI 33's
+  version symbol and contains the exact GTA exitspawn and SPU-finalization log
+  markers. Ad-hoc signing intentionally makes the signed dylib bytes differ
+  from the unsigned build product, so UUID plus symbol/marker readback is the
+  valid identity check.
+- PASS TRANSFER: repository and iCloud Drive copies are byte-identical and
+  have the SHA-256 above. V0.22 remains preserved as the immediate rollback.
+- OPEN PHYSICAL: no V0.23 game, input, Stop/relaunch, renderer correctness, or
+  FPS result exists yet. Run Sonic first, GTA V second, then controlled U1 and
+  RDR comparisons. A successful install, boot screen, menu, or compilation
+  stage is not acceptance.
