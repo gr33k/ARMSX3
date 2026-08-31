@@ -429,9 +429,14 @@ namespace vm
 				}
 
 				if (i < 100)
+				{
 					busy_wait(200);
-				else
-					std::this_thread::yield();
+				}
+				else if (const u64 bits = get_range_lock_bits(true))
+				{
+					// writer_lock notifies when this whole word reaches zero.
+					get_range_lock_bits(true).wait(bits, atomic_wait_timeout{50'000});
+				}
 
 				if (cpu_flag::wait - cpu.state)
 				{

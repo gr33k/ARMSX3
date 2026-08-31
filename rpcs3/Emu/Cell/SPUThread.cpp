@@ -584,12 +584,20 @@ namespace vm
 	{
 		if (range_lock)
 		{
-			g_range_lock_bits[1] &= ~(1ull << (range_lock - g_range_lock_set));
+			const u64 remaining = (g_range_lock_bits[1] &= ~(1ull << (range_lock - g_range_lock_set)));
 			range_lock->release(0);
+
+			// passive_lock waits for the entire exclusive-range word to clear.
+			if (!remaining)
+			{
+				g_range_lock_bits[1].notify_all();
+			}
+
 			return;
 		}
 
 		g_range_lock_bits[1].release(0);
+		g_range_lock_bits[1].notify_all();
 	}
 }
 
