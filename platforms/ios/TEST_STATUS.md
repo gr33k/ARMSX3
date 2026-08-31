@@ -2811,6 +2811,10 @@ cache-reuse gates.
   imports. Signature readback confirms `get-task-allow`, JIT, unsigned
   executable memory, Extended Virtual Addressing, and increased-memory-limit
   entitlements under the existing TrollStore bundle identity.
+- PASS TRANSFER: repository artifact, iCloud Drive copy, and NAS checkpoint at
+  `/Data/dockerprojects/armsx3-ios/checkpoints/ARMSX3-iOS-Core-Test-v0.31.ipa`
+  are byte-identical at the accepted size and SHA above. No rejected archive
+  was retained under the V0.31 filename.
 - OPEN PHYSICAL GATE: package correctness is proven; streamed GTA install is
   not. Install this exact SHA with TrollStore, launch BLES01807, and require the
   streamed-install mount line plus successful stats for the RPF files and
