@@ -2874,5 +2874,12 @@ cache-reuse gates.
   contract suite, diff check, and iOS 15 arm64 two-worker core build pass. It
   remains unpackaged and physically unqualified; accept only if the same scene
   loses the flashes/purple traces without regressing FPS, memory, or stability.
-- LIVE TRACE: `/private/tmp/armsx3-gta-v031-live.log`; capture remains active
-  until the physical test ends so the terminal outcome is not inferred.
+- COMPLETE TRACE: `/private/tmp/armsx3-gta-v031-live.log`; capture continued
+  through the terminal Stop result rather than inferring it from the UI.
+- PASS PHYSICAL / CONTROLLED STOP: the user requested Stop at 11:51:41 after
+  roughly 19 minutes without an app crash. The app cancelled the active NETISO
+  mount before asynchronous cleanup, reported process completion at 11:51:42,
+  stopped all emulator threads at 11:51:43, and released the guest session at
+  11:51:44. The stop path therefore completed in about three seconds under
+  severe memory pressure. The trace capture was closed only after this terminal
+  outcome; relaunch and unrelated-title stale-state gates remain open.
