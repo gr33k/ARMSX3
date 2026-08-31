@@ -48,6 +48,23 @@ U1 scene first on iPhone14,3/A15/6 GiB and then iPad14,3/M2/8 GiB. Record the
 effective budget printed at renderer creation and never compare different
 resolution, title profile, cache state, or gameplay segments.
 
+The M2 comparison currently has a hard provisioning prerequisite. A physical
+LLDB/debugserver run successfully prepared the complete 448-MiB Universal-JIT
+arena on the connected iPad14,3, but RPCS3 then aborted while reserving its
+24-GiB VM layout. The free personal-team profile does not grant Extended
+Virtual Addressing, and adding that entitlement only to the signature correctly
+fails profile validation. Do not weaken the VM reservation or treat the JIT
+bridge as gameplay proof. Resume the tablet comparison only after installed-app
+entitlement readback proves EVA is present and the process reaches core boot.
+
+The current iPhone observations also strengthen the renderer correctness gate:
+Uncharted 2 reaches its live-3D transition, produces severe green/white
+corruption, and then reports 0 FPS while audio continues. Uncharted 3 instead
+retains transient block and white-square artifacts without its former
+persistent green/pink cast. These are separate title failures and must not be
+collapsed into one cache or color workaround. God of War's repeatable 0-FPS
+transition after four 60-FPS logos is a third, post-boot runtime failure.
+
 Two symbolized v0.19 iOS resource reports also establish a CPU/JIT floor:
 
 - iOS measured 781 and 897 wakeups/sec against its reported 150/sec limit.

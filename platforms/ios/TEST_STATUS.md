@@ -1174,6 +1174,79 @@ V0.21 adaptive unified-memory recovery artifact:
   comparison. A package, install, menu, or pre-rendered video remains
   insufficient evidence.
 
+V0.21 iPad development-install and Universal-JIT qualification:
+
+- PASS DEVICE/INSTALL: the paired `iPad14,3` accepted a development-signed
+  V0.21 app with bundle ID `com.thec0de.armsx3ios`, version `0.21.0` build
+  `20`, native phone/tablet families, and full-screen presentation. The fresh
+  personal-team profile UUID is `28a2a126-fd5d-4c97-ab90-efc42f6a0df9` and
+  expires on 2026-09-07; this seven-day install is a benchmark lane, not a
+  permanent distribution result.
+- PASS PHYSICAL JIT BRIDGE: after mounting the iOS 26 developer disk image and
+  attaching LLDB to a start-stopped process, `lldb_universal_jit.py` handled
+  every `rpcs3_ios_jit26_protocol_call` page request through debugserver. The
+  M2 device selected and prepared 28 16-MiB chunks, or 448 MiB total, before
+  sealing the arena. This proves the Universal-JIT page protocol works on the
+  connected tablet; it does not prove that a game can boot.
+- BLOCKED BEFORE CORE BOOT / EVA: immediately after JIT preparation, static VM
+  initialization aborted while reserving RPCS3's 24-GiB direct-map layout
+  (8-GiB base/sudo, 12-GiB executable, and 4-GiB static regions). The personal
+  development team cannot provision Extended Virtual Addressing, and a manual
+  signature that added EVA plus increased-memory entitlements was correctly
+  rejected by installation with `0xe8008015` because the profile did not grant
+  them. Do not report an M2 performance comparison until installed-profile
+  readback contains EVA and the app passes this reservation.
+- DEVELOPMENT SUPPORT FILES: `Development.entitlements` records the two memory
+  capabilities required by an eligible development profile, but is not a
+  default free-team signing path. `lldb_universal_jit.py` is the repeatable
+  LLDB/debugserver bridge for the separate iOS 26 Universal-JIT requirement.
+
+V0.21 iPhone title observations reported during the 2026-08-30 test session:
+
+- FAIL PHYSICAL / GOD OF WAR POST-LOGO HANG: the title renders four startup
+  logos at approximately 60 FPS, then remains at 0 FPS with no visible
+  progress. A clean app restart reproduced the same transition, so this is a
+  deterministic post-boot title/runtime hang rather than a launcher-only
+  failure.
+- FAIL PHYSICAL / GRAN TURISMO 6: the title did not load. No device log was
+  available for a narrower classification because the USB hub exposed only
+  the iPad during this run.
+- FAIL PHYSICAL / UNCHARTED 2 LIVE-3D RSX STALL: its animated loading object
+  and prerendered sequence displayed correctly at approximately 60 FPS. At the
+  live-3D transition the frame became severely green/white-corrupted and then
+  reached 0 FPS while sound continued normally. This is evidence that the
+  guest/audio path remained alive while frame production or presentation
+  stalled; it is not a whole-process freeze and is not a performance pass.
+- FAIL PHYSICAL / UNCHARTED 3 CORRECTED CLASSIFICATION: the current build no
+  longer has the prior persistent green/pink cast, but transient block and
+  white-square corruption remains. Keep this distinct from Uncharted 2's
+  green/white live-3D failure.
+- TEST IN PROGRESS: LittleBigPlanet was launched as the next controlled title.
+  It passed its own game-data installer and intro video. Skipping the video
+  caused a long transition stall that eventually recovered without an app
+  restart. The first Sackboy/live-3D view initially reported approximately
+  `14-16 FPS` and continued at approximately `16 FPS` on average, while scene
+  content appeared to finish rendering slowly. This is a provisional
+  below-target result, not sustained-playability evidence; record longer-run
+  FPS, corruption, audio, input, and survival before final classification.
+- CONFIRMED TITLE-SPECIFIC / BEJEWELED 3: the off-center image is confined to
+  its pre-game loading wallpaper; other tested title artwork is centered. Do
+  not apply a global gameplay or loader viewport shift. Any correction must be
+  scoped to Bejeweled's loader composition.
+- EVIDENCE LIMIT: these phone observations are direct user/device-overlay
+  reports, but no matching iPhone process log was captured because the phone
+  did not enumerate through the USB hub. Preserve that distinction when using
+  them to choose a renderer candidate.
+- MODERN-IOS INSTALL PATH IN PROGRESS: official iloader 2.3.1 was checksum-
+  verified, Developer-ID signed, notarized, and run from a read-only image.
+  Its default `ani.sidestore.io` backend failed before Apple login with
+  `invalid Trust Key (-45003)`. Switching to the official
+  `https://ani.sidestore.app` mirror cleared that failure and reached Apple,
+  where the saved account credential was rejected with `-22406`. SideStore is
+  therefore not installed yet and no SideStore-issued ARMSX3 profile has been
+  read back. Account authentication must be completed in iloader before testing
+  whether Apple's portal grants EVA through this lane.
+
 V0.2 artifact:
 
 - Name: `ARMSX3-iOS-Core-Test-v0.2.ipa`

@@ -88,6 +88,43 @@ the Xcode app build uses one. The IPA is ad-hoc signed with explicit TrollStore
 JIT and memory entitlements, so normal App Store installation services are
 expected to reject it.
 
+## Modern iOS development lane
+
+Current iOS requires two independent capabilities before the core can boot:
+
+- The installed provisioning profile must grant Extended Virtual Addressing
+  and the increased-memory limit. RPCS3 reserves a 24-GiB virtual direct-map;
+  adding these keys only to a code signature is invalid and iOS rejects it.
+- The process must receive Universal-JIT page preparation. LocalDevVPN provides
+  transport for compatible sideload/JIT tools but does not grant EVA by itself.
+
+Always read back the entitlements from the installed profile. The connected
+iPad14,3 proved that a free personal-team Xcode profile can install the app but
+does not grant EVA. Do not work around the resulting VM reservation failure by
+returning an unreserved address or weakening fail-closed startup.
+
+For an eligible development profile, launch the app stopped, attach LLDB, and
+install the repository bridge before continuing:
+
+```sh
+xcrun devicectl device process launch \
+  --device <CORE_DEVICE_ID> --start-stopped com.thec0de.armsx3ios
+
+xcrun lldb <path-to-app>/ARMSX3iOS
+```
+
+```text
+(lldb) device select <CORE_DEVICE_ID>
+(lldb) device process attach --name ARMSX3iOS
+(lldb) command script import platforms/ios/scripts/lldb_universal_jit.py
+(lldb) armsx3-jit-install
+(lldb) continue
+```
+
+Keep LLDB attached after the arena seals. On the physical M2 iPad, this path
+prepared all 28 16-MiB regions (448 MiB) before startup reached the separate
+EVA gate. A successful page-preparation run is not game or core-boot proof.
+
 ## Acceptance gates
 
 An IPA, menu, simulator, or successful static build is not PS3 feasibility
