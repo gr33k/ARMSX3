@@ -2983,11 +2983,18 @@ cache-reuse gates.
   `IOS_PROFILE effective` telemetry fields, including `wcb` and
   `shader_color_remap`.
 - NATIVE-METAL PARALLEL GATE: the isolated SPIRV-Cross dependency/provenance
-  contract and iOS Metal shader-compiler smoke build pass. Actual vertex and
-  fragment SPIR-V translated to MSL and compiled through Apple's Metal toolchain
-  with hashes `5d57b51aa9249429ac76ce9e14a65f698eada20781ab7da9c7f13716bbcb459e`
+  contract and iOS 15 arm64 build pass with warnings as errors for the shader
+  compiler, native shader/pipeline cache, command runtime, and bounded upload
+  ring. Shader/pipeline key tests pass with hash
+  `1f2f18f1ac03a9a9e0b7607d96b272783d378160ea3dde7f22f1abc3b75243e9`.
+  Actual vertex and fragment SPIR-V translated to MSL and compiled through
+  Apple's Metal toolchain with hashes
+  `5d57b51aa9249429ac76ce9e14a65f698eada20781ab7da9c7f13716bbcb459e`
   and `0e75b103427a30f2e53e5f45261d64e9e2eb8d87d8f2832bab20334122bdcb78`.
-  This proves the shader-translation lane only, not RSX command encoding,
+  The runtime retains GPL-3.0-or-later ARMSX2 provenance while most RPCS3 code
+  is GPL-2.0-only, and SPIRV-Cross is Apache-2.0; neither may be linked into a
+  distributed binary until the documented license boundaries are resolved or
+  replaced compatibly. These gates still do not prove RSX command encoding,
   resource synchronization, presentation, or native-Metal gameplay.
 - ACCEPTED PACKAGE: `ARMSX3-iOS-Core-Test-v0.33.ipa` is `31,874,222` bytes,
   source revision `afdb39162afc96a4f038b306fb04e837b5b012c0`, core ABI `34`,
