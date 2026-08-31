@@ -2741,3 +2741,44 @@ cache-reuse gates.
   while capturing the selector marker and first outcome. Accept only progress
   beyond the corruption dialog; then perform Stop/relaunch and an unrelated
   title to reject stale session state.
+
+### V0.30 physical GTA boot result and V0.31 streamed-install candidate (2026-08-31)
+
+- PASS PHYSICAL / ORIGINAL EXECUTABLE: the exact V0.30 package selected
+  `EBOOT.BIN.ORIG`; its PPU cache identity includes `EBOOT.BIN.ORIG`, and about
+  176 original-executable modules compiled before boot. GTA V advanced beyond
+  the repeatable V0.28/V0.29 `HDD boot game is corrupted` termination. V0.30
+  therefore closes that wrapper/executable blocker, but it is not a gameplay
+  or performance pass.
+- NEW PHYSICAL BLOCKER: GTA created local metadata under
+  `/dev_hdd0/game/BLES01807_install`, then failed to find `part0.rpf` through
+  `part3.rpf` and `common.rpf` in its local `USRDIR`. It subsequently displayed
+  `ERROR: Not enough available space. The application will be terminated.` The
+  complete live trace is `/private/tmp/armsx3-gta-v030-live.log`.
+- SOURCE SIZE: the authoritative streamed GTA `USRDIR` contains `common.rpf`
+  plus `part0.rpf` through `part4.rpf`, totaling 8,898,562,048 bytes. Duplicating
+  that immutable set into the app container is unnecessary and exceeds the
+  capacity reported through the current device service.
+- CAPACITY DISCREPANCY: iPhone14,3 iOS 15.3 Settings reports 161.9 GB used of
+  256 GB, while the same connected device's lockdown disk-usage domain reports
+  3,169,738,752 bytes immediately data-available and 5,629,984,768 bytes total
+  data-available. The core subtracts a 1-GiB safety reserve from host `statfs`;
+  it does not impose a fixed 5-GiB app quota. V0.31 adds in-sandbox telemetry
+  for filesystem-free, Foundation volume-available, important-usage, and
+  opportunistic-usage capacity. Do not globally advertise fictitious capacity
+  until this physical readback proves what the sandbox can actually reclaim.
+- V0.31 CANDIDATE: only exact title `BLES01807`, from a live nonzero-generation
+  NETISO session with a canonical virtual ISO/NETISO source, may mount
+  `/dev_hdd0/game/BLES01807_install/USRDIR` onto the streamed
+  `/dev_bdvd/PS3_GAME/USRDIR`. Local metadata remains local; the 8.90-GB RPF set
+  stays remote. Other titles, local launches, stale/zero generations, and
+  non-virtual sources fail closed.
+- CLEANUP/EMUHUB CONTRACT: streamed aliases have independent generation-owned
+  state and are removed on Stop, terminal child failure, shutdown, and failed
+  launch cleanup before the NETISO device is cancelled. EmuHub's future ISO
+  service should preserve this split-storage/VFS contract while replacing only
+  the byte-serving backend; it must not force full-game copies into iOS storage.
+- STATIC GATE: the expanded exact-title policy tests and complete bounded
+  `rpcs3/ios/tests/run-contract-tests.sh` suite pass, including NETISO
+  cancellation; `git diff --check` passes. Build/package and physical progress
+  beyond the space dialog remain open.

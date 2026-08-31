@@ -57,6 +57,27 @@ int main()
 	static_assert(!should_mount_exitspawn_disc_alias(
 		"BLES01807", true, true, 42,
 		"/private/var/mobile/not-a-virtual-disc/PS3_GAME"));
+	static_assert(gta_v_streamed_install_prefix ==
+		"/dev_hdd0/game/BLES01807_install/USRDIR");
+	static_assert(disc_usrdir_prefix == "/dev_bdvd/PS3_GAME/USRDIR");
+	static_assert(should_mount_streamed_install_alias(
+		"BLES01807", true, 42,
+		"/vfsv0_virtual_netiso_overlay_fs_dev/***PS3***/GAMES/BLES01807-[Grand Theft Auto V]/PS3_GAME/USRDIR"));
+	static_assert(should_mount_streamed_install_alias(
+		"BLES01807", true, 42,
+		"/vfsv0_virtual_iso_overlay_fs_dev/PS3_GAME/USRDIR"));
+	static_assert(!should_mount_streamed_install_alias(
+		"BLUS31156", true, 42,
+		"/vfsv0_virtual_netiso_overlay_fs_dev/PS3_GAME/USRDIR"));
+	static_assert(!should_mount_streamed_install_alias(
+		"BLES01807", false, 42,
+		"/vfsv0_virtual_netiso_overlay_fs_dev/PS3_GAME/USRDIR"));
+	static_assert(!should_mount_streamed_install_alias(
+		"BLES01807", true, 0,
+		"/vfsv0_virtual_netiso_overlay_fs_dev/PS3_GAME/USRDIR"));
+	static_assert(!should_mount_streamed_install_alias(
+		"BLES01807", true, 42,
+		"/private/var/mobile/not-a-virtual-disc/PS3_GAME/USRDIR"));
 
 	assert(redirect_exitspawn_disc_path("/dev_hdd0/game/PS3_GAME") ==
 		"/dev_bdvd/PS3_GAME");

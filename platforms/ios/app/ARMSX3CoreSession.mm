@@ -19,6 +19,31 @@ NSString* last_core_error(rpcs3_ios_status status)
     return detail.length ? detail : [NSString stringWithFormat:@"RPCS3 status %d", status];
 }
 
+NSString* storage_capacity_summary(NSURL* url)
+{
+    NSFileManager* manager = NSFileManager.defaultManager;
+    NSDictionary<NSFileAttributeKey, id>* attributes =
+        [manager attributesOfFileSystemForPath:url.path error:nil];
+    NSNumber* volume_available = nil;
+    NSNumber* important_available = nil;
+    NSNumber* opportunistic_available = nil;
+    [url getResourceValue:&volume_available forKey:NSURLVolumeAvailableCapacityKey error:nil];
+    [url getResourceValue:&important_available
+                   forKey:NSURLVolumeAvailableCapacityForImportantUsageKey
+                     error:nil];
+    [url getResourceValue:&opportunistic_available
+                   forKey:NSURLVolumeAvailableCapacityForOpportunisticUsageKey
+                     error:nil];
+
+    return [NSString stringWithFormat:
+        @"Storage capacity bytes: filesystem-free=%llu total=%llu volume-available=%llu important-available=%llu opportunistic-available=%llu",
+        [attributes[NSFileSystemFreeSize] unsignedLongLongValue],
+        [attributes[NSFileSystemSize] unsignedLongLongValue],
+        volume_available.unsignedLongLongValue,
+        important_available.unsignedLongLongValue,
+        opportunistic_available.unsignedLongLongValue];
+}
+
 void core_main_thread_callback(void*, rpcs3_ios_main_thread_task task, void* task_context)
 {
     if (!task)
@@ -281,6 +306,8 @@ static void netiso_game_enumeration_callback(void* user_context, const rpcs3_ios
                 [self finish:completion succeeded:NO message:directory_error.localizedDescription ?: @"Cannot create RPCS3 sandbox directories"];
                 return;
             }
+
+            [self emit:storage_capacity_summary(support)];
 
             rpcs3_ios_config config{};
             config.abi_version = RPCS3_IOS_ABI_VERSION;

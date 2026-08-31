@@ -125,6 +125,7 @@ rpcs3::ios::guest_session_phase g_guest_session_phase =
 	rpcs3::ios::guest_session_phase::idle;
 bool g_guest_session_is_netiso = false;
 rpcs3::ios::exitspawn_disc_alias_state g_exitspawn_disc_alias;
+rpcs3::ios::exitspawn_disc_alias_state g_streamed_install_alias;
 u32 g_guest_boot_operations = 0;
 rpcs3::ios::display_surface_registry g_display_surface;
 std::shared_ptr<rpcn::rpcn_client> g_rpcn_client;
@@ -374,6 +375,84 @@ bool clear_exitspawn_disc_alias(bool unmount) noexcept
 	return was_active;
 }
 
+bool clear_streamed_install_alias(bool unmount) noexcept
+{
+	bool was_active = false;
+	{
+		std::lock_guard lock(g_guest_session_mutex);
+		was_active = g_streamed_install_alias.clear();
+	}
+	if (was_active && unmount)
+	{
+		return vfs::unmount(rpcs3::ios::gta_v_streamed_install_prefix);
+	}
+	return was_active;
+}
+
+void clear_guest_session_aliases(bool unmount) noexcept
+{
+	// Unmount the deepest path first so a parent compatibility alias cannot
+	// recursively discard its state before the nested mount is released.
+	clear_streamed_install_alias(unmount);
+	clear_exitspawn_disc_alias(unmount);
+}
+
+void mount_streamed_install_alias_for_ready_guest() noexcept
+{
+	u64 generation = 0;
+	bool is_netiso = false;
+	{
+		std::lock_guard lock(g_guest_session_mutex);
+		generation = g_guest_session_generation;
+		is_netiso = g_guest_session_is_netiso && rpcs3::ios::can_continue_guest_session(
+			g_guest_session_claimed.load(std::memory_order_acquire),
+			g_guest_session_phase, generation, generation);
+		if (g_streamed_install_alias.generation == generation &&
+			g_streamed_install_alias.active())
+		{
+			return;
+		}
+	}
+
+	try
+	{
+		const std::string disc_usrdir_path = vfs::get(rpcs3::ios::disc_usrdir_prefix);
+		if (!rpcs3::ios::should_mount_streamed_install_alias(
+			Emu.GetTitleID(), is_netiso, generation, disc_usrdir_path))
+		{
+			return;
+		}
+		if (!vfs::mount(rpcs3::ios::gta_v_streamed_install_prefix, disc_usrdir_path))
+		{
+			emit_log(1, "Failed to mount the GTA V NETISO streamed-install alias");
+			return;
+		}
+
+		bool retained = false;
+		{
+			std::lock_guard lock(g_guest_session_mutex);
+			retained = g_guest_session_is_netiso && rpcs3::ios::can_continue_guest_session(
+				g_guest_session_claimed.load(std::memory_order_acquire),
+				g_guest_session_phase, g_guest_session_generation, generation);
+			if (retained)
+			{
+				g_streamed_install_alias.activate(generation);
+			}
+		}
+		if (!retained)
+		{
+			vfs::unmount(rpcs3::ios::gta_v_streamed_install_prefix);
+			return;
+		}
+		emit_log(4,
+			"Mounted GTA V NETISO streamed install /dev_hdd0/game/BLES01807_install/USRDIR -> /dev_bdvd/PS3_GAME/USRDIR");
+	}
+	catch (...)
+	{
+		emit_log(1, "Failed to prepare the GTA V NETISO streamed-install alias");
+	}
+}
+
 void mount_exitspawn_disc_alias_for_ready_child() noexcept
 {
 	u64 generation = 0;
@@ -529,6 +608,7 @@ bool finish_guest_session_stop(u64 generation) noexcept
 		g_guest_session_phase);
 	g_guest_session_is_netiso = false;
 	g_exitspawn_disc_alias.clear();
+	g_streamed_install_alias.clear();
 	return true;
 }
 
@@ -549,7 +629,7 @@ void run_guest_session_stop_on_main_thread(u64 generation) noexcept
 		emit_log(4, "Guest cleanup is waiting for the in-flight boot operation");
 		return;
 	}
-	clear_exitspawn_disc_alias(true);
+	clear_guest_session_aliases(true);
 
 	// This is serialized with Emulator::Kill's callback exchange by the
 	// frontend main-thread queue. Never mutate after_kill_callback elsewhere.
@@ -1292,7 +1372,11 @@ EmuCallbacks make_callbacks()
 	callbacks.on_pause = []() {};
 	callbacks.on_resume = []() {};
 	callbacks.on_stop = []() { rpcs3::ios::handle_emulation_stopped(); };
-	callbacks.on_ready = []() { mount_exitspawn_disc_alias_for_ready_child(); };
+	callbacks.on_ready = []()
+	{
+		mount_streamed_install_alias_for_ready_guest();
+		mount_exitspawn_disc_alias_for_ready_child();
+	};
 	callbacks.on_missing_fw = []() { emit_log(5, "PlayStation 3 firmware is not installed yet"); };
 	callbacks.on_emulation_stop_no_response = [](std::shared_ptr<atomic_t<bool>>, int)
 	{
@@ -1686,7 +1770,7 @@ void handle_continuous_boot_failure(std::uint64_t expected_generation) noexcept
 	{
 		return;
 	}
-	clear_exitspawn_disc_alias(true);
+	clear_guest_session_aliases(true);
 	const bool cancelled_netiso = cancel_active_netiso_mount();
 	const bool scheduled = schedule_guest_session_stop(request.generation);
 
@@ -1731,7 +1815,7 @@ void handle_emulation_stopped() noexcept
 	Emu.DeactivateBigPictureMode();
 	Emu.SetContinuousMode(false);
 	Emu.SetForceBoot(false);
-	clear_exitspawn_disc_alias(true);
+	clear_guest_session_aliases(true);
 
 	// Keep ownership closed while cancelling the old mount, but never nest an
 	// emulator or NETISO operation inside the guest-session mutex.
@@ -5350,7 +5434,7 @@ extern "C" rpcs3_ios_status rpcs3_ios_stop_emulation(void) noexcept
 			set_error("Unable to reserve guest session cleanup");
 			return RPCS3_IOS_STOP_FAILED;
 		}
-		clear_exitspawn_disc_alias(true);
+		clear_guest_session_aliases(true);
 		const bool cancelled_netiso = cancel_active_netiso_mount();
 		if (!schedule_guest_session_stop(request.generation))
 		{
@@ -5398,7 +5482,7 @@ extern "C" rpcs3_ios_status rpcs3_ios_shutdown(void) noexcept
 	}
 	g_accept_display_surfaces = false;
 	g_accept_pad_state = false;
-	clear_exitspawn_disc_alias(true);
+	clear_guest_session_aliases(true);
 	{
 		std::lock_guard session_lock(g_guest_session_mutex);
 		g_guest_session_claimed.store(false, std::memory_order_release);

@@ -42,6 +42,15 @@ content from Files or enter a NETISO host and port after installing the app.
 through NETISO and do not copy the full game. No server address is compiled into
 the binary.
 
+Streamed titles use a split-storage contract that EmuHub's own ISO service must
+preserve: immutable disc/game payloads are read through the active remote
+virtual device, while firmware, caches, patches, saves, trophies, and small
+writable title metadata remain in the app container. Title-specific guest-path
+compatibility mounts must be read-only in effect, owned by the active session
+generation, fail closed for every other title/source, and be removed before the
+remote device is cancelled. This contract is independent of whether the bytes
+come from standard `ps3netsrv` or a future EmuHub streaming backend.
+
 Only one externally launched guest session may be active. RPCS3 can replace a
 title's boot executable with a child SELF without ending that session, so the
 app retains ownership across those handoffs and rejects another title until

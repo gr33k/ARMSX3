@@ -9,6 +9,9 @@ namespace rpcs3::ios
 inline constexpr std::string_view exitspawn_disc_legacy_prefix = "/dev_hdd0/game/PS3_GAME";
 inline constexpr std::string_view exitspawn_disc_native_prefix = "/dev_bdvd/PS3_GAME";
 inline constexpr std::string_view gta_v_disc_title_id = "BLES01807";
+inline constexpr std::string_view gta_v_streamed_install_prefix =
+	"/dev_hdd0/game/BLES01807_install/USRDIR";
+inline constexpr std::string_view disc_usrdir_prefix = "/dev_bdvd/PS3_GAME/USRDIR";
 inline constexpr std::string_view disc_eboot_suffix = "/USRDIR/EBOOT.BIN";
 inline constexpr std::string_view preserved_disc_eboot_suffix = "/USRDIR/EBOOT.BIN.ORIG";
 inline constexpr std::string_view virtual_iso_device_prefix = "/vfsv0_virtual_iso_overlay_fs_dev";
@@ -46,6 +49,16 @@ constexpr bool should_mount_exitspawn_disc_alias(
 	return title_id == gta_v_disc_title_id && is_child_process &&
 		is_netiso_session && session_generation != 0 &&
 		is_virtual_disc_source(disc_game_path);
+}
+
+constexpr bool should_mount_streamed_install_alias(
+	std::string_view title_id,
+	bool is_netiso_session,
+	std::uint64_t session_generation,
+	std::string_view disc_usrdir_path) noexcept
+{
+	return title_id == gta_v_disc_title_id && is_netiso_session &&
+		session_generation != 0 && is_virtual_disc_source(disc_usrdir_path);
 }
 
 struct exitspawn_disc_alias_state
