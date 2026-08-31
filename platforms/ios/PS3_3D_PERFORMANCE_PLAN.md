@@ -187,6 +187,28 @@ latency, stalls, or renderer regressions. If Metal execution remains dominant,
 continue the clean-room direct-Metal RSX phases above rather than stacking more
 unmeasured scheduling tweaks.
 
+### Command-buffer ring-lifetime candidate
+
+Post-V0.24 commit `1fd3c9401` separates upload-ring lifetime from presentation:
+a tagged primary Vulkan command buffer captures managed ring boundaries, and a
+proven successful fence completion can return those ranges even when a title
+does not present during a long load. Monotonic snapshot IDs reject older
+completion observations, while process-unique heap generations reject snapshots
+captured before grow or renderer recreation. Timeout paths never authorize
+reclamation.
+
+The candidate deliberately adds no new fence polling and does not restore the
+driver-sensitive zero-timeout polling experiment. A no-present workload can
+therefore retain completed ranges until an existing observation or the
+512-command-buffer reuse fallback, but it must stop growing indefinitely. Use
+the new named heap-growth lines plus process memory/headroom to decide whether a
+future low-frequency retirement queue is justified on Apple/MoltenVK.
+
+This is a transient-memory lifetime repair, not native Metal, a shader fix, or
+an FPS claim. Physical acceptance requires the Sonic Generations no-present
+load and, if available, the measured Ratchet index-ring load, followed by the
+same U1/RDR gameplay and U3 correctness gates. Preserve V0.24 as rollback.
+
 ## Required evidence
 
 Every candidate records source commit, IPA SHA-256, bundle version/build,

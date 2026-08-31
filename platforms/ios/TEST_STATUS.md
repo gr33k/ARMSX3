@@ -1878,3 +1878,59 @@ cache-reuse gates.
   artifacts, geometry, FPS, audio, and crash behavior. These CPU fixes may
   repair bad data feeding RSX, but they are not presumed to fix renderer bugs;
   accept only title-specific observed changes and preserve Vulkan rollback.
+
+## Vulkan command-buffer ring retirement candidate (post-V0.24)
+
+- SOURCE: isolated implementation commit `1fd3c9401`. It was reconstructed
+  from the measured problem statement in dangling experiment `d57fc974b`, then
+  hardened rather than cherry-picked. The experiment's split ticket/map state,
+  missing blocking-wait retirement, and lack of heap-growth epochs were not
+  accepted as-is.
+- ROOT CAUSE: managed Vulkan upload rings previously advanced their GET pointers
+  only when a presented frame retired. A title that submits substantial RSX
+  work during a long no-present load can therefore keep allocating without
+  returning completed command-buffer ranges. The measured experiment saw a
+  Sonic '06 attrib ring grow from 64 MiB to 576 MiB over a 16-second load and a
+  Ratchet & Clank index ring grow from 16 MiB to 256 MiB in 290 ms despite only
+  kilobyte-size requests. Those are donor measurements, not current iPhone
+  results.
+- FIX READY: each tagged primary command buffer captures all managed ring GET
+  boundaries immediately before submission. A successful fence poll or
+  blocking wait retires that snapshot, so no-present work is eventually
+  reclaimed when its command-buffer slot is observed or reused. Normal frame
+  retirement remains as a second path, and rare heap growth now logs the heap
+  name, old/new size, and request size for physical diagnosis.
+- ORDERING SAFETY: snapshots carry one manager-serialized monotonic ID. A
+  completion older than the most recently applied snapshot is ignored, so an
+  out-of-order observation cannot move a wrapped ring backward over reused
+  memory. Capture and restore share one mutex; the reusable contiguous entry
+  vector avoids per-heap hash-node allocation on every submit.
+- GROWTH/TEARDOWN SAFETY: every heap create or grow receives a process-unique
+  generation. Restore requires both a currently registered pointer and matching
+  generation, preventing an old fence from modifying a re-created or newly
+  grown allocator. Snapshot IDs intentionally remain monotonic across renderer
+  reset so late old completions stay stale.
+- TIMEOUT SAFETY: only `VK_SUCCESS` authorizes command or frame reclamation. A
+  timed-out command snapshot is discarded without moving GET, frame cleanup
+  skips its snapshot, and the context clears its ticket before reuse. The
+  existing broader device-loss cleanup behavior is unchanged.
+- POLLING BOUNDARY: this commit adds no fence query and does not switch
+  `vkGetFenceStatus` to the prior zero-timeout experiment. It attaches reclaim
+  to observations the renderer already performs. Consequently a no-present
+  load may retain completed ranges until a command-buffer slot is revisited;
+  reducing that latency requires device telemetry and cannot be traded for an
+  unmeasured mobile-driver synchronization stall.
+- PASS STATIC/BUILD: `git diff --check`, the complete bounded iOS contract
+  runner including NETISO cancellation, and the two-worker arm64 iOS 15 core
+  build pass. The resulting unsigned core is `77,495,184` bytes, SHA-256
+  `b4e8c69ed69527dd87e1080f24d39f001e05210f3ae6929af27ce3e3b911a4c4`,
+  UUID `96EC3E90-7DDA-31C6-B0BC-E48330BF4BCE`.
+- REQUIRED PHYSICAL: first cold-launch Sonic Generations and record every named
+  heap-growth line, process footprint/headroom, whether PPU/SPU progress exits,
+  and whether a renderable frame appears. If available, repeat the Ratchet load
+  that exercised the index ring. Then run the exact warm U1 and RDR gameplay
+  segments used for V0.20, plus U3 visual checks and sequential Stop/relaunch.
+  Acceptance requires bounded repeated growth, no allocator fatal, no new
+  geometry/color corruption, no worse FPS/audio/input, and clean teardown. A
+  successful build or lower theoretical lifetime is not a gameplay or
+  performance claim.
