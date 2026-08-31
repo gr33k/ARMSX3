@@ -35,13 +35,23 @@ Vulkan or CPU rendering fallback.
   and therefore must not be inferred from successful target allocation.
 - Shader/resource binding and every RSX draw still fail closed. The backend
   factory is deliberately unregistered.
+- The existing RSX GLSL decompilers now accept explicit device-capability
+  records. Their normal Vulkan entry points preserve the prior live Vulkan
+  queries, while `MTLRSXShaderProgram` supplies deterministic Metal choices,
+  compiles the resulting GLSL to Vulkan-semantics SPIR-V without creating a
+  Vulkan object, and preserves vertex/fragment constant metadata.
+- `MTLRSXShaderProgram` converts every decompiler descriptor into explicit,
+  collision-checked Metal buffer/texture/sampler slots while reserving the
+  translator's auxiliary buffer indices. Unsupported resource classes or an
+  exhausted binding namespace fail closed before MSL translation.
 - Memory coherency, tiled-resource invalidation, scaled blits, host labels,
   semaphores, and occlusion queries deliberately fail closed until implemented.
 
 ## Required new modules before selection
 
-1. An MSL shader translator and persistent pipeline cache with RSX precision,
-   swizzle, specialization, depth/stencil, blend, and provoking-vertex parity.
+1. Connect the compile-checked RSX-to-SPIR-V adapter to the existing MSL shader
+   translator and persistent pipeline cache, then add RSX precision, swizzle,
+   specialization, depth/stencil, blend, and provoking-vertex parity.
 2. Unified-memory vertex/index/constants upload rings with bounded in-flight
    retirement and indexed, inline, instanced, restart, and multidraw handling.
 3. Complete the current guest color/depth target cache with sampled texture
@@ -55,8 +65,9 @@ Vulkan or CPU rendering fallback.
 ## Existing files the integration lane must modify
 
 - `rpcs3/Emu/CMakeLists.txt`: compile-only integration is complete for the iOS
-  frontend with ARC for both `MTLGSRender.mm` and `MTLGuestBackend.mm`; do not
-  remove the Vulkan sources.
+  frontend with ARC for `MTLGSRender.mm` and `MTLGuestBackend.mm`, plus the
+  backend-independent RSX-to-SPIR-V adapter and shader metadata validation; do
+  not remove the Vulkan sources.
 - `rpcs3/Emu/system_config_types.h`: add a distinct native-Metal renderer enum.
 - `rpcs3/Emu/system_config_types.cpp`: add its stable configuration string.
 - `rpcs3/ios/RPCS3IOS.cpp`: include the renderer, register a complete

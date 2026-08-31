@@ -10,6 +10,14 @@ namespace vk
 	class shader_interpreter;
 }
 
+struct VKFragmentDecompilerDeviceProperties
+{
+	bool has_native_half_support = false;
+	bool emulate_depth_compare = false;
+	bool has_low_precision_rounding = false;
+	bool disable_early_discard = true;
+};
+
 class VKFragmentDecompilerThread : public FragmentProgramDecompiler
 {
 	friend class vk::shader_interpreter;
@@ -19,17 +27,19 @@ class VKFragmentDecompilerThread : public FragmentProgramDecompiler
 	std::vector<vk::glsl::program_input> inputs;
 	class VKFragmentProgram *vk_prog;
 	glsl::shader_properties m_shader_props{};
+	bool m_disable_early_discard = true;
 
 	void prepareBindingTable();
 
 public:
-	VKFragmentDecompilerThread(std::string& shader, ParamArray& parr, const RSXFragmentProgram &prog, u32& size, class VKFragmentProgram& dst)
-		: FragmentProgramDecompiler(prog, size)
-		, m_shader(shader)
-		, m_parrDummy(parr)
-		, vk_prog(&dst)
-	{
-	}
+	VKFragmentDecompilerThread(std::string& shader, ParamArray& parr, const RSXFragmentProgram &prog, u32& size, class VKFragmentProgram& dst);
+	VKFragmentDecompilerThread(
+		std::string& shader,
+		ParamArray& parr,
+		const RSXFragmentProgram& prog,
+		u32& size,
+		class VKFragmentProgram& dst,
+		const VKFragmentDecompilerDeviceProperties& device_properties);
 
 	void Task();
 	const std::vector<vk::glsl::program_input>& get_inputs() { return inputs; }
@@ -85,6 +95,7 @@ public:
 	 * @param prog RSXShaderProgram specifying the location and size of the shader in memory
 	 */
 	void Decompile(const RSXFragmentProgram& prog);
+	void Decompile(const RSXFragmentProgram& prog, const VKFragmentDecompilerDeviceProperties& device_properties);
 
 	/** Compile the decompiled fragment shader into a format we can use with OpenGL. */
 	void Compile();

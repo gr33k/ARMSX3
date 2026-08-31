@@ -6,6 +6,43 @@
 #include "vkutils/device.h"
 #include "../Program/GLSLCommon.h"
 
+namespace
+{
+	VKVertexDecompilerDeviceProperties current_vertex_device_properties()
+	{
+		const bool is_nvidia = vk::is_NVIDIA(vk::get_driver_vendor());
+		return {
+			.emulate_conditional_rendering = vk::emulate_conditional_rendering(),
+			.emulate_depth_clip_only = vk::g_render_device->get_shader_types_support().allow_float64,
+			.low_precision_tests = is_nvidia,
+			.require_explicit_invariance = is_nvidia && g_cfg.video.shader_precision != gpu_preset_level::low,
+		};
+	}
+}
+
+VKVertexDecompilerThread::VKVertexDecompilerThread(
+	const RSXVertexProgram& prog,
+	std::string& shader,
+	ParamArray& parameters,
+	VKVertexProgram& dst)
+	: VKVertexDecompilerThread(prog, shader, parameters, dst, current_vertex_device_properties())
+{
+}
+
+VKVertexDecompilerThread::VKVertexDecompilerThread(
+	const RSXVertexProgram& prog,
+	std::string& shader,
+	ParamArray&,
+	VKVertexProgram& dst,
+	const VKVertexDecompilerDeviceProperties& device_properties)
+	: VertexProgramDecompiler(prog)
+	, m_shader(shader)
+	, vk_prog(&dst)
+	, m_device_props(device_properties)
+	, rsx_vertex_program(prog)
+{
+}
+
 std::string VKVertexDecompilerThread::getFloatTypeName(usz elementCount)
 {
 	return glsl::getFloatTypeNameImpl(elementCount);
@@ -341,9 +378,9 @@ void VKVertexDecompilerThread::insertMainStart(std::stringstream& OS)
 	properties2.require_lit_emulation = properties.has_lit_op;
 	properties2.require_clip_plane_functions = true;
 	properties2.emulate_zclip_transform = true;
-	properties2.emulate_depth_clip_only = vk::g_render_device->get_shader_types_support().allow_float64;
-	properties2.low_precision_tests = vk::is_NVIDIA(vk::get_driver_vendor());
-	properties2.require_explicit_invariance = (vk::is_NVIDIA(vk::get_driver_vendor()) && g_cfg.video.shader_precision != gpu_preset_level::low);
+	properties2.emulate_depth_clip_only = m_device_props.emulate_depth_clip_only;
+	properties2.low_precision_tests = m_device_props.low_precision_tests;
+	properties2.require_explicit_invariance = m_device_props.require_explicit_invariance;
 	properties2.require_instanced_render = !!(m_prog.ctrl & RSX_SHADER_CONTROL_INSTANCED_CONSTANTS);
 
 	glsl::insert_glsl_legacy_function(OS, properties2);
@@ -483,7 +520,6 @@ void VKVertexDecompilerThread::insertMainEnd(std::stringstream& OS)
 
 void VKVertexDecompilerThread::Task()
 {
-	m_device_props.emulate_conditional_rendering = vk::emulate_conditional_rendering();
 	m_shader = Decompile();
 	vk_prog->SetInputs(inputs);
 }
@@ -497,10 +533,17 @@ VKVertexProgram::~VKVertexProgram()
 
 void VKVertexProgram::Decompile(const RSXVertexProgram& prog)
 {
+	Decompile(prog, current_vertex_device_properties());
+}
+
+void VKVertexProgram::Decompile(
+	const RSXVertexProgram& prog,
+	const VKVertexDecompilerDeviceProperties& device_properties)
+{
 	use_last_provoking_vertex = !!(prog.ctrl & RSX_SHADER_CONTROL_FLAT_SHADING);
 
 	std::string source;
-	VKVertexDecompilerThread decompiler(prog, source, parr, *this);
+	VKVertexDecompilerThread decompiler(prog, source, parr, *this, device_properties);
 	decompiler.Task();
 
 	has_indexed_constants = decompiler.properties.has_indexed_constants;

@@ -6,6 +6,50 @@
 #include "Emu/system_config.h"
 #include "../Program/GLSLCommon.h"
 
+namespace
+{
+	VKFragmentDecompilerDeviceProperties current_fragment_device_properties()
+	{
+		const auto* device = vk::get_current_renderer();
+		const bool is_nvidia = vk::is_NVIDIA(vk::get_driver_vendor());
+		return {
+			.has_native_half_support = g_cfg.video.shader_precision == gpu_preset_level::low &&
+				device->get_shader_types_support().allow_float16,
+			.emulate_depth_compare = !device->get_formats_support().d24_unorm_s8,
+			.has_low_precision_rounding = is_nvidia,
+			.disable_early_discard = !is_nvidia,
+		};
+	}
+}
+
+VKFragmentDecompilerThread::VKFragmentDecompilerThread(
+	std::string& shader,
+	ParamArray& parameters,
+	const RSXFragmentProgram& prog,
+	u32& size,
+	VKFragmentProgram& dst)
+	: VKFragmentDecompilerThread(shader, parameters, prog, size, dst, current_fragment_device_properties())
+{
+}
+
+VKFragmentDecompilerThread::VKFragmentDecompilerThread(
+	std::string& shader,
+	ParamArray& parr,
+	const RSXFragmentProgram& prog,
+	u32& size,
+	VKFragmentProgram& dst,
+	const VKFragmentDecompilerDeviceProperties& device_properties)
+	: FragmentProgramDecompiler(prog, size)
+	, m_shader(shader)
+	, m_parrDummy(parr)
+	, vk_prog(&dst)
+	, m_disable_early_discard(device_properties.disable_early_discard)
+{
+	device_props.has_native_half_support = device_properties.has_native_half_support;
+	device_props.emulate_depth_compare = device_properties.emulate_depth_compare;
+	device_props.has_low_precision_rounding = device_properties.has_low_precision_rounding;
+}
+
 std::string VKFragmentDecompilerThread::getFloatTypeName(usz elementCount)
 {
 	return glsl::getFloatTypeNameImpl(elementCount);
@@ -347,7 +391,7 @@ void VKFragmentDecompilerThread::insertGlobalFunctions(std::stringstream &OS)
 	m_shader_props.emulate_shadow_compare = device_props.emulate_depth_compare;
 
 	m_shader_props.low_precision_tests = device_props.has_low_precision_rounding && !(m_prog.ctrl & RSX_SHADER_CONTROL_ATTRIBUTE_INTERPOLATION);
-	m_shader_props.disable_early_discard = !vk::is_NVIDIA(vk::get_driver_vendor());
+	m_shader_props.disable_early_discard = m_disable_early_discard;
 	m_shader_props.supports_native_fp16 = device_props.has_native_half_support;
 
 	m_shader_props.ROP_output_rounding = (g_cfg.video.shader_precision != gpu_preset_level::low) && !!(m_prog.ctrl & RSX_SHADER_CONTROL_8BIT_FRAMEBUFFER);
@@ -550,18 +594,16 @@ VKFragmentProgram::~VKFragmentProgram()
 
 void VKFragmentProgram::Decompile(const RSXFragmentProgram& prog)
 {
+	Decompile(prog, current_fragment_device_properties());
+}
+
+void VKFragmentProgram::Decompile(
+	const RSXFragmentProgram& prog,
+	const VKFragmentDecompilerDeviceProperties& device_properties)
+{
 	u32 size;
 	std::string source;
-	VKFragmentDecompilerThread decompiler(source, parr, prog, size, *this);
-
-	const auto pdev = vk::get_current_renderer();
-	if (g_cfg.video.shader_precision == gpu_preset_level::low)
-	{
-		decompiler.device_props.has_native_half_support = pdev->get_shader_types_support().allow_float16;
-	}
-
-	decompiler.device_props.emulate_depth_compare = !pdev->get_formats_support().d24_unorm_s8;
-	decompiler.device_props.has_low_precision_rounding = vk::is_NVIDIA(vk::get_driver_vendor());
+	VKFragmentDecompilerThread decompiler(source, parr, prog, size, *this, device_properties);
 	decompiler.Task();
 
 	constant_offsets = std::move(decompiler.properties.constant_offsets);

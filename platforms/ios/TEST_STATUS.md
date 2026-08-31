@@ -3067,3 +3067,22 @@ cache-reuse gates.
   content, NETISO random-read delivery, or guest filesystem handling. The
   iPhone was not visible to CoreDevice when this result was recorded, so no
   matching live device trace was captured and no fix is claimed.
+- RSX SHADER SEAM: Vulkan vertex/fragment decompilers now accept explicit
+  capability records; their existing entry points still derive the same values
+  from the active Vulkan renderer. The unregistered `MTLRSXShaderProgram`
+  entry points instead supply deterministic Metal capabilities, retain RSX
+  constant/provoking-vertex/output metadata, compile GLSL to Vulkan-semantics
+  SPIR-V without creating a Vulkan device object, and assign collision-checked
+  Metal resource slots while reserving translator auxiliary indices.
+- PASS SHADER BUILD/READBACK: the serial iOS 15 arm64 core compiled and linked
+  after the capability refactor and adapter addition. Archive readback contains
+  both `compile_vertex_program_to_spirv` and
+  `compile_fragment_program_to_spirv` plus explicit-capability Vulkan overloads.
+  The pinned native-Metal shader suite also passes unchanged: shader-key hash
+  `1f2f18f1ac03a9a9e0b7607d96b272783d378160ea3dde7f22f1abc3b75243e9`,
+  vertex MSL hash
+  `5d57b51aa9249429ac76ce9e14a65f698eada20781ab7da9c7f13716bbcb459e`,
+  and fragment MSL hash
+  `0e75b103427a30f2e53e5f45261d64e9e2eb8d87d8f2832bab20334122bdcb78`.
+  No real game shader has traversed this new seam yet; the MSL converter is not
+  linked into the selectable core and no draw or gameplay claim is made.

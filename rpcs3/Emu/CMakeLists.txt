@@ -107,6 +107,10 @@ if(RPCS3_FRONTEND STREQUAL "IOS")
 		RSX/MTL/MTLGSRender.mm
 		RSX/MTL/MTLGuestBackend.h
 		RSX/MTL/MTLGuestBackend.mm
+		RSX/MTL/MTLRSXShaderProgram.h
+		RSX/MTL/MTLRSXShaderProgram.cpp
+		RSX/MTL/MTLShaderTypes.h
+		RSX/MTL/MTLShaderTypes.cpp
         ../../Utilities/JITArenaAllocator.h
         ../../Utilities/JITIOS.cpp
         ../../Utilities/JITIOS.h

@@ -8,6 +8,14 @@ namespace vk
 	class shader_interpreter;
 }
 
+struct VKVertexDecompilerDeviceProperties
+{
+	bool emulate_conditional_rendering = false;
+	bool emulate_depth_clip_only = false;
+	bool low_precision_tests = false;
+	bool require_explicit_invariance = false;
+};
+
 struct VKVertexDecompilerThread : public VertexProgramDecompiler
 {
 	friend class vk::shader_interpreter;
@@ -16,11 +24,7 @@ struct VKVertexDecompilerThread : public VertexProgramDecompiler
 	std::vector<vk::glsl::program_input> inputs;
 	class VKVertexProgram *vk_prog;
 
-	struct
-	{
-		bool emulate_conditional_rendering{false};
-	}
-	m_device_props;
+	VKVertexDecompilerDeviceProperties m_device_props;
 
 protected:
 	std::string getFloatTypeName(usz elementCount) override;
@@ -39,13 +43,13 @@ protected:
 
 	const RSXVertexProgram &rsx_vertex_program;
 public:
-	VKVertexDecompilerThread(const RSXVertexProgram& prog, std::string& shader, ParamArray&, class VKVertexProgram& dst)
-		: VertexProgramDecompiler(prog)
-		, m_shader(shader)
-		, vk_prog(&dst)
-		, rsx_vertex_program(prog)
-	{
-	}
+	VKVertexDecompilerThread(const RSXVertexProgram& prog, std::string& shader, ParamArray&, class VKVertexProgram& dst);
+	VKVertexDecompilerThread(
+		const RSXVertexProgram& prog,
+		std::string& shader,
+		ParamArray&,
+		class VKVertexProgram& dst,
+		const VKVertexDecompilerDeviceProperties& device_properties);
 
 	void Task();
 	const std::vector<vk::glsl::program_input>& get_inputs() { return inputs; }
@@ -79,6 +83,7 @@ public:
 	} binding_table;
 
 	void Decompile(const RSXVertexProgram& prog);
+	void Decompile(const RSXVertexProgram& prog, const VKVertexDecompilerDeviceProperties& device_properties);
 	void Compile();
 	void SetInputs(std::vector<vk::glsl::program_input>& inputs);
 
