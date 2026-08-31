@@ -108,6 +108,15 @@ retain source provenance and attribution.
 
 - Compare this fork against current upstream and Android ARM64 PPU/SPU JIT,
   scheduler, LLVM, reservation, and memory-mapping paths using narrow diffs.
+- Current source-audit hypothesis: normal PPU initialization adds every
+  `Emu.GetGameDirs()` path to `ppu_precompile()` only when the main executable
+  cache is missing. A warm launch with a valid EBOOT cache but an uncached
+  late PRX can therefore skip the related-directory scan and compile that PRX
+  after boot. Before changing policy, correlate v0.20 timestamps for
+  `LLVM: Compiling module`, PPU progress state, cache hit/miss paths, and the
+  U1 menu-to-gameplay transition. A fix must use a per-title completeness
+  record or targeted missing-module scan; recursively rescanning a remote
+  NETISO tree on every launch is not acceptable.
 - Preserve executable-code caches and avoid recompiling valid PPU/SPU modules.
 - Precompile cacheable static PPU modules before gameplay and persist their
   valid ARM64 output. Dynamic SPU/self-modifying paths may still require JIT,
