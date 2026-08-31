@@ -3433,6 +3433,8 @@ static bool ppu_store_reservation(ppu_thread& ppu, u32 addr, u64 reg_value)
 
 		ppu.last_faddr = 0;
 		ppu.res_cached = ppu.raddr;
+		// A same-line cached LARX keeps rtime, so mirror the successful store's counter increment.
+		ppu.rtime += 128;
 		ppu.raddr = 0;
 		return true;
 	}
