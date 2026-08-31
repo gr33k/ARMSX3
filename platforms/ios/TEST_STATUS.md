@@ -3024,6 +3024,15 @@ cache-reuse gates.
   checkpoint at
   `/Data/dockerprojects/armsx3-ios/checkpoints/ARMSX3-iOS-Core-Test-v0.33.ipa`
   are byte-identical at the accepted SHA above. V0.31 and V0.32 remain intact.
+- INSTALL ATTEMPT: the connected `iPhone14,3` was read back with installed
+  version `0.32.0 (31)`. A non-destructive `ideviceinstaller upgrade` copied
+  V0.33 to staging but iOS rejected it at `VerifyingApplication` with
+  `ApplicationVerificationFailed` / `0xe8008014`, as expected for the
+  TrollStore signature outside TrollStore. Immediate readback proved V0.32 and
+  its existing container path remained installed unchanged. CoreDevice marks
+  this iOS 15 phone unavailable and debugserver has no mounted matching
+  developer image, so USB URL-payload launch could not automate TrollStore.
+  The audited iCloud-root IPA must be opened through TrollStore.
 - OPEN PHYSICAL GATES: install the exact SHA above, force-close the retired
   process, and launch GTA `BLES01807`. Require public profile readback showing
   `wcb=1` and `shader_color_remap=1`; compare purple/lighting artifacts and FPS
