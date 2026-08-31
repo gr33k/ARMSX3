@@ -2934,15 +2934,30 @@ cache-reuse gates.
   `/private/tmp/armsx3-gta-v032-fresh.log`. Because capture began mid-session,
   it does not independently read back the package startup/version or WCB
   selection marker.
-- PERFORMANCE/MEMORY: initial fresh-process samples measured `18-22 FPS`; a
-  heavier segment mostly measured `14-16 FPS`, with sampled excursions from
-  `10` to `28 FPS`. Resident memory was approximately `3338-3360 MiB`, reported
-  headroom declined from `758` to `736 MiB`, and the Vulkan allocator reported
-  `98%` with cache reclaim active. No app termination was captured in this
-  interval, but the pressure warnings and sub-20-FPS heavy segment remain open
-  risks.
+- PERFORMANCE: initial fresh-process samples measured `18-22 FPS`; a heavier
+  segment mostly measured `14-16 FPS`, with sampled excursions from `10` to
+  `28 FPS`. A later dense scene mostly measured `10-12 FPS` and reached `2 FPS`
+  immediately before termination. This remains materially promising but does
+  not meet the sustained 30-FPS target.
+- FAIL PHYSICAL / LONG-RUN MEMORY STABILITY: during the approximately
+  11-minute-46-second fresh capture, resident memory rose from about `3338 MiB`
+  to `3828 MiB` with `268 MiB` headroom, then jumped to `4089 MiB` with only
+  `7 MiB` headroom during a large RSX shader-compilation burst. The final sample
+  reported `4091 MiB` resident and `5 MiB` headroom; the process trace then
+  ended abruptly without the controlled Stop, emulator-thread shutdown, or
+  session-cleanup sequence. This is strongly consistent with an iOS memory
+  termination, but no matching current Jetsam/crash report was available at
+  capture time, so the exact OS termination class remains unproven.
+- MEMORY ROOT-CAUSE CANDIDATE: the existing iOS policy permits only one
+  synchronized inactive-texture eviction until process pressure recovers to
+  moderate. GTA remained continuously fatal while tracked textures grew from
+  about `190 MiB` to `482 MiB`, so later scene transitions had no second
+  destructive emergency pass. Any repair must add a strictly bounded,
+  headroom-gated cooldown rather than restoring the V0.10 repeated-eviction
+  oscillation.
 - OPEN GATES: preserve this WCB candidate while isolating the remaining purple
-  artifact path; do not call the renderer fixed or native Metal complete.
-  Capture terminal Stop, relaunch, and an explicit public runtime profile
-  marker before closing the A/B. The important-usage import/free-space gate is
-  still separate and untested physically.
+  artifact path; do not call the renderer fixed or native Metal complete. A
+  replacement must survive the same long GTA scene without approaching the
+  process ceiling, then pass terminal Stop, relaunch, and explicit public
+  runtime-profile readback. The important-usage import/free-space gate is still
+  separate and untested physically.
