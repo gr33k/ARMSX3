@@ -140,7 +140,8 @@ namespace vk
 				mvk_settings.push_back(VkLayerSettingEXT{ kMVKMoltenVKDriverLayerName, "MVK_CONFIG_RESUME_LOST_DEVICE", VK_LAYER_SETTING_TYPE_BOOL32_EXT, 1, &setting_true });
 				mvk_settings.push_back(VkLayerSettingEXT{ kMVKMoltenVKDriverLayerName, "MVK_CONFIG_FAST_MATH_ENABLED", VK_LAYER_SETTING_TYPE_INT32_EXT, 1, &setting_fast_math });
 #ifdef RPCS3_IOS
-				rsx_log.notice("MoltenVK shader compression restored to the pre-V0.14 default.");
+				mvk_settings.push_back(VkLayerSettingEXT{ kMVKMoltenVKDriverLayerName, "MVK_CONFIG_PERFORMANCE_TRACKING", VK_LAYER_SETTING_TYPE_BOOL32_EXT, 1, &setting_true });
+				rsx_log.notice("MoltenVK shader compression uses the pre-V0.14 default; low-overhead performance tracking is enabled.");
 #endif
 
 				mvk_layer_settings_create_info.sType = VK_STRUCTURE_TYPE_LAYER_SETTINGS_CREATE_INFO_EXT;

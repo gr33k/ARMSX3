@@ -17,7 +17,7 @@ extern "C" {
 #define RPCS3_IOS_EXPORT
 #endif
 
-#define RPCS3_IOS_ABI_VERSION 32u
+#define RPCS3_IOS_ABI_VERSION 33u
 
 typedef enum rpcs3_ios_status
 {
@@ -497,13 +497,20 @@ typedef enum rpcs3_ios_performance_metric_validity
     RPCS3_IOS_PERFORMANCE_FPS_VALID = 1u << 0,
     RPCS3_IOS_PERFORMANCE_CPU_VALID = 1u << 1,
     RPCS3_IOS_PERFORMANCE_GPU_VALID = 1u << 2,
-    RPCS3_IOS_PERFORMANCE_MEMORY_VALID = 1u << 3
+    RPCS3_IOS_PERFORMANCE_MEMORY_VALID = 1u << 3,
+    RPCS3_IOS_PERFORMANCE_CPU_BREAKDOWN_VALID = 1u << 4,
+    RPCS3_IOS_PERFORMANCE_MEMORY_HEADROOM_VALID = 1u << 5,
+    RPCS3_IOS_PERFORMANCE_MOLTENVK_VALID = 1u << 6,
+    RPCS3_IOS_PERFORMANCE_SHADER_VALID = 1u << 7,
+    RPCS3_IOS_PERFORMANCE_RSX_FRAME_VALID = 1u << 8
 } rpcs3_ios_performance_metric_validity;
 
 // CPU is this process's usage normalized across the device's logical cores.
 // GPU is RPCS3's approximate RSX renderer utilization rather than a private
 // Metal hardware counter. Memory is this process's physical footprint relative
-// to total device memory, not the current iOS jetsam limit.
+// to total device memory, not the current iOS jetsam limit. MoltenVK durations
+// are aggregate milliseconds observed during moltenvk_sample_seconds; they are
+// deliberately separate because submit time can include command encoding.
 typedef struct rpcs3_ios_performance_metrics
 {
     uint32_t struct_size;
@@ -513,6 +520,35 @@ typedef struct rpcs3_ios_performance_metrics
     double gpu_usage_percent;
     uint64_t memory_used_bytes;
     uint64_t memory_total_bytes;
+    uint64_t memory_available_bytes;
+    double ppu_cpu_usage_percent;
+    double spu_cpu_usage_percent;
+    double rsx_cpu_usage_percent;
+    double other_cpu_usage_percent;
+    double moltenvk_sample_seconds;
+    double moltenvk_command_encoding_ms;
+    double moltenvk_queue_wait_ms;
+    double moltenvk_queue_submit_ms;
+    double metal_gpu_execution_ms;
+    double moltenvk_frame_interval_ms;
+    uint64_t moltenvk_gpu_memory_bytes;
+    double spirv_to_msl_ms;
+    double msl_compile_ms;
+    double metal_pipeline_compile_ms;
+    uint32_t moltenvk_command_buffer_count;
+    uint32_t metal_command_buffer_count;
+    uint32_t spirv_to_msl_count;
+    uint32_t msl_compile_count;
+    uint32_t metal_pipeline_compile_count;
+    uint32_t reserved;
+    uint32_t rsx_draw_calls;
+    uint32_t rsx_submit_count;
+    uint32_t rsx_setup_time_us;
+    uint32_t rsx_vertex_upload_time_us;
+    uint32_t rsx_texture_upload_time_us;
+    uint32_t rsx_draw_exec_time_us;
+    uint32_t rsx_flip_time_us;
+    uint32_t rsx_reserved;
 } rpcs3_ios_performance_metrics;
 
 RPCS3_IOS_EXPORT uint32_t rpcs3_ios_abi_version(void) RPCS3_IOS_NOEXCEPT;

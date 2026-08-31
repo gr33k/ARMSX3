@@ -979,10 +979,39 @@ V0.19 signed Uncharted 3 accuracy artifact:
   bytes.
 - PASS TRANSFER: repository artifact, Desktop copy, and iCloud Drive copy have
   the exact SHA-256 above. V0.18 remains the immediate rollback.
-- PENDING PHYSICAL: install only the exact hash above. Attach USB diagnostics
-  before launch, boot U3 only to the first menu frame, verify every effective
-  profile value and generation 4, and capture color/artifacts/FPS/memory before
-  deciding whether gameplay is safe.
+- PASS PHYSICAL / EXACT INSTALL IDENTITY: the connected iPhone14,3 running
+  iOS 15.3 reported bundle `com.thec0de.armsx3ios`, version `0.19.0`, build
+  `18`. This is the exact v0.19 qualification lane above; no later package was
+  substituted during the test.
+- PARTIAL PHYSICAL / U3 COLOR ONLY: Uncharted 3 no longer has the persistent
+  green/pink full-frame cast seen in v0.18. The first title/menu frames ran at
+  roughly 10-14 FPS with a process footprint around 2.8 GiB.
+- FAIL PHYSICAL / U3 TRANSIENT ATTACHMENTS: three adjacent USB framebuffer
+  captures proved intermittent stale rectangular contents rather than a
+  permanently corrupted source texture. One frame contained a large stale
+  yellow rectangle over the lower-left render area, another contained a green
+  horizontal block at the upper-right edge, and an adjacent frame could be
+  visually clean. Continued gameplay also showed morphing/warping plus
+  intermittent green and white squares near the top of the frame. Generation-4
+  cache isolation and the restored U3 accuracy profile therefore did not fix
+  the resolve/attachment defect.
+- FAIL PHYSICAL / DEMANDING 3D CONTROL: Red Dead Redemption title `BLUS30758`
+  reached live gameplay at exactly `2.0 FPS`, `3389 MiB`, NET `0.0 Mbps`,
+  `963 MiB` transferred, reconnect count `R1`. UIKit emitted
+  `Received memory warning` while the session was active. V0.19 is not a
+  general 3D-performance improvement and is not releasable for demanding PS3
+  gameplay.
+- FAIL PHYSICAL / U1 CONTROL: Uncharted 1 held 60 FPS in startup video and the
+  menu, then collapsed when live 3D gameplay began and terminated the app. A
+  clean second launch was started to distinguish warmed caches from sustained
+  gameplay pressure. This transition is the required profiler boundary; menu
+  FPS must never be reported as gameplay performance.
+- NEXT MEASUREMENT GATE: do not stack more title-profile guesses. Instrument
+  cycle-weighted PPU/SPU/RSX CPU work, MoltenVK command encoding/submission,
+  actual Metal command-buffer execution, shader conversion/compilation,
+  MoltenVK GPU allocation, and iOS process headroom. Use RDR, U1, and U3 on
+  this same A15 lane to decide whether a direct Metal RSX backend can remove
+  the dominant bottleneck or whether PPU/SPU emulation is already the ceiling.
 
 V0.2 artifact:
 

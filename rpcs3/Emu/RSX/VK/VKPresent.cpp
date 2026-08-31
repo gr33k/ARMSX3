@@ -12,11 +12,166 @@
 #include "util/asm.hpp"
 #include "util/video_provider.h"
 
+#ifdef RPCS3_IOS
+#include "ios/RPCS3IOSPerformance.h"
+#include <MoltenVK/mvk_private_api.h>
+#endif
+
 extern atomic_t<bool> g_user_asked_for_screenshot;
 extern atomic_t<recording_mode> g_recording_mode;
 
 namespace
 {
+#ifdef RPCS3_IOS
+	struct interval_tracker_state
+	{
+		u32 count = 0;
+		double total = 0.0;
+	};
+
+	struct interval_metric
+	{
+		u32 count = 0;
+		double total = 0.0;
+
+		double average() const
+		{
+			return count ? total / count : 0.0;
+		}
+	};
+
+	interval_metric consume_interval(
+		const MVKPerformanceTracker& current,
+		interval_tracker_state& previous)
+	{
+		const double cumulative = std::max(0.0, current.average) * current.count;
+		if (current.count < previous.count || cumulative < previous.total)
+		{
+			previous = {};
+		}
+
+		const interval_metric result
+		{
+			.count = current.count - previous.count,
+			.total = std::max(0.0, cumulative - previous.total),
+		};
+		previous.count = current.count;
+		previous.total = cumulative;
+		return result;
+	}
+
+	class moltenvk_performance_sampler final
+	{
+	public:
+		bool capture(VkDevice device, rpcs3::ios::renderer_performance_sample& result)
+		{
+			const auto now = std::chrono::steady_clock::now();
+			if (device == m_device && m_last_sample.time_since_epoch().count() &&
+				now - m_last_sample < std::chrono::seconds(1))
+			{
+				return false;
+			}
+
+			if (device != m_device)
+			{
+				reset(device);
+			}
+
+			if (m_last_sample.time_since_epoch().count())
+			{
+				result.interval_seconds = std::chrono::duration<double>(now - m_last_sample).count();
+			}
+			m_last_sample = now;
+
+			MVKPerformanceStatistics statistics{};
+			size_t statistics_size = sizeof(statistics);
+			const VkResult status = vkGetPerformanceStatisticsMVK(device, &statistics, &statistics_size);
+			if (status != VK_SUCCESS)
+			{
+				if (!m_reported_failure)
+				{
+					rsx_log.error("MoltenVK performance statistics unavailable (VkResult=%d, bytes=%u).",
+						static_cast<s32>(status), static_cast<u32>(statistics_size));
+					m_reported_failure = true;
+				}
+				return true;
+			}
+
+			const interval_metric encoding = consume_interval(
+				statistics.queue.commandBufferEncoding, m_encoding);
+			const interval_metric submit_wait = consume_interval(
+				statistics.queue.waitSubmitCommandBuffers, m_submit_wait);
+			const interval_metric submit = consume_interval(
+				statistics.queue.submitCommandBuffers, m_submit);
+			const interval_metric metal = consume_interval(
+				statistics.queue.mtlCommandBufferExecution, m_metal);
+			const interval_metric drawable_wait = consume_interval(
+				statistics.queue.retrieveCAMetalDrawable, m_drawable_wait);
+			const interval_metric present_wait = consume_interval(
+				statistics.queue.waitPresentSwapchains, m_present_wait);
+			const interval_metric frame_interval = consume_interval(
+				statistics.queue.frameInterval, m_frame_interval);
+			const interval_metric spirv = consume_interval(
+				statistics.shaderCompilation.spirvToMSL, m_spirv);
+			const interval_metric msl = consume_interval(
+				statistics.shaderCompilation.mslCompile, m_msl);
+			const interval_metric pipeline = consume_interval(
+				statistics.shaderCompilation.pipelineCompile, m_pipeline);
+
+			result.command_encoding_ms = encoding.total;
+			result.queue_wait_ms = submit_wait.total + drawable_wait.total + present_wait.total;
+			result.queue_submit_ms = submit.total;
+			result.metal_execution_ms = metal.total;
+			result.frame_interval_ms = frame_interval.average();
+			result.gpu_memory_bytes = static_cast<u64>(std::max(
+				0.0, statistics.device.gpuMemoryAllocated.latest) * 1024.0);
+			result.spirv_to_msl_ms = spirv.total;
+			result.msl_compile_ms = msl.total;
+			result.pipeline_compile_ms = pipeline.total;
+			result.command_buffer_count = encoding.count;
+			result.metal_command_buffer_count = metal.count;
+			result.spirv_to_msl_count = spirv.count;
+			result.msl_compile_count = msl.count;
+			result.pipeline_compile_count = pipeline.count;
+			result.moltenvk_valid = true;
+			result.shader_valid = true;
+			return true;
+		}
+
+	private:
+		void reset(VkDevice device)
+		{
+			m_device = device;
+			m_last_sample = {};
+			m_encoding = {};
+			m_submit_wait = {};
+			m_submit = {};
+			m_metal = {};
+			m_drawable_wait = {};
+			m_present_wait = {};
+			m_frame_interval = {};
+			m_spirv = {};
+			m_msl = {};
+			m_pipeline = {};
+			m_reported_failure = false;
+		}
+
+		VkDevice m_device = VK_NULL_HANDLE;
+		std::chrono::steady_clock::time_point m_last_sample{};
+		interval_tracker_state m_encoding{};
+		interval_tracker_state m_submit_wait{};
+		interval_tracker_state m_submit{};
+		interval_tracker_state m_metal{};
+		interval_tracker_state m_drawable_wait{};
+		interval_tracker_state m_present_wait{};
+		interval_tracker_state m_frame_interval{};
+		interval_tracker_state m_spirv{};
+		interval_tracker_state m_msl{};
+		interval_tracker_state m_pipeline{};
+		bool m_reported_failure = false;
+	};
+#endif
+
 	VkFormat RSX_display_format_to_vk_format(u8 format)
 	{
 		switch (format)
@@ -1052,6 +1207,23 @@ void VKGSRender::flip(const rsx::display_flip_info_t& info)
 
 	m_frame->flip(m_context);
 	rsx::thread::flip(info);
+
+#ifdef RPCS3_IOS
+	static moltenvk_performance_sampler performance_sampler;
+	rpcs3::ios::renderer_performance_sample performance_sample{};
+	if (performance_sampler.capture(*m_device, performance_sample))
+	{
+		performance_sample.rsx_draw_calls = info.stats.draw_calls;
+		performance_sample.rsx_submit_count = info.stats.submit_count;
+		performance_sample.rsx_setup_time_us = info.stats.setup_time;
+		performance_sample.rsx_vertex_upload_time_us = info.stats.vertex_upload_time;
+		performance_sample.rsx_texture_upload_time_us = info.stats.textures_upload_time;
+		performance_sample.rsx_draw_exec_time_us = info.stats.draw_exec_time;
+		performance_sample.rsx_flip_time_us = info.stats.flip_time;
+		performance_sample.rsx_frame_valid = true;
+		rpcs3::ios::record_renderer_performance(performance_sample);
+	}
+#endif
 
 	// Data sync
 	const rsx::surface_scaling_config_t active_res_scaling_config =

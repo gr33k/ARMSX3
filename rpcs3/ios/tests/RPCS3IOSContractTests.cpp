@@ -6,7 +6,7 @@
 int main()
 {
 	using namespace rpcs3::ios;
-	static_assert(RPCS3_IOS_ABI_VERSION == 32);
+	static_assert(RPCS3_IOS_ABI_VERSION == 33);
 	static_assert(RPCS3_IOS_FOLDER_INVALID == 22);
 	static_assert(RPCS3_IOS_FOLDER_INSTALL_FAILED == 23);
 	static_assert(RPCS3_IOS_PATCH_INVALID == 24);
@@ -28,9 +28,12 @@ int main()
 	static_assert(sizeof(rpcs3_ios_runtime_patch_info) == 80);
 	static_assert(sizeof(rpcs3_ios_setting_info) == 104);
 	static_assert(sizeof(rpcs3_ios_setting_option) == 32);
-	static_assert(sizeof(rpcs3_ios_performance_metrics) == 48);
+	static_assert(sizeof(rpcs3_ios_performance_metrics) == 224);
 	static_assert(RPCS3_IOS_PERFORMANCE_FPS_VALID == 1);
 	static_assert(RPCS3_IOS_PERFORMANCE_MEMORY_VALID == 8);
+	static_assert(RPCS3_IOS_PERFORMANCE_CPU_BREAKDOWN_VALID == 16);
+	static_assert(RPCS3_IOS_PERFORMANCE_MOLTENVK_VALID == 64);
+	static_assert(RPCS3_IOS_PERFORMANCE_RSX_FRAME_VALID == 256);
 	static_assert(RPCS3_IOS_SETTING_BOOLEAN == 0);
 	static_assert(RPCS3_IOS_SETTING_TEXT == 4);
 	static_assert(RPCS3_IOS_EMULATION_STATE_UNKNOWN == 0);

@@ -111,6 +111,7 @@ static void netiso_game_enumeration_callback(void* user_context, const rpcs3_ios
     BOOL _verboseLogFlushScheduled;
     uint64_t _lastNetISOBytes;
     CFAbsoluteTime _lastNetISOSample;
+    CFAbsoluteTime _lastPerformanceLog;
     double _netISOMegabitsPerSecond;
     BOOL _pausedForBackground;
 }
@@ -620,6 +621,8 @@ static void netiso_game_enumeration_callback(void* user_context, const rpcs3_ios
         [result appendFormat:@" | %.1f FPS", metrics.frames_per_second];
     if (metrics.valid_fields & RPCS3_IOS_PERFORMANCE_MEMORY_VALID)
         [result appendFormat:@" | %.0f MiB", metrics.memory_used_bytes / (1024.0 * 1024.0)];
+    if (metrics.valid_fields & RPCS3_IOS_PERFORMANCE_MEMORY_HEADROOM_VALID)
+        [result appendFormat:@" H%.0f", metrics.memory_available_bytes / (1024.0 * 1024.0)];
 
     rpcs3_ios_netiso_metrics netiso{};
     netiso.struct_size = sizeof(netiso);
@@ -637,6 +640,60 @@ static void netiso_game_enumeration_callback(void* user_context, const rpcs3_ios
             _netISOMegabitsPerSecond,
             netiso.remote_bytes / (1024.0 * 1024.0),
             (unsigned long long)netiso.reconnects];
+    }
+
+    BOOL has_detail_line = NO;
+    if (metrics.valid_fields & RPCS3_IOS_PERFORMANCE_CPU_BREAKDOWN_VALID)
+    {
+        [result appendFormat:@"\nCPU P%.0f S%.0f R%.0f O%.0f",
+            metrics.ppu_cpu_usage_percent,
+            metrics.spu_cpu_usage_percent,
+            metrics.rsx_cpu_usage_percent,
+            metrics.other_cpu_usage_percent];
+        has_detail_line = YES;
+    }
+    if (metrics.valid_fields & RPCS3_IOS_PERFORMANCE_MOLTENVK_VALID)
+    {
+        [result appendFormat:has_detail_line
+            ? @" | MVK %.1fs E%.0f W%.0f Q%.0f G%.0f F%.1f C%u/%u"
+            : @"\nMVK %.1fs E%.0f W%.0f Q%.0f G%.0f F%.1f C%u/%u",
+            metrics.moltenvk_sample_seconds,
+            metrics.moltenvk_command_encoding_ms,
+            metrics.moltenvk_queue_wait_ms,
+            metrics.moltenvk_queue_submit_ms,
+            metrics.metal_gpu_execution_ms,
+            metrics.moltenvk_frame_interval_ms,
+            metrics.moltenvk_command_buffer_count,
+            metrics.metal_command_buffer_count];
+    }
+    if (metrics.valid_fields & RPCS3_IOS_PERFORMANCE_RSX_FRAME_VALID)
+    {
+        [result appendFormat:@"\nRSX D%u S%u U%u/%u/%u X%u F%u",
+            metrics.rsx_draw_calls,
+            metrics.rsx_submit_count,
+            metrics.rsx_setup_time_us,
+            metrics.rsx_vertex_upload_time_us,
+            metrics.rsx_texture_upload_time_us,
+            metrics.rsx_draw_exec_time_us,
+            metrics.rsx_flip_time_us];
+    }
+    if (metrics.valid_fields & RPCS3_IOS_PERFORMANCE_SHADER_VALID)
+    {
+        [result appendFormat:@" | SH %u/%u/%u %.0f/%.0f/%.0f",
+            metrics.spirv_to_msl_count,
+            metrics.msl_compile_count,
+            metrics.metal_pipeline_compile_count,
+            metrics.spirv_to_msl_ms,
+            metrics.msl_compile_ms,
+            metrics.metal_pipeline_compile_ms];
+    }
+
+    const CFAbsoluteTime performance_now = CFAbsoluteTimeGetCurrent();
+    if (state == RPCS3_IOS_EMULATION_STATE_RUNNING &&
+        performance_now - _lastPerformanceLog >= 5.0)
+    {
+        _lastPerformanceLog = performance_now;
+        NSLog(@"[ARMSX3 PERF] %@", result);
     }
     return result;
 }

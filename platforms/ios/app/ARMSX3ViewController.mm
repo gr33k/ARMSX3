@@ -297,14 +297,14 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
     [scroll addSubview:stack];
 
     UILabel* title = [[UILabel alloc] init];
-    title.text = @"ARMSX3 iOS Core Test v0.18";
+    title.text = @"ARMSX3 iOS Core Test v0.20";
     title.textColor = UIColor.whiteColor;
     title.font = [UIFont systemFontOfSize:24.0 weight:UIFontWeightBlack];
     [stack addArrangedSubview:title];
 
     self.stateLabel = [[UILabel alloc] init];
     self.stateLabel.text = @"Initializing real RPCS3 core...";
-    self.stateLabel.numberOfLines = 2;
+    self.stateLabel.numberOfLines = 3;
     self.stateLabel.textColor = [UIColor colorWithRed:0.98 green:0.72 blue:0.25 alpha:1.0];
     self.stateLabel.font = [UIFont monospacedSystemFontOfSize:13.0 weight:UIFontWeightSemibold];
     [stack addArrangedSubview:self.stateLabel];
@@ -340,7 +340,7 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
     self.landscapeRuntimeLabel = [[UILabel alloc] init];
     self.landscapeRuntimeLabel.hidden = YES;
     self.landscapeRuntimeLabel.userInteractionEnabled = NO;
-    self.landscapeRuntimeLabel.numberOfLines = 2;
+    self.landscapeRuntimeLabel.numberOfLines = 4;
     self.landscapeRuntimeLabel.textAlignment = NSTextAlignmentCenter;
     self.landscapeRuntimeLabel.textColor = UIColor.whiteColor;
     self.landscapeRuntimeLabel.backgroundColor = [UIColor colorWithWhite:0.0 alpha:0.66];

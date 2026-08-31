@@ -6,7 +6,7 @@ signing keys, device identifiers, or private server paths.
 
 ## What the test app does
 
-The UIKit app links the real ABI 32 `libRPCS3Core.dylib`. It initializes and
+The UIKit app links the real ABI 33 `libRPCS3Core.dylib`. It initializes and
 seals the iOS JIT arena, runs an LLVM-generated AArch64 self-test, attaches a
 `CAMetalLayer` to RPCS3's Vulkan renderer through MoltenVK, imports firmware and
 games through the Files picker, enumerates installed titles, and boots a chosen
