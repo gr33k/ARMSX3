@@ -1839,3 +1839,42 @@ cache-reuse gates.
   compare a warm second launch. Require lower routine log volume with genuine
   failures still visible, no new compile loop or hang, and no regression in
   gameplay, audio, memory, or Stop/relaunch. No performance gain is claimed yet.
+
+## ARM64 SPU codegen-correctness candidate (post-V0.24)
+
+- SOURCE: SHUFB commit `4c3ae0229` and float commit `4e676683b`, selectively
+  backported from upstream `19d23eb69` and `424514fde`. X86 code generation and
+  persistent SPU object-cache machinery are intentionally unchanged.
+- UPSTREAM SHUFB EVIDENCE: non-splat constant byte-swap folding plus KnownBits
+  single-source selection caused a Borderlands 2 SPURS block at LS `0x25da8`
+  to spin forever when compiled but boot when interpreted. Removing both
+  triggers also stopped reported Spider-Man: Edge of Time crashes and allowed
+  Bleach to reach Story Mode. These are upstream measurements, not yet iPhone
+  results.
+- FIX READY / SHUFB: on ARM64, only splat constants use the byteswap fold, where
+  byteswap is identity. A single-source fast path is selected only when the two
+  guest source registers are actually the same. ARM64 TBL/TBX paths otherwise
+  remain enabled, and all x86 fast paths remain source-identical.
+- UPSTREAM FLOAT EVIDENCE: PS3 SPU tests found 984 ARM-specific output
+  divergences before the fixes and zero for the affected CFLTS and FMS cases
+  afterward. The accurate f64-to-s32 path also reproduced negative overflow as
+  a positive integer because AArch64 saturates to i64 before lane narrowing.
+- FIX READY / FLOAT: ARM64 FMS preserves a NaN-pattern addend before host
+  negation so SPU extended-range values do not flip sign. CFLTS now explicitly
+  saturates high and low in the accurate path and handles ARM64 high/NaN
+  behavior directly in the f32 path instead of applying an x86-specific XOR.
+- CACHE BOUNDARY: iOS `Automatic` resolves persistent SPU object caching off,
+  which is required because persisted ARM64 objects contain unrelocated host
+  addresses. Leave it off while qualifying this codegen. The normal SPU guest
+  cache and compile pipeline remain enabled.
+- PASS STATIC/BUILD: each commit independently passed `git diff --check`, the
+  complete bounded iOS contract runner, and an incremental two-worker arm64
+  iOS 15 core build. With both commits present, the unsigned core has SHA-256
+  `4c9a85bed75a2b24078721b51f8431960672a303ac778b1ea7e2f1af3f596eac`
+  and UUID `504F9690-E52F-35B5-A2FB-D7B0D56D7351`.
+- REQUIRED PHYSICAL: first verify Borderlands 2 or another known SHUFB-heavy
+  title crosses its prior startup/SPURS point without an SPU spin. Then compare
+  U1/U2/U3 and RDR from clean app launches for changed hangs, green/white block
+  artifacts, geometry, FPS, audio, and crash behavior. These CPU fixes may
+  repair bad data feeding RSX, but they are not presumed to fix renderer bugs;
+  accept only title-specific observed changes and preserve Vulkan rollback.
