@@ -1006,6 +1006,21 @@ V0.19 signed Uncharted 3 accuracy artifact:
   clean second launch was started to distinguish warmed caches from sustained
   gameplay pressure. This transition is the required profiler boundary; menu
   FPS must never be reported as gameplay performance.
+- FAIL PHYSICAL / IN-GAME LLVM PRESSURE: two exact v0.19 iPhone resource
+  reports recorded `45,002` wakeups in 50 seconds (`897 wakeups/sec`) and
+  `45,004` wakeups in 58 seconds (`781 wakeups/sec`) against iOS's reported
+  `150 wakeups/sec` limit. Both reports said `Action taken: none`; sampled
+  footprint grew from `191.38 MB` to `1173.70 MB` in the first report and from
+  `563.44 MB` to `857.17 MB` in the second. The report UUID matched the
+  packaged v0.19 `libRPCS3Core.dylib` UUID
+  `E921A37A-F8DF-3062-9A6F-706C92421F5D`. Symbolizing the hottest sampled
+  chain resolved `ios_thread_worker::run` through `run_recoverable_llvm`,
+  `llvm::MCJIT::generateCodeForModule`, `emitObject`, the legacy pass manager,
+  machine scheduling, and greedy register allocation. This proves expensive
+  PPU LLVM compilation remained active during the sampled gameplay interval;
+  it does not by itself attribute every reported wakeup to LLVM. V0.21 must
+  move cacheable PPU compilation outside live gameplay and compare the same
+  title's wake rate, frame rate, and audio pacing before accepting the change.
 - NEXT MEASUREMENT GATE: do not stack more title-profile guesses. Instrument
   cycle-weighted PPU/SPU/RSX CPU work, MoltenVK command encoding/submission,
   actual Metal command-buffer execution, shader conversion/compilation,
@@ -1016,23 +1031,32 @@ V0.19 signed Uncharted 3 accuracy artifact:
 V0.20 signed PS3 3D profiler artifact:
 
 - Name: `ARMSX3-iOS-Core-Test-v0.20.ipa`
-- Source commit: `3cd1d12a868c8f29ed15a1e3289566cd1f6301ae`
-- Compressed size: `31,848,336` bytes
+- Source commit: `bf40d9592206f175c808ab3fbf017ab29c4b1148`
+- Profiler implementation commit:
+  `3cd1d12a868c8f29ed15a1e3289566cd1f6301ae`
+- Compressed size: `31,848,919` bytes
 - SHA-256:
-  `c64f4ebef9c1767b521f52ccf4807c4357da0e21b05f1c9bed85cd9b189b862f`
+  `a3e32a7d37d4f8adaf3e829cc6a56cb267086536a590d75f724882c3705a746f`
 - PASS STATIC SOURCE: the complete bounded iOS contract suite, incremental
   two-worker `RPCS3Core` build, and serial UIKit build pass. ABI 33 adds
   one-second PPU/SPU/RSX/other CPU, iOS headroom, MoltenVK encode/wait/submit,
   actual Metal execution, shader/pipeline compile, and sampled RSX frame
   telemetry without changing game profiles, resolution, JIT mode, or cache
-  behavior.
+  behavior. Build identity now derives its ABI directly from
+  `RPCS3_IOS_ABI_VERSION`, and a compile-time regression assertion requires
+  the exact valid-JSON `"abi":33,"frontend"` boundary and profiler capability
+  string.
 - PASS PACKAGE: archive integrity, version `0.20.0` build `19`, bundle ID
   `com.thec0de.armsx3ios`, strict deep signing, TrollStore JIT/unsigned-memory/
   extended-address-space/increased-memory entitlements, arm64 app/core, iOS
-  15.0 minimum, ABI exports, and private-path scan pass against the packaged
-  bytes.
+  15.0 minimum, ABI exports, private-path scan, and embedded valid ABI-33 JSON
+  identity pass against the packaged bytes.
 - PASS TRANSFER: the repository artifact and iCloud Drive copy have the exact
   SHA-256 above. V0.19 remains the immediate rollback.
+- REJECTED PREDECESSOR BYTES: the earlier `c64f4eb...` package advertised ABI
+  32 in its identity JSON, and the provisional `af4b94cd...` package emitted
+  invalid JSON with `"abi":33u`. Neither package is the current repository or
+  iCloud artifact and neither may be installed or used as evidence.
 - OBSERVATIONAL CANDIDATE: V0.20 is not an FPS claim. It exists to identify the
   first optimization for V0.21. Telemetry labels and decision gates are fixed
   in `PS3_3D_PERFORMANCE_PLAN.md`.

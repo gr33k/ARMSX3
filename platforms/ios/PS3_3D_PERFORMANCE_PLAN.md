@@ -21,6 +21,18 @@ V0.19 established the current floor:
 These results prove presentation alone is not the bottleneck and do not prove
 that a Metal backend alone can reach the target.
 
+Two symbolized v0.19 iOS resource reports also establish a CPU/JIT floor:
+
+- iOS measured 781 and 897 wakeups/sec against its reported 150/sec limit.
+- The hottest sampled chain ran from `ios_thread_worker::run` through the PPU
+  LLVM/MCJIT object-emission, machine-scheduling, and register-allocation path.
+- The reports prove that expensive PPU compilation remained active during the
+  sampled gameplay interval, but do not attribute every wakeup to LLVM.
+
+V0.21 is accepted only if a same-title physical comparison lowers live-gameplay
+LLVM compile time and wake pressure while improving sustained FPS and audio
+pacing. A successful build, faster menu, or shorter launch is insufficient.
+
 ## V0.20 measurement boundary
 
 ABI 33 adds one-second, low-overhead measurements without changing title
@@ -97,6 +109,9 @@ retain source provenance and attribution.
 - Compare this fork against current upstream and Android ARM64 PPU/SPU JIT,
   scheduler, LLVM, reservation, and memory-mapping paths using narrow diffs.
 - Preserve executable-code caches and avoid recompiling valid PPU/SPU modules.
+- Precompile cacheable static PPU modules before gameplay and persist their
+  valid ARM64 output. Dynamic SPU/self-modifying paths may still require JIT,
+  but compilation must not monopolize render or audio-critical intervals.
 - Keep compilation bounded and parallel only while headroom permits; gameplay
   threads retain priority.
 - Move noncritical cache serialization, NETISO reads, and shader/pipeline work
