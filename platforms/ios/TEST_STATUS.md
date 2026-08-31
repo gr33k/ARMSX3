@@ -2619,3 +2619,58 @@ cache-reuse gates.
   build or physical fix. The next gates are an iOS core compile, independently
   audited signed IPA, then physical proof that `common.edat` resolves and GTA
   advances beyond the corruption dialog without poisoning Stop/relaunch.
+
+## V0.29 GTA V disc-alias and bounded PUTLLC16 candidate (2026-08-31)
+
+- SOURCE: pushed `ios-core` revision
+  `693fae776c095a5612b889cba712464fee47ffbb`. The candidate includes the
+  exact-title GTA V NETISO child alias above and the hash-gated iOS PUTLLC16
+  admission for the known upstream pattern plus the captured RDR CellSpurs
+  JobChain pattern. It does not include or select the unfinished native-Metal
+  renderer files; Vulkan/MoltenVK remains the gameplay renderer.
+- PASS BUILD: the clean iOS 15 arm64 core build completed with `-j2`. One first
+  compile correctly rejected an implicit conversion from RPCS3's explicit
+  config boolean to `bool`; the call now uses `static_cast<bool>`, and both the
+  resumed build and final post-commit relink pass. The full bounded contract
+  suite and `git diff --check` pass.
+- PASS PACKAGE: `ARMSX3-iOS-Core-Test-v0.29.ipa` is version `0.29.0`, build
+  `28`, `31,871,458` bytes, and SHA-256
+  `1ef9bcf6c458108d11120b60370364cefac644301ff8f90d43a5a06322f4fe21`.
+  The first independent readback caught a stale hard-coded build `27`; that
+  package was rejected before transfer, the plist was corrected, and the IPA
+  was rebuilt from the pushed revision above.
+- PASS INDEPENDENT READBACK: a fresh temporary extraction passed ZIP integrity,
+  absence of `__MACOSX`, strict deep app signature verification, standalone
+  core signature verification, and the private local path/address scan. The
+  archive contains nine regular files. App UUID is
+  `E6342429-CED6-3744-8D6A-468C7B8E09BD`; core UUID is
+  `1C944246-68F2-3EF5-B765-5AAC9ECD3650`. The unsigned core is `77,544,520`
+  bytes with SHA-256
+  `0a5bb7ca5491492babc47d84ed6331a453486db25785a8cd91449f02cbe7097b`;
+  the extracted signed core has SHA-256
+  `760ffbc455e007d02a70f2291efc4d6f45e783486b746759b887d3f8edc9f390`.
+- PASS TARGET/CONTRACT: app and core are arm64 Mach-O binaries targeting iOS
+  15.0. Readback confirms ABI 34, NETISO boot/Stop exports, the GTA alias marker,
+  and the bounded PUTLLC16 admission marker. The signature contains
+  `get-task-allow`, JIT, unsigned executable memory, Extended Virtual
+  Addressing, and increased-memory-limit entitlements under
+  `TROLLTROLL.com.thec0de.armsx3ios`.
+- PASS TRANSFER: the repository artifact and iCloud Drive copy at
+  `ARMSX3-iOS-Core-Test-v0.29.ipa` are byte-identical at the size and SHA above.
+  Normal Installation Proxy reaches verification and rejects the TrollStore
+  ad-hoc signature with expected error `0xe8008014`; USB port 22 is not exposed,
+  so this device requires installation through TrollStore from iCloud Drive.
+- RESOURCE SAFETY: obsolete browser/update caches and only archived superseded
+  IPAs were removed. The clean feasibility checkout was copied to
+  `/Data/dockerprojects/armsx3-ios/checkpoints/ARMSX3-ios-feasibility-20260831`.
+  Its `.git` metadata was restored locally after preflight proved that
+  `ARMSX3-ios-core` is a linked worktree; never delete that common metadata while
+  this worktree exists. V0.26-V0.28, Codex history, dependencies, and device
+  evidence remain preserved.
+- REQUIRED PHYSICAL: install this exact V0.29 SHA with TrollStore. Launch GTA V
+  fresh and retain the alias-mount line plus the first `sys_fs_stat` result for
+  `common.edat`; require progress beyond the V0.28 corruption dialog. Then Stop,
+  launch one unrelated local or NETISO title, Stop, and launch GTA V again to
+  reject stale aliases or session poisoning. RDR/U1 performance remains an
+  unproven A/B gate; a successful package or GTA boot is not a heavy-3D FPS
+  claim.
