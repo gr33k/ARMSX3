@@ -2495,3 +2495,63 @@ cache-reuse gates.
   thread/permit/file-budget deadlock, and clean Stop/relaunch. Then run a local
   title and a NETISO failure followed by a second title, plus warm U1/RDR, to
   reject startup, memory, graphics, audio, and gameplay regressions.
+
+## V0.28 combined candidate (2026-08-31)
+
+- SOURCE: packaged executable revision
+  `18be3e5662c5918db93917b97649e9c648e7879c`. Relative to V0.27 this combines
+  the incompatible-pitch ownership guard (`d24ca3a66`), serialized GTA
+  child-handoff/Stop lifecycle (`652f9f7af`), and adaptive PPU/Sonic diagnostics
+  (`c8b7fd651`). It does not claim or select a direct-Metal game renderer;
+  Vulkan/MoltenVK remains the active gameplay path.
+- PASS PACKAGE: `ARMSX3-iOS-Core-Test-v0.28.ipa` is version `0.28.0`, build
+  `27`, `31,868,910` bytes, SHA-256
+  `9a8276c864dbe6f26d586ee876817794715a37ea30262b957d59e7069fe33c4a`.
+  The package was built serially from the independently hashed unsigned core
+  and reports ABI 34 plus iOS 15.0 arm64.
+- PASS INDEPENDENT READBACK: a fresh temporary extraction passed full ZIP
+  integrity, absence of `__MACOSX`, `codesign --verify --deep --strict`, and
+  standalone embedded-core signature verification. It contains nine regular
+  files: app/core binaries, two controller skins, two icon renditions,
+  `Info.plist`, `PkgInfo`, and `CodeResources`. The clean ad-hoc TrollStore build
+  has no stale `embedded.mobileprovision`; signature entitlements identify
+  `TROLLTROLL.com.thec0de.armsx3ios`.
+- PASS ENTITLEMENTS/TARGET: readback confirms JIT, unsigned executable memory,
+  Extended Virtual Addressing, increased memory limit, and `get-task-allow`.
+  App and core are arm64 Mach-O binaries targeting iOS 15.0. The app supports
+  iPhone and iPad, links the core through `@rpath`, and links
+  GameController/Metal/UIKit. iOS 17.4-only `os_sync` imports are absent.
+- PASS CORE IDENTITY: the unsigned and signed cores share UUID
+  `09F84F1D-ED5B-375A-AA07-3D34E11BE036`. The unsigned core is `77,527,184`
+  bytes with SHA-256
+  `9ef3f2788521355c9cbab7e4308f3294be2a65df8b7dc4d5bec03fa2958ed24b`;
+  the independently extracted signed core is `78,151,152` bytes with SHA-256
+  `344aed3809471090f6952944a667a8a40eab2f00e48287e70c906649cd7b4fee`.
+  App UUID is `E6342429-CED6-3744-8D6A-468C7B8E09BD`. ABI, NETISO boot/Stop,
+  serialized session, preserved-argv exitspawn, adaptive PPU, and bounded
+  cache-miss diagnostics are present; private local paths are absent.
+- PASS TRANSFER/ROLLBACK: repository and iCloud V0.28 copies are byte-identical
+  at the size and SHA above. V0.27 remains unchanged at SHA-256
+  `f5eb3b64841e3d8ceaecc3dc8927976a911d6574463ce374e9494e143878230c`
+  and is the immediate rollback; V0.26 was not touched.
+- RESOURCE SAFETY: final core/app builds were limited to `-j2`/`-jobs 1`.
+  Before packaging, the final core was copied and hash-verified, then only its
+  reproducible CMake tree and Xcode DerivedData were removed to satisfy the
+  5 GiB package floor. After readback, only temporary audit, staging, and app
+  build trees were removed. The signed IPA, compressed device log archive,
+  source, dependencies, and rollback packages were preserved; 5.4 GiB remains
+  free.
+- PHYSICAL STATE: untested. No compatible iPhone was connected during this
+  package run, and the paired iPad lacks the required EVA execution lane. A
+  signed IPA, static audit, and simulator are not PS3 gameplay evidence.
+- REQUIRED PHYSICAL ORDER: install this exact V0.28 SHA. First launch and Stop
+  known-good local Bejeweled 3, then immediately relaunch it. Test GTA V through
+  Duplex and capture preserved guest argv plus redirected BDVD host lookup;
+  deliberately fail one child executable, then scan/start another NETISO title.
+  Exercise Stop during NETISO inspection, PPU compilation, and exitspawn plus
+  repeated taps and background/foreground. Run Sonic once cold and twice warm,
+  correlating every popup to path/cache/object/process identity and worker
+  counts. Finally rebuild graphics cache for U2/U3 artifact scenes and use warm
+  U1/RDR plus the RDR car/train as FPS/audio/visual regressions. Reject stale
+  mounts or launch state, repeated identical cache work, deadlock, unbounded
+  logs, new graphics corruption, worse FPS/audio, crash, or slow Stop/relaunch.
