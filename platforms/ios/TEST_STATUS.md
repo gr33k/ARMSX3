@@ -1200,6 +1200,63 @@ V0.21 iPad development-install and Universal-JIT qualification:
   capabilities required by an eligible development profile, but is not a
   default free-team signing path. `lldb_universal_jit.py` is the repeatable
   LLDB/debugserver bridge for the separate iOS 26 Universal-JIT requirement.
+- PASS INSTALL / FAIL PROFILE GATE: after SideStore's first refresh completed,
+  the exact V0.21 IPA was imported and signed. iOS initially rejected it because
+  the free-profile slots were occupied by SideStore, old EmuHub, and the prior
+  non-EVA ARMSX3 development install. The prior ARMSX3 container contained no
+  user payload (only an empty `games.yml`); it was backed up and removed. The
+  replacement then installed as `com.thec0de.armsx3ios.3B67JS22ZN`, version
+  `0.21.0`, with a validated profile and `get-task-allow`.
+- FAIL INSTALLED ENTITLEMENT READBACK: the SideStore-issued ARMSX3 profile omits
+  both `com.apple.developer.kernel.extended-virtual-addressing` and
+  `com.apple.developer.kernel.increased-memory-limit`. A physical icon and
+  successful installation therefore remain insufficient. Apple's current iOS
+  capability matrix does not make EVA available to a free Apple Developer
+  account, and this Mac has only the free personal team configured.
+- FAIL PHYSICAL LAUNCH / SIDESTORE PROFILE: tapping the installed replacement
+  aborted before UI in `asmjit::get_global_runtime()::custom_runtime()` with
+  `EXC_BREAKPOINT` / `SIGABRT`; crash evidence is
+  `ARMSX3iOS-2026-08-31-001441.ips`. This is not an M2 performance result. Do
+  not launch this profile repeatedly or claim iPad qualification until EVA is
+  granted or an independently verified compact-memory architecture replaces
+  the direct-map requirement.
+- NO-PAID-TEAM ROUTES: another free signer (AltStore, Sideloadly, or a different
+  SideStore build) cannot repair this profile gate; those tools can provide a
+  renewable development signature and debugger-enabled JIT, but Apple's portal
+  still omits EVA. The actionable local routes are (1) replace RPCS3's 24-GiB
+  fixed direct-map with a measured compact/segmented VM design, or (2) qualify
+  the same build on a separate TrollStore/jailbreak-compatible device that can
+  preserve the required entitlements. An explicit remote-RPCS3 streaming mode
+  is also viable for this iPad, but it is not local emulation and must never be
+  presented as a silent native-core fallback. Waiting for a future iPadOS 26
+  exploit is possible but is not an engineering schedule. A borrowed eligible
+  paid organization/team profile would clear the current test gate without the
+  user purchasing membership, but it still depends on paid-team provisioning.
+- ORGANIZATION ACCESS CHECK: Xcode recognizes the Apple Developer organization
+  team `Netfortris Acquisition Co., Inc`, confirming that the Apple Account is
+  associated with a paid organization team. The user's assigned role is
+  `Sales`, however, and Xcode marks `Certificates, Identifiers, & Profiles` as
+  unavailable. App Store Connect independently shows the same Sales-only role;
+  Xcode's usable provisioning cache still contains only free personal team
+  `3B67JS22ZN`, and the sole installed development profile remains a seven-day
+  `LocalProvision` profile without EVA or increased-memory. This is therefore
+  not currently usable paid development access. An authorized organization
+  Account Holder/Admin would need to assign an eligible development role and
+  grant Certificates, Identifiers & Profiles access; company authorization is
+  also required before using an employer-owned team for this project. After
+  that change, re-verify the new Team ID and Apple-issued profile entitlements
+  rather than assuming the role label fixed the gate.
+- CURRENT EXPLOIT-LANE CHECK: TrollStore Lite `2.1.1` is explicitly a
+  jailbreak-required package; its implementation depends on jailbreak-provided
+  `ldid`, a jailbreak root path, and jailbreak trust-cache handling. It does not
+  provide a CoreTrust or jailbreak exploit by itself. Full TrollStore officially
+  ends at iOS 17.0, while current Dopamine arm64e support covers all devices only
+  through 17.3.1; its iOS 26.0-26.0.1 lane is limited to A12/A13. Palera1n is
+  limited to A8-A11. Therefore the connected M2 `iPad14,3` on iPadOS `26.3.1`
+  has no currently verified TrollStore, TrollStore Lite, Dopamine, or palera1n
+  installation path. Do not install unverified websites/profiles claiming an
+  iPadOS 26.3.1 TrollStore jailbreak. Recheck only against the official
+  TrollStore, Dopamine, and palera1n projects when support changes.
 
 V0.21 iPhone title observations reported during the 2026-08-30 test session:
 
@@ -1221,14 +1278,68 @@ V0.21 iPhone title observations reported during the 2026-08-30 test session:
   longer has the prior persistent green/pink cast, but transient block and
   white-square corruption remains. Keep this distinct from Uncharted 2's
   green/white live-3D failure.
-- TEST IN PROGRESS: LittleBigPlanet was launched as the next controlled title.
-  It passed its own game-data installer and intro video. Skipping the video
-  caused a long transition stall that eventually recovered without an app
-  restart. The first Sackboy/live-3D view initially reported approximately
-  `14-16 FPS` and continued at approximately `16 FPS` on average, while scene
-  content appeared to finish rendering slowly. This is a provisional
-  below-target result, not sustained-playability evidence; record longer-run
-  FPS, corruption, audio, input, and survival before final classification.
+- FAIL PHYSICAL / LITTLEBIGPLANET SUSTAINED RUN: the title passed its own
+  game-data installer and intro video. Skipping the video caused a long
+  transition stall that eventually recovered without an app restart. The first
+  Sackboy/live-3D view then sustained approximately `12-16 FPS` for a meaningful
+  period and appeared visually plausible; the initially unusual scene was
+  likely intentional art direction rather than proven render corruption. The
+  run ultimately hard-stalled at `0 FPS` and audio stopped as well. This is a
+  full emulation/guest stall rather than the renderer-only Uncharted 2 symptom,
+  and the title is not qualified. Relaunch recovery remains untested.
+- PARTIAL PHYSICAL / XMB: XMB launched on the iPhone. The user heard intermittent
+  static during startup, while ordinary menu-navigation click sounds remained
+  clean. Several game-list entries displayed `Corrupted Data` icons. It is not
+  yet known whether those entries are expected remnants, incomplete installed
+  data, or a guest-filesystem/title-registration defect; preserve the exact
+  entries and session log before changing install or VFS behavior.
+- FAIL PHYSICAL / NEED FOR SPEED CARBON BOOT: the first attempt was launched in
+  the same app process immediately after stopping XMB. It reached the EA logo
+  and then froze while the debug overlay continued to report `60 FPS`. A second
+  attempt after fully quitting and restarting the app stalled at the identical
+  point immediately after the EA logo faded. This is a reproducible cold-start
+  title/core failure, not evidence of incomplete Stop cleanup; the lingering
+  FPS value reflects presentation cadence rather than advancing guest work.
+- FAIL PHYSICAL / CARS MATER-NATIONAL CHAMPIONSHIP: the title did not launch.
+  The iPhone still did not enumerate through the USB hub, so no matching core
+  log was captured and the failure stage remains unclassified.
+- PARTIAL PHYSICAL / CARS RACE-O-RAMA: the separate Race-O-Rama title reached
+  live rendering and held a consistent `30 FPS` on the iPhone. This is a
+  physical performance pass for the tested segment. Purple squares were the
+  sole observed defect and are retained as suspected RSX/render artifacts until
+  a screenshot or known-good comparison proves they belong to the game. Visual
+  accuracy and extended survival remain open; do not merge this result with the
+  Mater-National failure above.
+- FAIL PHYSICAL / THE SIMPSONS GAME: the title did not launch. Preserve this as
+  a separate unclassified boot failure until an iPhone core log is available.
+- PARTIAL PHYSICAL / LOST PLANET: the guest HDD installation completed and the
+  title reached live 3D on the iPhone. Its initial/pre-game 3D phase was
+  reported near `34 FPS`, but visible corruption increased. Interactive 3D
+  fluctuated substantially, with a rough `20 FPS` average, observed lows near
+  `14 FPS`, and heavier dips while shooting. Simpler live-3D areas reached the
+  apparent `30 FPS` target, with brief reported spikes around `34-36 FPS`, and
+  were subsequently observed without visible corruption, so the earlier
+  glitches are scene-dependent or transient rather than continuous. The run
+  was subjectively playable despite its uneven frame pacing and materially
+  faster than the
+  tested Uncharted and Red Dead Redemption scenes, but sustained full speed and
+  renderer correctness are not yet qualified. Use it as a middle-tier
+  benchmark between Ratatouille's near-30-FPS result and the heavy-title
+  single-digit failures.
+- STORAGE REQUIREMENT: streamed source media should remain remote, while
+  firmware, saves, shader/PPU caches, and title-required HDD game data may use
+  real device capacity up to a measured safety reserve. Do not impose an
+  arbitrary small quota or allow optional cache growth to consume space needed
+  for a safe iOS update and normal device operation.
+- PASS PHYSICAL / RATATOUILLE 3D PERFORMANCE: the first cold run displayed
+  title artwork that did not fill the shader-loading viewport, then completed
+  PPU compilation and reached interactive 3D gameplay. It initially sustained
+  approximately `25-28 FPS`, subsequently reached the apparent `30 FPS` title
+  cap, and continued holding near `30 FPS` with only minimal slowdown during
+  gameplay. This is the first sustained full-speed real-3D result reported on
+  the iPhone. Extended survival, audio, visual accuracy, and input remain open
+  before full title qualification. The tested media appears to be an EU
+  language build; that content limitation is separate from compatibility.
 - CONFIRMED TITLE-SPECIFIC / BEJEWELED 3: the off-center image is confined to
   its pre-game loading wallpaper; other tested title artwork is centered. Do
   not apply a global gameplay or loader viewport shift. Any correction must be
@@ -1237,15 +1348,24 @@ V0.21 iPhone title observations reported during the 2026-08-30 test session:
   reports, but no matching iPhone process log was captured because the phone
   did not enumerate through the USB hub. Preserve that distinction when using
   them to choose a renderer candidate.
-- MODERN-IOS INSTALL PATH IN PROGRESS: official iloader 2.3.1 was checksum-
-  verified, Developer-ID signed, notarized, and run from a read-only image.
-  Its default `ani.sidestore.io` backend failed before Apple login with
-  `invalid Trust Key (-45003)`. Switching to the official
-  `https://ani.sidestore.app` mirror cleared that failure and reached Apple,
-  where the saved account credential was rejected with `-22406`. SideStore is
-  therefore not installed yet and no SideStore-issued ARMSX3 profile has been
-  read back. Account authentication must be completed in iloader before testing
-  whether Apple's portal grants EVA through this lane.
+- PARTIAL PHYSICAL / MODERN-IOS INSTALL PATH: official iloader 2.3.1 was
+  checksum-verified, Developer-ID signed, notarized, and run from a read-only
+  image. Its default `ani.sidestore.io` backend failed before Apple login with
+  `invalid Trust Key (-45003)`; switching to the official
+  `https://ani.sidestore.app` mirror cleared that failure. Account login then
+  succeeded, iloader signed and physically installed SideStore `0.6.3`, placed
+  its pairing file through House Arrest/AFC, and launched it on the M2 iPad.
+  Installation Proxy independently reports bundle
+  `com.SideStore.SideStore.3B67JS22ZN`, a validated profile, `get-task-allow`,
+  and signer `iPhone Developer: gr33k420@gmail.com (D72N562933)`. The user must
+  complete SideStore's first refresh before importing ARMSX3. The initial
+  SideStore login/2FA attempt failed with a malformed-data error while its saved
+  Anisette URL remained the known-bad `https://ani.sidestore.io`; selecting the
+  working `.app` mirror allowed login and the first refresh to complete. The
+  subsequent ARMSX3 install and installed-profile failure are recorded in the
+  iPad qualification section above. Competitor-emulator attempts were stopped
+  at the user's direction; do not spend additional App IDs or active slots on
+  them.
 
 V0.2 artifact:
 
@@ -1400,3 +1520,63 @@ cache-reuse gates.
 - REQUIRED: EmuHub's admin panel remains authoritative for managed host paths,
   Docker bind mounts, source ordering, and enable/disable state. See
   `PS3_NETWORK_DISC_DESIGN.md`.
+
+## V0.21 NETISO failed-launch recovery candidate (2026-08-31)
+
+- FAIL PHYSICAL / SERVER PROCESS CRASH: during the live iPhone title sweep,
+  `ps3netsrv` segfaulted at `2026-08-31T08:05:02.679791593Z`. The container
+  remained running with Docker restart count `0` because its internal s6
+  supervisor restarted `/usr/local/bin/ps3netsrv` approximately 5 ms later.
+  This proves container-up state is not sufficient NETISO health evidence and
+  explains the variable post-failure reconnect window.
+- PASS SERVER IDENTITY: the running amd64 container uses
+  `shawly/ps3netsrv:latest` config digest `da9a24050be2...`, which matches the
+  current Docker Hub amd64 `latest` manifest inspected during this session.
+  There was no newer image to pull or deploy.
+- ROOT CAUSE / CLIENT LIFECYCLE: the core retained one extracted-folder VISO
+  backing after failed inspection, failed boot, and Stop. Initial connect/open
+  completed before the backing became reachable from the independent Stop
+  path. A blocked open/read could therefore hold synchronous `BootGame` and the
+  serial app core queue through repeated 15-second protocol timeouts; the next
+  title or Connect + Scan NAS appeared hung even after s6 revived the server.
+- FIX READY: NETISO now publishes one active cancellable backing for either an
+  ISO or extracted-folder title before connect/open. `connection::cancel()` is
+  terminal and calls `shutdown(SHUT_RDWR)` to wake blocked I/O without racing
+  descriptor reuse. Failed metadata inspection, failed boot, exception, Stop
+  even when RPCS3 already reports stopped, server replacement, disconnect, and
+  shutdown all retire the mount. A new boot always cancels stale stopped-state
+  backing before inspection and cannot reuse a cancelled connection.
+- PASS DETERMINISTIC CONTRACT: a loopback server intentionally withheld the
+  NETISO open response. Cancellation woke the blocked client in approximately
+  100 ms instead of waiting for the 15-second I/O deadline; a pre-cancelled
+  connection also failed closed. `NetISOProtocolCancellationTests` is now part
+  of the bounded contract runner.
+- PASS STATIC/BUILD: `git diff --check`, the complete bounded iOS contract
+  suite, and the incremental two-worker arm64 `RPCS3Core` build pass with the
+  recovery changes. This is not yet physical recovery proof.
+- PASS PACKAGE / TRANSFER: `ARMSX3-iOS-Core-Test-v0.22.ipa` is version
+  `0.22.0` build `21`, `31,857,787` bytes, SHA-256
+  `9ac2e18efd7576452258d6f4234f5ea8ebcfbc87cc611e905d25ba4305f3298a`.
+  Independent readback passed ZIP integrity, deep strict signing, arm64
+  app/core binaries, iOS 15.0 minimum, iPhone+iPad device families, and the
+  TrollStore JIT/unsigned-memory/extended-address-space/increased-memory
+  entitlements. The repository and iCloud Drive copies are byte-identical.
+- SOURCE IDENTITY NOTE: the package script reports base revision
+  `cb32d3effdb97f7c46af4a7085eec3efb41b18cc`; V0.22 also contains the scoped
+  verified working-tree changes documented in this section. Do not treat the
+  base revision alone as the full source identity until the candidate is
+  checkpointed in Git.
+- PHYSICAL TITLE MATRIX / OPEN: `Star Wars: The Force Unleashed` and
+  `Tomb Raider Trilogy` reported decryption failures. `Hasbro Family Game
+  Night` required three boots, reached logos/menu, then remained black at a
+  reported `57-60 FPS` before appearing jammed; at that point the server was
+  idle with no active port-38008 client and no new server crash, identifying a
+  separate guest/runtime hang. `Sonic Generations` began loading after the
+  preceding title error. Preserve each result separately from transport health.
+- REQUIRED PHYSICAL RECOVERY GATE: install the exact next signed IPA, launch a
+  known failing encrypted title, press Stop, immediately launch a known-good
+  NETISO title, then Stop and run Connect + Scan NAS. The second launch and both
+  `/PS3ISO` and `/GAMES` listings must complete without restarting the app,
+  container, or supervised server process. Repeat once while deliberately
+  restarting only `ps3netsrv` inside the container. Until this passes on-device,
+  the recovery fix remains a candidate rather than accepted behavior.

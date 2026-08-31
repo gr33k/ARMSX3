@@ -3,6 +3,7 @@
 #include "NetISOProtocol.h"
 #include "Utilities/File.h"
 
+#include <atomic>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -53,9 +54,10 @@ public:
 	inline static constexpr std::string_view registry_name = "netiso_overlay_fs_dev";
 
 	explicit netiso_device(netiso::endpoint server);
-	~netiso_device() override = default;
+	~netiso_device() override;
 
 	const netiso::endpoint& server() const noexcept;
+	bool cancel_active_mount() noexcept;
 	std::string virtual_path(const std::string& remote_path) const;
 	bool list_remote(const std::string& remote_path,
 		std::vector<netiso::directory_entry>& entries, std::string& error) const;
@@ -75,8 +77,11 @@ private:
 
 	netiso::endpoint m_server;
 	std::mutex m_backing_mutex;
-	std::string m_virtual_backing_path;
-	std::shared_ptr<netiso_backing> m_virtual_backing;
+	std::string m_cached_backing_path;
+	std::shared_ptr<netiso_backing> m_cached_backing;
+	std::mutex m_active_backing_mutex;
+	std::shared_ptr<netiso_backing> m_active_backing;
+	std::atomic<u64> m_backing_generation{0};
 	mutable std::mutex m_error_mutex;
 	mutable std::string m_last_error;
 };

@@ -103,6 +103,7 @@ namespace
 std::mutex g_api_mutex;
 std::mutex g_stop_mutex;
 std::mutex g_progress_mutex;
+std::mutex g_netiso_mutex;
 rpcs3::ios::lifecycle g_lifecycle;
 rpcs3::ios::error_store g_last_error;
 rpcs3_ios_config g_config{};
@@ -257,12 +258,26 @@ bool valid_netiso_host(std::string_view host)
 		});
 }
 
+stx::shared_ptr<rpcs3::ios::netiso_device> active_netiso_device()
+{
+	std::lock_guard lock(g_netiso_mutex);
+	return g_netiso_device;
+}
+
+bool cancel_active_netiso_mount()
+{
+	const auto device = active_netiso_device();
+	return device && device->cancel_active_mount();
+}
+
 bool remove_netiso_device()
 {
+	std::lock_guard lock(g_netiso_mutex);
 	if (!g_netiso_device)
 	{
 		return true;
 	}
+	g_netiso_device->cancel_active_mount();
 	if (!fs::set_virtual_device(std::string{rpcs3::ios::netiso_device::registry_name},
 		stx::shared_ptr<fs::device_base>{}))
 	{
@@ -2222,32 +2237,36 @@ extern "C" rpcs3_ios_status rpcs3_ios_netiso_connect(
 		}
 
 		stx::shared_ptr<fs::device_base> previous;
-		if (g_netiso_device)
 		{
-			previous = fs::set_virtual_device(
-				std::string{rpcs3::ios::netiso_device::registry_name},
-				stx::shared_ptr<fs::device_base>{});
-			if (!previous)
+			std::lock_guard netiso_lock(g_netiso_mutex);
+			if (g_netiso_device)
 			{
-				set_error("Unable to replace the active NETISO virtual filesystem");
+				g_netiso_device->cancel_active_mount();
+				previous = fs::set_virtual_device(
+					std::string{rpcs3::ios::netiso_device::registry_name},
+					stx::shared_ptr<fs::device_base>{});
+				if (!previous)
+				{
+					set_error("Unable to replace the active NETISO virtual filesystem");
+					return RPCS3_IOS_INTERNAL_ERROR;
+				}
+			}
+
+			if (!fs::set_virtual_device(
+				std::string{rpcs3::ios::netiso_device::registry_name}, candidate))
+			{
+				if (previous)
+				{
+					fs::set_virtual_device(
+						std::string{rpcs3::ios::netiso_device::registry_name},
+						std::move(previous));
+				}
+				set_error("Unable to register the NETISO virtual filesystem");
 				return RPCS3_IOS_INTERNAL_ERROR;
 			}
-		}
 
-		if (!fs::set_virtual_device(
-			std::string{rpcs3::ios::netiso_device::registry_name}, candidate))
-		{
-			if (previous)
-			{
-				fs::set_virtual_device(
-					std::string{rpcs3::ios::netiso_device::registry_name},
-					std::move(previous));
-			}
-			set_error("Unable to register the NETISO virtual filesystem");
-			return RPCS3_IOS_INTERNAL_ERROR;
+			g_netiso_device = std::move(candidate);
 		}
-
-		g_netiso_device = std::move(candidate);
 		rpcs3::ios::reset_netiso_statistics();
 		emit_log(4, fmt::format("Connected NETISO server %s:%u with %u root entries",
 			requested_host, endpoint.port, root_entries.size()));
@@ -4420,10 +4439,14 @@ extern "C" rpcs3_ios_status rpcs3_ios_boot_netiso_game(const char* remote_path) 
 
 	try
 	{
+		// A previous guest may have reached stopped state without the UI issuing
+		// Stop. Never let its stale socket or virtual image leak into this boot.
+		cancel_active_netiso_mount();
 		rpcs3::ios::netiso_game_metadata metadata;
 		std::string error;
 		if (!rpcs3::ios::inspect_netiso_game(*g_netiso_device, remote_path, metadata, error))
 		{
+			cancel_active_netiso_mount();
 			set_error(std::move(error));
 			return RPCS3_IOS_NETISO_GAME_INVALID;
 		}
@@ -4443,6 +4466,7 @@ extern "C" rpcs3_ios_status rpcs3_ios_boot_netiso_game(const char* remote_path) 
 		if (result != game_boot_result::no_errors)
 		{
 			Emu.SetForceBoot(false);
+			cancel_active_netiso_mount();
 			set_error(fmt::format("NETISO game boot failed: %s", result));
 			return RPCS3_IOS_BOOT_FAILED;
 		}
@@ -4454,10 +4478,12 @@ extern "C" rpcs3_ios_status rpcs3_ios_boot_netiso_game(const char* remote_path) 
 	}
 	catch (const std::exception& error)
 	{
+		cancel_active_netiso_mount();
 		set_error(error.what());
 	}
 	catch (...)
 	{
+		cancel_active_netiso_mount();
 		set_error("Unknown exception while booting a NETISO game");
 	}
 
@@ -4663,6 +4689,9 @@ extern "C" rpcs3_ios_status rpcs3_ios_stop_emulation(void) noexcept
 
 	try
 	{
+		// Cancel first so a blocked remote read or server-side VISO open cannot
+		// hold BootGame and the serial core queue through every socket timeout.
+		const bool cancelled_netiso = cancel_active_netiso_mount();
 		// An explicit wrapper stop leaves the full-screen session. It must not
 		// trigger upstream's automatic game-to-Big-Picture return callback.
 		g_guest_session_claimed.store(false, std::memory_order_release);
@@ -4670,12 +4699,20 @@ extern "C" rpcs3_ios_status rpcs3_ios_stop_emulation(void) noexcept
 		Emu.SetForceBoot(false);
 		if (Emu.GetStatus(false) == system_state::stopped)
 		{
+			if (cancelled_netiso)
+			{
+				emit_log(4, "Cancelled stale NETISO mount after emulation stopped");
+			}
 			return RPCS3_IOS_OK;
 		}
 
 		emit_log(4, "Stopping the current PlayStation 3 emulation session");
 		Emu.GracefulShutdown(false, true);
 		rpcs3::ios::shared_pad_feedback().clear();
+		if (cancelled_netiso)
+		{
+			emit_log(4, "Cancelled active NETISO mount during stop");
+		}
 		emit_log(4, "PlayStation 3 stop request accepted; cleanup is continuing asynchronously");
 		return RPCS3_IOS_OK;
 	}

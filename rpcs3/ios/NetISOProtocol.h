@@ -1,7 +1,9 @@
 #pragma once
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -39,6 +41,7 @@ public:
 	connection& operator=(const connection&) = delete;
 
 	bool connect(std::string& error);
+	void cancel() noexcept;
 	void close() noexcept;
 	bool is_connected() const noexcept;
 
@@ -54,8 +57,11 @@ private:
 	bool receive_all(void* data, std::size_t size, std::string& error);
 	bool send_path_command(std::uint16_t opcode, const std::string& path,
 		std::string& error);
+	int socket_handle() const noexcept;
 
 	endpoint m_server;
+	std::atomic_bool m_cancelled = false;
+	mutable std::mutex m_socket_mutex;
 	int m_socket = -1;
 };
 

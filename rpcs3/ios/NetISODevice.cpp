@@ -65,17 +65,44 @@ bool same_identity(const netiso::file_info& left, const netiso::file_info& right
 class netiso_backing final
 {
 public:
-	static std::shared_ptr<netiso_backing> open(
-		netiso::endpoint server, std::string path, std::string& error)
+	static std::shared_ptr<netiso_backing> create(
+		netiso::endpoint server, std::string path)
 	{
-		auto connection = std::make_unique<netiso::connection>(server);
-		netiso::file_info identity{};
-		if (!connection->connect(error) || !connection->open_file(path, identity, error))
-		{
-			return {};
-		}
 		return std::shared_ptr<netiso_backing>(new netiso_backing(
-			std::move(server), std::move(path), identity, std::move(connection)));
+			std::move(server), std::move(path)));
+	}
+
+	bool initialize(std::string& error)
+	{
+		const auto connection = current_connection();
+		netiso::file_info identity{};
+		if (!connection || !connection->connect(error) ||
+			!connection->open_file(m_path, identity, error))
+		{
+			return false;
+		}
+		if (m_cancelled.load(std::memory_order_acquire))
+		{
+			error = "NETISO mount cancelled";
+			connection->cancel();
+			return false;
+		}
+		m_identity = identity;
+		return true;
+	}
+
+	void cancel() noexcept
+	{
+		m_cancelled.store(true, std::memory_order_release);
+		if (const auto connection = current_connection())
+		{
+			connection->cancel();
+		}
+	}
+
+	bool is_cancelled() const noexcept
+	{
+		return m_cancelled.load(std::memory_order_acquire);
 	}
 
 	fs::stat_t get_stat() const
@@ -162,18 +189,40 @@ public:
 	}
 
 private:
-	netiso_backing(netiso::endpoint server, std::string path,
-		netiso::file_info identity, std::unique_ptr<netiso::connection> connection)
+	netiso_backing(netiso::endpoint server, std::string path)
 		: m_server(std::move(server))
 		, m_path(std::move(path))
-		, m_identity(identity)
-		, m_connection(std::move(connection))
+		, m_connection(std::make_shared<netiso::connection>(m_server))
 	{
+	}
+
+	std::shared_ptr<netiso::connection> current_connection() const
+	{
+		std::lock_guard lock(m_connection_mutex);
+		return m_connection;
+	}
+
+	void set_connection(std::shared_ptr<netiso::connection> connection)
+	{
+		std::lock_guard lock(m_connection_mutex);
+		m_connection = std::move(connection);
 	}
 
 	bool reconnect_and_verify(std::string& error)
 	{
-		auto replacement = std::make_unique<netiso::connection>(m_server);
+		if (m_cancelled.load(std::memory_order_acquire))
+		{
+			error = "NETISO mount cancelled";
+			return false;
+		}
+		auto replacement = std::make_shared<netiso::connection>(m_server);
+		set_connection(replacement);
+		if (m_cancelled.load(std::memory_order_acquire))
+		{
+			replacement->cancel();
+			error = "NETISO mount cancelled";
+			return false;
+		}
 		if (!replacement->connect(error))
 		{
 			return false;
@@ -188,7 +237,12 @@ private:
 			error = "NETISO remote file changed while it was mounted";
 			return false;
 		}
-		m_connection = std::move(replacement);
+		if (m_cancelled.load(std::memory_order_acquire))
+		{
+			replacement->cancel();
+			error = "NETISO mount cancelled";
+			return false;
+		}
 		g_netiso_statistics.reconnects.fetch_add(1, std::memory_order_relaxed);
 		return true;
 	}
@@ -197,10 +251,16 @@ private:
 	{
 		for (u32 attempt = 0; attempt < 2; attempt++)
 		{
+			if (m_cancelled.load(std::memory_order_acquire))
+			{
+				error = "NETISO mount cancelled";
+				return false;
+			}
 			usz received = 0;
 			g_netiso_statistics.remote_reads.fetch_add(1, std::memory_order_relaxed);
-			const bool succeeded = m_connection &&
-				m_connection->read_at(offset, buffer, size, received, error);
+			const auto connection = current_connection();
+			const bool succeeded = connection &&
+				connection->read_at(offset, buffer, size, received, error);
 			g_netiso_statistics.remote_bytes.fetch_add(received, std::memory_order_relaxed);
 			if (succeeded && received == size)
 			{
@@ -217,7 +277,9 @@ private:
 	netiso::endpoint m_server;
 	std::string m_path;
 	netiso::file_info m_identity;
-	std::unique_ptr<netiso::connection> m_connection;
+	mutable std::mutex m_connection_mutex;
+	std::shared_ptr<netiso::connection> m_connection;
+	std::atomic_bool m_cancelled = false;
 	std::mutex m_mutex;
 	u64 m_cache_offset = 0;
 	std::vector<u8> m_cache;
@@ -407,9 +469,30 @@ netiso_device::netiso_device(netiso::endpoint server)
 	fs_prefix = std::string{virtual_device_name};
 }
 
+netiso_device::~netiso_device()
+{
+	cancel_active_mount();
+}
+
 const netiso::endpoint& netiso_device::server() const noexcept
 {
 	return m_server;
+}
+
+bool netiso_device::cancel_active_mount() noexcept
+{
+	m_backing_generation.fetch_add(1, std::memory_order_acq_rel);
+	std::shared_ptr<netiso_backing> backing;
+	{
+		std::lock_guard lock(m_active_backing_mutex);
+		backing = std::move(m_active_backing);
+	}
+	if (backing)
+	{
+		backing->cancel();
+		return true;
+	}
+	return false;
 }
 
 std::string netiso_device::virtual_path(const std::string& remote_path) const
@@ -448,25 +531,51 @@ std::string netiso_device::last_error() const
 std::shared_ptr<netiso_backing> netiso_device::acquire_backing(
 	const std::string& remote_path, std::string& error)
 {
-	if (!remote_path.starts_with(virtual_ps3_prefix))
+	std::lock_guard lock(m_backing_mutex);
+	if (m_cached_backing && !m_cached_backing->is_cancelled() &&
+		m_cached_backing_path == remote_path)
 	{
-		return netiso_backing::open(m_server, remote_path, error);
+		return m_cached_backing;
+	}
+	if (m_cached_backing)
+	{
+		cancel_active_mount();
+		m_cached_backing.reset();
+		m_cached_backing_path.clear();
 	}
 
-	// ps3netsrv synthesizes an ISO every time a /***PS3***/ folder is opened.
-	// Keep exactly one mounted virtual image alive so every file RPCS3 opens from
-	// that archive shares the same server-side image and transport connection.
-	std::lock_guard lock(m_backing_mutex);
-	if (m_virtual_backing && m_virtual_backing_path == remote_path)
+	// Publish the backing before connect/open so Stop can cancel a server-side
+	// virtual ISO build instead of waiting for the protocol timeout.
+	const u64 generation = m_backing_generation.load(std::memory_order_acquire);
+	auto backing = netiso_backing::create(m_server, remote_path);
 	{
-		return m_virtual_backing;
+		std::lock_guard active_lock(m_active_backing_mutex);
+		if (generation != m_backing_generation.load(std::memory_order_relaxed))
+		{
+			error = "NETISO mount cancelled";
+			return {};
+		}
+		m_active_backing = backing;
 	}
-	auto backing = netiso_backing::open(m_server, remote_path, error);
-	if (backing)
+
+	if (!backing->initialize(error) ||
+		generation != m_backing_generation.load(std::memory_order_acquire))
 	{
-		m_virtual_backing_path = remote_path;
-		m_virtual_backing = backing;
+		backing->cancel();
+		std::lock_guard active_lock(m_active_backing_mutex);
+		if (m_active_backing == backing)
+		{
+			m_active_backing.reset();
+		}
+		if (error.empty())
+		{
+			error = "NETISO mount cancelled";
+		}
+		return {};
 	}
+
+	m_cached_backing_path = remote_path;
+	m_cached_backing = backing;
 	return backing;
 }
 

@@ -4,6 +4,7 @@
 #include "GameFolderContract.h"
 #include "GamePatchContract.h"
 #include "IOSPipelineCachePolicy.h"
+#include "IOSStoragePolicy.h"
 
 #include "Utilities/StrFmt.h"
 #include "Crypto/unpkg.h"
@@ -34,6 +35,11 @@ namespace rpcs3::ios
 {
 namespace
 {
+u64 available_install_bytes(const fs::device_stat& device) noexcept
+{
+	return storage::writable_bytes(device.avail_free);
+}
+
 game_package_install_result invalid_package(std::string detail)
 {
 	return {game_package_install_error::invalid_package, {}, {}, std::move(detail)};
@@ -1119,11 +1125,12 @@ game_package_install_result install_game_package(
 		return installation_failed(
 			"Unable to determine free space for package installation", title_id, title);
 	}
-	if (device.avail_free < required_size)
+	const u64 available_bytes = available_install_bytes(device);
+	if (available_bytes < required_size)
 	{
 		return installation_failed(fmt::format(
 			"Not enough free space to install the package (need at least %u more bytes)",
-			required_size - device.avail_free), title_id, title);
+			required_size - available_bytes), title_id, title);
 	}
 
 	if (progress)
@@ -1288,11 +1295,12 @@ game_iso_install_result install_game_iso(
 	{
 		return iso_installation_failed("Unable to determine free space for ISO installation");
 	}
-	if (device.avail_free < total_size)
+	const u64 available_bytes = available_install_bytes(device);
+	if (available_bytes < total_size)
 	{
 		return iso_installation_failed(fmt::format(
 			"Not enough free space to install the ISO (need at least %s more)",
-			formatted_byte_size(total_size - device.avail_free)));
+			formatted_byte_size(total_size - available_bytes)));
 	}
 	static std::atomic<u64> import_counter{0};
 	temporary_directory temporary{
@@ -1456,11 +1464,12 @@ game_zip_install_result install_game_zip(
 	{
 		return zip_installation_failed("Unable to determine free space for ZIP installation");
 	}
-	if (device.avail_free < required_size)
+	const u64 available_bytes = available_install_bytes(device);
+	if (available_bytes < required_size)
 	{
 		return zip_installation_failed(fmt::format(
 			"Not enough free space to extract the ZIP (need at least %s more)",
-			formatted_byte_size(required_size - device.avail_free)));
+			formatted_byte_size(required_size - available_bytes)));
 	}
 
 	static std::atomic<u64> import_counter{0};
@@ -1626,11 +1635,12 @@ game_folder_install_result install_game_folder(
 		return folder_installation_failed(
 			"Unable to determine free space for folder installation", title_id, title);
 	}
-	if (device.avail_free < required_size)
+	const u64 available_bytes = available_install_bytes(device);
+	if (available_bytes < required_size)
 	{
 		return folder_installation_failed(fmt::format(
 			"Not enough free space to copy the game folder (need at least %s more)",
-			formatted_byte_size(required_size - device.avail_free)), title_id, title);
+			formatted_byte_size(required_size - available_bytes)), title_id, title);
 	}
 
 	static std::atomic<u64> import_counter{0};

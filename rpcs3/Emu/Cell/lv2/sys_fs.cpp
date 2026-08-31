@@ -1,6 +1,10 @@
 #include "stdafx.h"
 #include "sys_sync.h"
 #include "sys_fs.h"
+
+#ifdef RPCS3_IOS
+#include "ios/IOSStoragePolicy.h"
+#endif
 #include "sys_memory.h"
 #include "util/asm.hpp"
 
@@ -2371,9 +2375,16 @@ error_code sys_fs_fcntl(ppu_thread& ppu, u32 fd, u32 op, vm::ptr<void> _arg, u32
 		const auto arg = vm::static_ptr_cast<lv2_file_c0000002>(_arg);
 
 		const auto& mp = g_fxo->get<lv2_fs_mount_info_map>().lookup("/dev_hdd0");
+		u64 available = 40ull * 1024 * 1024 * 1024 - 1;
+#ifdef RPCS3_IOS
+		fs::device_stat device{};
+		available = fs::statfs(rpcs3::utils::get_hdd0_dir(), device)
+			? rpcs3::ios::storage::guest_reported_bytes(device.avail_free)
+			: 0;
+#endif
 
 		arg->out_block_size = mp->block_size;
-		arg->out_block_count = (40ull * 1024 * 1024 * 1024 - 1) / mp->block_size; // Read explanation in cellHddGameCheck
+		arg->out_block_count = available / mp->block_size;
 		return CELL_OK;
 	}
 
@@ -3278,7 +3289,14 @@ error_code sys_fs_disk_free(ppu_thread& ppu, vm::cptr<char> path, vm::ptr<u64> t
 	}
 	else //if (mp == &g_mp_sys_dev_hdd0)
 	{
+#ifdef RPCS3_IOS
+		fs::device_stat device{};
+		available = fs::statfs(local_path, device)
+			? rpcs3::ios::storage::guest_reported_bytes(device.avail_free)
+			: 0;
+#else
 		available = (40ull * 1024 * 1024 * 1024 - mp->sector_size); // Read explanation in cellHddGameCheck
+#endif
 	}
 
 	// HACK: Hopefully nothing uses this value or once at max because its hacked here:

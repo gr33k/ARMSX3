@@ -155,6 +155,11 @@ connection::~connection()
 bool connection::connect(std::string& error)
 {
 	close();
+	if (m_cancelled.load(std::memory_order_acquire))
+	{
+		error = "NETISO operation cancelled";
+		return false;
+	}
 	if (m_server.host.empty() || !m_server.port)
 	{
 		error = "NETISO host and port are required";
@@ -177,6 +182,11 @@ bool connection::connect(std::string& error)
 	int last_error = 0;
 	for (addrinfo* address = addresses; address; address = address->ai_next)
 	{
+		if (m_cancelled.load(std::memory_order_acquire))
+		{
+			last_error = ECANCELED;
+			break;
+		}
 		const int candidate = ::socket(address->ai_family, address->ai_socktype, address->ai_protocol);
 		if (candidate < 0)
 		{
@@ -249,13 +259,26 @@ bool connection::connect(std::string& error)
 		{
 			if (::fcntl(candidate, F_SETFL, original_flags) == 0)
 			{
-				timeval timeout{io_timeout_seconds, 0};
-				::setsockopt(candidate, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
-				::setsockopt(candidate, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
-				m_socket = candidate;
-				break;
+				if (!m_cancelled.load(std::memory_order_acquire))
+				{
+					timeval timeout{io_timeout_seconds, 0};
+					::setsockopt(candidate, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+					::setsockopt(candidate, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
+					{
+						std::lock_guard lock(m_socket_mutex);
+						if (!m_cancelled.load(std::memory_order_relaxed))
+						{
+							m_socket = candidate;
+							break;
+						}
+					}
+				}
+				connect_error = ECANCELED;
 			}
-			connect_error = errno;
+			else
+			{
+				connect_error = errno;
+			}
 		}
 		last_error = connect_error;
 		::close(candidate);
@@ -264,24 +287,51 @@ bool connection::connect(std::string& error)
 
 	if (m_socket < 0)
 	{
+		if (m_cancelled.load(std::memory_order_acquire))
+		{
+			error = "NETISO operation cancelled";
+			return false;
+		}
 		error = socket_error("NETISO connection failed", last_error ? last_error : ECONNREFUSED);
 		return false;
 	}
 	return true;
 }
 
-void connection::close() noexcept
+void connection::cancel() noexcept
 {
+	m_cancelled.store(true, std::memory_order_release);
+	std::lock_guard lock(m_socket_mutex);
 	if (m_socket >= 0)
 	{
-		::close(m_socket);
-		m_socket = -1;
+		// shutdown wakes a blocked send/receive without racing descriptor reuse;
+		// the operation that owns the connection performs the final close.
+		::shutdown(m_socket, SHUT_RDWR);
+	}
+}
+
+void connection::close() noexcept
+{
+	int descriptor = -1;
+	{
+		std::lock_guard lock(m_socket_mutex);
+		descriptor = std::exchange(m_socket, -1);
+	}
+	if (descriptor >= 0)
+	{
+		::close(descriptor);
 	}
 }
 
 bool connection::is_connected() const noexcept
 {
-	return m_socket >= 0;
+	return socket_handle() >= 0 && !m_cancelled.load(std::memory_order_acquire);
+}
+
+int connection::socket_handle() const noexcept
+{
+	std::lock_guard lock(m_socket_mutex);
+	return m_socket;
 }
 
 bool connection::send_all(const void* data, std::size_t size, std::string& error)
@@ -289,10 +339,22 @@ bool connection::send_all(const void* data, std::size_t size, std::string& error
 	const auto* bytes = static_cast<const std::uint8_t*>(data);
 	while (size)
 	{
+		if (m_cancelled.load(std::memory_order_acquire))
+		{
+			error = "NETISO operation cancelled";
+			close();
+			return false;
+		}
+		const int descriptor = socket_handle();
+		if (descriptor < 0)
+		{
+			error = "NETISO connection is closed";
+			return false;
+		}
 #if defined(MSG_NOSIGNAL)
-		const ssize_t sent = ::send(m_socket, bytes, size, MSG_NOSIGNAL);
+		const ssize_t sent = ::send(descriptor, bytes, size, MSG_NOSIGNAL);
 #else
-		const ssize_t sent = ::send(m_socket, bytes, size, 0);
+		const ssize_t sent = ::send(descriptor, bytes, size, 0);
 #endif
 		if (sent < 0 && errno == EINTR)
 		{
@@ -300,7 +362,9 @@ bool connection::send_all(const void* data, std::size_t size, std::string& error
 		}
 		if (sent <= 0)
 		{
-			error = socket_error("NETISO send failed");
+			error = m_cancelled.load(std::memory_order_acquire)
+				? "NETISO operation cancelled"
+				: socket_error("NETISO send failed");
 			close();
 			return false;
 		}
@@ -315,14 +379,28 @@ bool connection::receive_all(void* data, std::size_t size, std::string& error)
 	auto* bytes = static_cast<std::uint8_t*>(data);
 	while (size)
 	{
-		const ssize_t received = ::recv(m_socket, bytes, size, 0);
+		if (m_cancelled.load(std::memory_order_acquire))
+		{
+			error = "NETISO operation cancelled";
+			close();
+			return false;
+		}
+		const int descriptor = socket_handle();
+		if (descriptor < 0)
+		{
+			error = "NETISO connection is closed";
+			return false;
+		}
+		const ssize_t received = ::recv(descriptor, bytes, size, 0);
 		if (received < 0 && errno == EINTR)
 		{
 			continue;
 		}
 		if (received <= 0)
 		{
-			error = received == 0 ? "NETISO server closed the connection" : socket_error("NETISO receive failed");
+			error = m_cancelled.load(std::memory_order_acquire)
+				? "NETISO operation cancelled"
+				: received == 0 ? "NETISO server closed the connection" : socket_error("NETISO receive failed");
 			close();
 			return false;
 		}

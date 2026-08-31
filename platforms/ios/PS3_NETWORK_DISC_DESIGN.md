@@ -75,6 +75,24 @@ The existing ISO parser and game-folder boot code read through this device.
 Title discovery still derives the title ID and metadata through the normal PS3
 content path, so patch selection is not bypassed.
 
+Exactly one active backing is retained for the selected `/PS3ISO` image or
+server-generated `/***PS3***/GAMES/<title>` virtual image. The backing is
+published before its potentially slow connect/open operation so the independent
+Stop path can cancel an in-progress server-side VISO build. Cancellation is
+terminal for that connection: it performs `shutdown(SHUT_RDWR)` to wake blocked
+I/O, prevents reconnect, and leaves final descriptor close to the owning
+operation. Failed metadata inspection, failed `BootGame`, explicit Stop,
+server replacement, disconnect, and core shutdown all retire the active mount.
+A subsequent launch therefore starts from a fresh backing instead of consuming
+the stale connection's full timeout and blocking the serial core queue.
+
+Container health and server-process health are distinct. The current
+`shawly/ps3netsrv` image supervises `ps3netsrv` inside a still-running container;
+therefore EmuHub health checks must probe the protocol and detect an internal
+process restart rather than trusting Docker's container state alone. The client
+must fail visibly after a server crash and may reconnect on the next explicit
+operation, but it must not run an unbounded automatic retry loop.
+
 V0.4 intentionally does not add the proposed cross-file 64 MiB LRU or latency
 histograms. Physical major-3D testing must first show whether network reads are
 the limiting factor; expanding cache memory before that evidence would compete
@@ -99,5 +117,11 @@ without duplicating the entire EmuHub catalog.
   remote.
 - Network interruption fails visibly, reconnects only when safe, and never
   falls back to a hosted/WebKit/WASM path.
+- A failed title followed by Stop must release a blocked mount promptly; a
+  second title and a fresh `/PS3ISO` plus `/GAMES` scan must succeed without an
+  app, container, or server-process restart.
+- Managed-server qualification must kill only the supervised `ps3netsrv`
+  process, prove that protocol health changes while the container remains up,
+  and prove bounded client recovery after the supervisor restarts it.
 - Admin mount changes survive Compose regeneration, container restart, and Git
   sync without altering unrelated mounts.

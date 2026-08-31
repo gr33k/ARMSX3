@@ -72,6 +72,19 @@ mkdir -p "${OUTPUT_ROOT}"
 
 "${CXX_COMPILER}" -std=c++20 -Wall -Wextra -Werror \
     -I "${SOURCE_ROOT}" -I "${SOURCE_ROOT}/rpcs3" \
+    "${SCRIPT_DIR}/IOSStoragePolicyTests.cpp" \
+    -o "${OUTPUT_ROOT}/IOSStoragePolicyTests"
+"${OUTPUT_ROOT}/IOSStoragePolicyTests"
+
+"${CXX_COMPILER}" -std=c++20 -Wall -Wextra -Werror -pthread \
+    -I "${SOURCE_ROOT}" -I "${SOURCE_ROOT}/rpcs3" \
+    "${SCRIPT_DIR}/NetISOProtocolCancellationTests.cpp" \
+    "${SCRIPT_DIR}/../NetISOProtocol.cpp" \
+    -o "${OUTPUT_ROOT}/NetISOProtocolCancellationTests"
+"${OUTPUT_ROOT}/NetISOProtocolCancellationTests"
+
+"${CXX_COMPILER}" -std=c++20 -Wall -Wextra -Werror \
+    -I "${SOURCE_ROOT}" -I "${SOURCE_ROOT}/rpcs3" \
     "${SCRIPT_DIR}/RPCS3IOSOverlayMediaTests.cpp" \
     -o "${OUTPUT_ROOT}/RPCS3IOSOverlayMediaTests"
 "${OUTPUT_ROOT}/RPCS3IOSOverlayMediaTests"

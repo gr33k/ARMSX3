@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "Emu/System.h"
 #include "Emu/VFS.h"
+#include "Emu/system_utils.hpp"
 #include "Emu/IdManager.h"
 #include "Emu/localized_string.h"
 #include "Emu/savestate_utils.hpp"
@@ -28,7 +29,26 @@
 
 #include "util/asm.hpp"
 
+#ifdef RPCS3_IOS
+#include "ios/IOSStoragePolicy.h"
+#endif
+
 LOG_CHANNEL(cellSaveData);
+
+static s32 guest_hdd_free_size_kib()
+{
+#ifdef RPCS3_IOS
+	fs::device_stat device{};
+	if (!fs::statfs(rpcs3::utils::get_hdd0_dir(), device))
+	{
+		return 0;
+	}
+
+	return rpcs3::ios::storage::guest_reported_kib(device.avail_free);
+#else
+	return 40 * 1024 * 1024 - 256;
+#endif
+}
 
 template<>
 void fmt_class_string<CellSaveDataError>::format(std::string& out, u64 arg)
@@ -1181,7 +1201,7 @@ static NEVER_INLINE error_code savedata_op(ppu_thread& ppu, u32 operation, u32 v
 		{
 			const SaveDataEntry& entry = ::at32(save_entries, selected);
 			strcpy_trunc(doneGet->dirName, entry.dirName);
-			doneGet->hddFreeSizeKB = 40 * 1024 * 1024 - 256; // Read explanation in cellHddGameCheck
+			doneGet->hddFreeSizeKB = guest_hdd_free_size_kib();
 			doneGet->excResult     = CELL_OK;
 			std::memset(doneGet->reserved, 0, sizeof(doneGet->reserved));
 
@@ -1528,7 +1548,7 @@ static NEVER_INLINE error_code savedata_op(ppu_thread& ppu, u32 operation, u32 v
 			// funcStat is called even if the directory doesn't exist.
 		}
 
-		statGet->hddFreeSizeKB = 40 * 1024 * 1024 - 256; // Read explanation in cellHddGameCheck
+		statGet->hddFreeSizeKB = guest_hdd_free_size_kib();
 		statGet->isNewData = save_entry.isNew = psf.empty();
 
 		statGet->dir.atime = save_entry.atime = dir_info.atime;

@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <type_traits>
 
 LOG_CHANNEL(IOSAudio, "iOS Audio");
 
@@ -18,6 +19,45 @@ bool check_status(OSStatus status, std::string_view operation)
 
 	IOSAudio.error("%s failed with OSStatus %d", operation, status);
 	return false;
+}
+
+template <typename Sample>
+void fade_underrun_tail(
+	u8* output,
+	u32 written,
+	u32 requested,
+	u32 channel_count,
+	const u8* last_frame) noexcept
+{
+	const u32 bytes_per_frame = channel_count * sizeof(Sample);
+	if (!output || !last_frame || bytes_per_frame == 0 || written >= requested)
+	{
+		return;
+	}
+
+	const u32 missing_frames = (requested - written) / bytes_per_frame;
+	const u32 fade_frames = rpcs3::ios::audio::underrun_fade_frame_count(missing_frames);
+	for (u32 frame = 0; frame < fade_frames; frame++)
+	{
+		const float gain = rpcs3::ios::audio::underrun_fade_gain(frame, fade_frames);
+		for (u32 channel = 0; channel < channel_count; channel++)
+		{
+			Sample sample{};
+			std::memcpy(&sample, last_frame + channel * sizeof(Sample), sizeof(Sample));
+			if constexpr (std::is_floating_point_v<Sample>)
+			{
+				sample *= gain;
+			}
+			else
+			{
+				sample = static_cast<Sample>(static_cast<float>(sample) * gain);
+			}
+			std::memcpy(output + written + (frame * channel_count + channel) * sizeof(Sample), &sample, sizeof(Sample));
+		}
+	}
+
+	const u32 faded_bytes = fade_frames * bytes_per_frame;
+	std::memset(output + written + faded_bytes, 0, requested - written - faded_bytes);
 }
 }
 
@@ -345,9 +385,17 @@ OSStatus IOSAudioBackend::render_callback(
 			bytes_per_frame);
 	}
 
-	for (u32 offset = written; offset < requested; offset += bytes_per_frame)
+	if (written < requested)
 	{
-		std::memcpy(output + offset, backend->m_last_frame.data(), bytes_per_frame);
+		if (backend->get_convert_to_s16())
+		{
+			fade_underrun_tail<s16>(output, written, requested, backend->get_channels(), backend->m_last_frame.data());
+		}
+		else
+		{
+			fade_underrun_tail<f32>(output, written, requested, backend->get_channels(), backend->m_last_frame.data());
+		}
+		backend->m_last_frame.fill(0);
 	}
 	return noErr;
 }
