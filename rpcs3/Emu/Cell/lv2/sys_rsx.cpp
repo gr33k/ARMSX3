@@ -101,6 +101,25 @@ bool rsx::thread::send_event(u64 data1, u64 event_flags, u64 data3)
 
 	auto error = sys_event_port_send(rsx_event_port, data1, event_flags, data3);
 
+	// Vblank events are periodic and already allowed to be lost or duplicated.
+	// Do not strand their producer behind a full guest event queue.
+	static constexpr u64 vblank_bits =
+		SYS_RSX_EVENT_VBLANK | SYS_RSX_EVENT_SECOND_VBLANK_BASE | (SYS_RSX_EVENT_SECOND_VBLANK_BASE * 2);
+
+	if (error + 0u == CELL_EBUSY && (event_flags & ~vblank_bits) == 0)
+	{
+		static atomic_t<u64> s_dropped{0};
+		const u64 dropped = ++s_dropped;
+
+		if (dropped == 1 || (dropped & 0x3ff) == 0)
+		{
+			rsx_log.warning("Dropped %u vblank events into a full queue; the guest is not draining it.",
+				static_cast<u32>(dropped));
+		}
+
+		return false;
+	}
+
 	while (error + 0u == CELL_EBUSY)
 	{
 		auto cpu = get_current_cpu_thread();
