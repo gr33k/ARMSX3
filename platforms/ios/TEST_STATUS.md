@@ -2883,3 +2883,36 @@ cache-reuse gates.
   11:51:44. The stop path therefore completed in about three seconds under
   severe memory pressure. The trace capture was closed only after this terminal
   outcome; relaunch and unrelated-title stale-state gates remain open.
+
+### V0.32 audited capacity/GTA-WCB package (2026-08-31)
+
+- SOURCE/BUILD: commits `34aefc171` and `ce217bf98` add the important-usage
+  capacity policy and GTA-only WCB profile; package metadata commit `2bed51e81`
+  sets version `0.32.0`, build `31`. The complete iOS contract suite,
+  `git diff --check`, and two-worker iOS 15 arm64 core build pass.
+- ACCEPTED PACKAGE: `ARMSX3-iOS-Core-Test-v0.32.ipa` is 31,872,844 bytes and
+  SHA-256 `e6be6ac3274bea84ef50ae24acb43d711b3092ea7d5e29db4f29d46923e281ac`.
+  It was built from source revision
+  `2bed51e81c8974f66eb310ae71abc8487c6dcd06` with core ABI 34.
+- INDEPENDENT READBACK: a fresh temporary extraction passed full ZIP integrity,
+  nine regular-file inventory, absence of symlinks and `__MACOSX`, strict deep
+  app signature verification, and standalone strict core verification. App
+  UUID is `69D7A59B-7C33-3246-B726-57DD65356555`; core UUID is
+  `569F75C8-5563-320A-863B-C389AFA464BD`. The unsigned core SHA-256 is
+  `9f589c4962040d7b611fb5553d73a67a67a9d6f731628395e51b0fa0f4ad81ed`;
+  extracted signed-core SHA-256 is
+  `638631ea5a1227222574a8e8807132fd9b4748410233508ee4e00c80eabe072a`.
+- TARGET/CONTRACT: app and core are arm64 Mach-O binaries targeting iOS 15.0.
+  Readback confirms ABI 34, the GTA streamed-install marker, capacity API
+  linkage, NETISO boot/Stop exports, and no iOS 17.4-only `os_sync` imports.
+  Signature readback confirms `get-task-allow`, JIT, unsigned executable
+  memory, Extended Virtual Addressing, and increased-memory-limit entitlements
+  under the TrollStore identity. App/core scans contain no private source paths
+  or NAS addresses.
+- OPEN TRANSFER/PHYSICAL GATES: repository audit is complete; iCloud/NAS copies
+  and byte-identical readback remain open. Physical acceptance requires GTA
+  `BLES01807` to log WCB enabled, lose the flashing/purple target-obscuring
+  artifacts without worse FPS or memory, and preserve clean Stop/relaunch.
+  Local import and guest free-space acceptance separately require the device to
+  report important-usage capacity through the new policy and accept a title
+  that the old immediate-capacity preflight rejected.
