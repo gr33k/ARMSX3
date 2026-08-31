@@ -2433,3 +2433,65 @@ cache-reuse gates.
   failure followed by a retrying Stop; and a second local/NETISO title. Require
   no stale mount, argv/environment/data/disc/KLIC/HDD1 state and preserve
   fail-closed behavior. Device logs and gameplay are mandatory evidence.
+
+## Adaptive PPU precompile and Sonic diagnostics candidate (post-V0.27)
+
+- SOURCE: isolated commit `c8b7fd651`; only `PPUThread.cpp` changes. The
+  investigation confirms that a warm main-EBOOT cache suppresses the broad
+  `Emu.GetGameDirs()` precompile scan. Sonic's repeated runtime popup is
+  therefore consistent with a late PRX/overlay, a changing cache identity, or
+  a child-process restart, but prior device logs did not identify the module
+  and do not prove identical-object recompilation.
+- BOUNDED DIAGNOSTICS: iOS logs distinct precompile begin, source, scan-complete,
+  worker-end, and precompile-end markers. Source roots are capped at eight plus
+  one truncation count. Cache misses identify path, SHA-derived cache directory,
+  object, fragments scanned/total, check-only state, and process occurrence;
+  the first 64 and then powers of two are retained to prevent unbounded logs.
+  Dispatch and completion lines report configured worker limit, actual native
+  starts, inline fallbacks, current-thread participation, headroom, and stopped
+  state rather than presenting a maximum as completed work.
+- ADAPTIVE WORKERS: the outer SPRX pool now uses short-lived pthread workers
+  with explicit joins, 8 MiB stacks, and the existing adaptive iOS headroom
+  policy. High/moderate/severe dispatch is capped at 4/2/1 workers. A nested
+  `ppu_initialize()` remains on its owning outer worker instead of opening a
+  second adaptive pool, so concurrent LLVM work does not multiply beyond that
+  aggregate budget. Runtime-discovered modules outside the outer pool retain
+  the normal adaptive inner parallelism.
+- FAILURE SAFETY: pthread setup failure falls back inline without stranding an
+  acquired compiler permit. Parent cleanup joins every started child before
+  stack teardown; worker cleanup releases LLVM permits; outer-worker cleanup
+  restores and notifies the file-memory budget before the parent join. Thread
+  name and watchdog state use pthread cleanup on iOS. Impossible join failure
+  aborts the process rather than detaching a worker whose context would be
+  freed. Non-iOS retains its original named-thread path.
+- NETISO BOUNDARY: this does not recursively rescan every warm NETISO game
+  directory. Such a scan would enumerate/decrypt remote disc content on each
+  launch and could make startup worse. The new identity evidence must first
+  distinguish a genuinely missing late module from a restart or changing key;
+  any later fix should use a targeted per-title completeness record.
+- PASS STATIC/BUILD/AUDIT: `git diff --check`, the complete bounded iOS contract
+  runner, and a two-worker arm64 iOS 15 core build pass. Multiple independent
+  review rounds found and closed raw-thread registration, non-iOS forwarding,
+  stack size, join/context lifetime, watchdog, semaphore, file-budget, parent
+  cleanup, aggregate-limit, and log-bounding defects; final review reports no
+  remaining P0/P1/P2 finding. The resulting unsigned core is `77,527,184`
+  bytes, SHA-256
+  `9ef3f2788521355c9cbab7e4308f3294be2a65df8b7dc4d5bec03fa2958ed24b`,
+  UUID `09F84F1D-ED5B-375A-AA07-3D34E11BE036`.
+- RESOURCE SAFETY: work stayed at `-j2` on the 8 GB Mac. The 145 MiB expanded
+  Aug 30 temporary device log archive was losslessly preserved as the verified
+  46,639,995-byte
+  `/private/tmp/armsx3-recent-20260830.logarchive.tar.gz` before only its
+  expanded temporary copy was removed. Source, dependencies, signed IPAs, and
+  V0.26/V0.27 rollbacks were untouched.
+- PACKAGE STATE: not packaged and not physically run. V0.27 remains the latest
+  independently audited signed IPA. Compilation and review do not prove Sonic
+  stops repeating work or that launch time improves on an iPhone.
+- REQUIRED PHYSICAL: install the exact future packaged SHA and capture one cold
+  plus two warm Sonic launches. For every `Compiling PPU modules` popup, retain
+  the cache-miss path/object/key, precompile source/queue, child-process marker,
+  worker counts, headroom, elapsed phase, and whether the object already exists
+  next launch. Require warm reuse, bounded logs, no finalization stall, no
+  thread/permit/file-budget deadlock, and clean Stop/relaunch. Then run a local
+  title and a NETISO failure followed by a second title, plus warm U1/RDR, to
+  reject startup, memory, graphics, audio, and gameplay regressions.

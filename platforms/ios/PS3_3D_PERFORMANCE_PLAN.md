@@ -300,6 +300,25 @@ Stop/relaunch, and a second title. Reject any missing transfer, new corruption,
 crash, unbounded logging, or teardown regression. Keep V0.27 as rollback until
 the exact packaged candidate passes those gates.
 
+### Adaptive PPU precompile candidate
+
+Post-V0.27 commit `c8b7fd651` makes the iOS precompile stages observable and
+keeps their aggregate LLVM concurrency inside the existing headroom policy.
+The outer SPRX pool owns the adaptive 4/2/1 budget; nested module fragments stay
+on their owning outer worker, while runtime-discovered modules outside that pool
+retain adaptive inner parallelism. Dedicated 8 MiB pthread workers avoid the
+physical named-thread join stall and have explicit cleanup for child joins,
+compiler permits, file-memory reservations, watchdog state, and thread names.
+
+This is a startup/cache diagnosis and safe-compilation candidate, not a heavy-3D
+FPS claim. Do not restore a recursive warm NETISO directory scan: it can walk and
+decrypt remote disc content merely because one late module is missing. Capture
+one cold and two warm Sonic launches first, correlate every popup with its exact
+path/cache/object identity and child-process state, then decide whether a narrow
+per-title completeness record or targeted late-module prefetch is justified.
+Use U1/RDR only as regression controls; no compile-thread change substitutes for
+the direct-Metal/RSX work required by their settled gameplay bottleneck.
+
 ## Required evidence
 
 Every candidate records source commit, IPA SHA-256, bundle version/build,
