@@ -34,6 +34,7 @@
 #include "Emu/RSX/Overlays/BigPicture/overlay_big_picture.h"
 
 #ifdef RPCS3_IOS
+#include "ios/IOSExitspawnDiscPathPolicy.h"
 #include "ios/RPCS3IOSExperimentalPolicy.h"
 #endif
 
@@ -1644,12 +1645,24 @@ game_boot_result Emulator::Load(const std::string& title_id, bool is_disc_patch,
 			launching_from_disc_archive = true;
 
 			std::string path = iso_device::virtual_device_name + "/";
+			const std::string disc_game_path = path + m_game_dir;
+			const std::string standard_eboot = disc_game_path + "/USRDIR/EBOOT.BIN";
 
 			// ISOs that are install discs will error if set to EBOOT.BIN
 			// so this should cover both of them
-			if (fs::exists(path + m_game_dir + "/USRDIR/EBOOT.BIN"))
+		#ifdef RPCS3_IOS
+			const std::string preserved_eboot = disc_game_path + "/USRDIR/EBOOT.BIN.ORIG";
+			if (rpcs3::ios::should_boot_preserved_disc_eboot(
+				m_title_id, fs::exists(standard_eboot), fs::exists(preserved_eboot)))
 			{
-				path = path + m_game_dir + "/USRDIR/EBOOT.BIN";
+				sys_log.notice("iOS GTA V source contains preserved EBOOT.BIN.ORIG; bypassing modified wrapper");
+				path = preserved_eboot;
+			}
+			else
+		#endif
+			if (fs::exists(standard_eboot))
+			{
+				path = standard_eboot;
 			}
 
 			m_path_real = m_path;

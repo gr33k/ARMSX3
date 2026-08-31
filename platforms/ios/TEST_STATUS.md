@@ -2674,3 +2674,36 @@ cache-reuse gates.
   reject stale aliases or session poisoning. RDR/U1 performance remains an
   unproven A/B gate; a successful package or GTA boot is not a heavy-3D FPS
   claim.
+
+### V0.29 physical rejection and V0.30 GTA original-executable candidate (2026-08-31)
+
+- FAIL PHYSICAL / V0.29: the user installed the exact V0.29 TrollStore package
+  and GTA V `BLES01807` again displayed `HDD boot game is corrupted. The
+  application will be terminated.` V0.29 is rejected as a GTA boot fix; do not
+  repeat it.
+- DEVICE EVIDENCE: `/private/tmp/armsx3-gta-v029-live.log` records the initial
+  NETISO boot, two completed `/dev_hdd1/duplex.self` handoffs, two successful
+  exact-title alias mounts, and the guest EBOOT redirect from
+  `/dev_hdd0/game/PS3_GAME/USRDIR/EBOOT.BIN` to
+  `/dev_bdvd/PS3_GAME/USRDIR/EBOOT.BIN`. The core remained live near 56-58 FPS
+  while the corruption dialog was visible, proving the alias and redirect ran
+  but did not supply the modified wrapper's absent payload.
+- SOURCE LAYOUT: the authoritative NETISO source is
+  `/NAS/Consoles/roms/Playstation_3_Games/GAMES/BLES01807-[Grand Theft Auto V]`
+  through `192.168.10.144:38008`. `PS3_GAME/USRDIR` has no `common.edat`; it has
+  `BOOT.BIN` (67,124 bytes), modified `EBOOT.BIN` (15,023,168 bytes), and
+  preserved `EBOOT.BIN.ORIG` (14,564,408 bytes). SHA-256 values are respectively
+  `cda8f73f0ec20b76dcc030b52195fbb9fb51e94bb36acccb45e159d98293a9f8`,
+  `8cd96122a52a96fd1c673fca06d5ace70403eb0e037e9550aa0ed5506e1b4cb7`, and
+  `dbe129873ea26e8e9066e1a32e026aa58beb09e0eeca90b9370169a50b42bb16`.
+- V0.30 CANDIDATE: iOS disc-archive selection bypasses the modified wrapper and
+  boots `EBOOT.BIN.ORIG` only for exact title `BLES01807` and only when both the
+  standard and preserved executables exist. Other title IDs, missing original,
+  missing standard executable, non-iOS builds, and install-disc behavior retain
+  the prior path and therefore fail closed.
+- STATIC GATE: the expanded `IOSExitspawnDiscPathPolicyTests` and full bounded
+  `rpcs3/ios/tests/run-contract-tests.sh` suite pass, including NETISO
+  cancellation; `git diff --check` passes. This is not a physical fix claim.
+  Required proof is the exact V0.30 package log marker selecting
+  `EBOOT.BIN.ORIG`, followed by progress beyond the corruption dialog, then
+  Stop/relaunch and an unrelated-title launch to reject stale state.

@@ -26,6 +26,16 @@ int main()
 		"/vfsv0_virtual_netiso_overlay_fs_dev/***PS3***/GAMES/BLES01807-[Grand Theft Auto V]"));
 	static_assert(!is_virtual_disc_source(
 		"/vfsv0_virtual_iso_overlay_fs_device/PS3_GAME"));
+	static_assert(should_boot_preserved_disc_eboot(
+		"BLES01807", true, true));
+	static_assert(!should_boot_preserved_disc_eboot(
+		"BLUS31156", true, true));
+	static_assert(!should_boot_preserved_disc_eboot(
+		"BLES01807", true, false));
+	static_assert(!should_boot_preserved_disc_eboot(
+		"BLES01807", false, true));
+	static_assert(disc_eboot_suffix == "/USRDIR/EBOOT.BIN");
+	static_assert(preserved_disc_eboot_suffix == "/USRDIR/EBOOT.BIN.ORIG");
 
 	// Physical V0.28 evidence: BLES01807's duplex.self probes this exact
 	// pseudo-HDD tree. Only its serialized NETISO child may receive the alias.

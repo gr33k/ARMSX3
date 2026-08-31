@@ -9,8 +9,18 @@ namespace rpcs3::ios
 inline constexpr std::string_view exitspawn_disc_legacy_prefix = "/dev_hdd0/game/PS3_GAME";
 inline constexpr std::string_view exitspawn_disc_native_prefix = "/dev_bdvd/PS3_GAME";
 inline constexpr std::string_view gta_v_disc_title_id = "BLES01807";
+inline constexpr std::string_view disc_eboot_suffix = "/USRDIR/EBOOT.BIN";
+inline constexpr std::string_view preserved_disc_eboot_suffix = "/USRDIR/EBOOT.BIN.ORIG";
 inline constexpr std::string_view virtual_iso_device_prefix = "/vfsv0_virtual_iso_overlay_fs_dev";
 inline constexpr std::string_view virtual_netiso_device_prefix = "/vfsv0_virtual_netiso_overlay_fs_dev";
+
+constexpr bool should_boot_preserved_disc_eboot(
+	std::string_view title_id,
+	bool has_standard_eboot,
+	bool has_preserved_eboot) noexcept
+{
+	return title_id == gta_v_disc_title_id && has_standard_eboot && has_preserved_eboot;
+}
 
 constexpr bool path_has_prefix_boundary(
 	std::string_view path,
