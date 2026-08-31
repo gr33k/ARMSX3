@@ -9,7 +9,7 @@ int main()
 {
 	using namespace rpcs3::ios;
 	static_assert(RPCS3_IOS_ABI_VERSION == 33);
-	static_assert(std::string_view(build_info_json).find("\"abi\":33") != std::string_view::npos);
+	static_assert(std::string_view(build_info_json).find("\"abi\":33,\"frontend\"") != std::string_view::npos);
 	static_assert(std::string_view(build_info_json).find("fps-cpu-breakdown-rsx-frame-moltenvk-metal-shaders-memory-headroom-netiso") != std::string_view::npos);
 	static_assert(RPCS3_IOS_FOLDER_INVALID == 22);
 	static_assert(RPCS3_IOS_FOLDER_INSTALL_FAILED == 23);

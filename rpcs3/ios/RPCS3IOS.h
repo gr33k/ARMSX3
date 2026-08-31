@@ -17,7 +17,7 @@ extern "C" {
 #define RPCS3_IOS_EXPORT
 #endif
 
-#define RPCS3_IOS_ABI_VERSION 33u
+#define RPCS3_IOS_ABI_VERSION 33
 
 typedef enum rpcs3_ios_status
 {
