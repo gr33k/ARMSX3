@@ -7,15 +7,18 @@
 #include "../VKResourceManager.h"
 #include "Emu/IdManager.h"
 
+#include <atomic>
 #include <memory>
 
 namespace vk
 {
 	data_heap g_upload_heap;
+	static std::atomic<u64> g_data_heap_generation{0};
 
 	void data_heap::create(VkBufferUsageFlags usage, usz size, rsx::flags32_t flags, const char* name, usz guard, VkBool32 notify)
 	{
 		rsx::data_heap::init(size, name, guard);
+		m_generation = g_data_heap_generation.fetch_add(1, std::memory_order_relaxed) + 1;
 
 		const auto& memory_map = g_render_device->get_memory_mapping();
 
@@ -108,6 +111,10 @@ namespace vk
 			aligned_new_size = size_limit;
 		}
 
+		rsx_log.notice("[%s] Heap grew from %uM to %uM (requested %uK).",
+			m_name, static_cast<u32>(m_size / 0x100000),
+			static_cast<u32>(aligned_new_size / 0x100000), static_cast<u32>(size / 1024));
+
 		// Wait for DMA activity to end
 		g_fxo->get<rsx::dma_manager>().sync();
 
@@ -136,6 +143,7 @@ namespace vk
 
 		// Update heap information and reset the allocator
 		rsx::data_heap::init(aligned_new_size, m_name, m_min_guard_size);
+		m_generation = g_data_heap_generation.fetch_add(1, std::memory_order_relaxed) + 1;
 
 		// Discard old heap and create a new one. Old heap will be garbage collected when no longer needed
 		auto gc = get_resource_manager();

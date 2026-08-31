@@ -3,7 +3,7 @@
 #include <util/types.hpp>
 #include "Emu/RSX/Common/simple_array.hpp"
 
-#include <unordered_map>
+#include <vector>
 
 namespace vk
 {
@@ -11,7 +11,24 @@ namespace vk
 
 	namespace data_heap_manager
 	{
-		using managed_heap_snapshot_t = std::unordered_map<const vk::data_heap*, s64>;
+		struct managed_heap_snapshot_entry_t
+		{
+			vk::data_heap* heap = nullptr;
+			usz get_pos = 0;
+			u64 generation = 0;
+		};
+
+		struct managed_heap_snapshot_t
+		{
+			u64 id = 0;
+			std::vector<managed_heap_snapshot_entry_t> heaps;
+
+			void clear()
+			{
+				id = 0;
+				heaps.clear();
+			}
+		};
 
 		// Submit ring buffer for management
 		void register_ring_buffer(vk::data_heap& heap);
@@ -19,10 +36,10 @@ namespace vk
 		// Bulk registration
 		void register_ring_buffers(std::initializer_list<std::reference_wrapper<vk::data_heap>> heaps);
 
-		// Capture managed ring buffers snapshot at current time
-		managed_heap_snapshot_t get_heap_snapshot();
+		// Capture managed ring buffers at the current allocation positions.
+		void capture_snapshot(managed_heap_snapshot_t& snapshot);
 
-		// Synchronize heap with snapshot
+		// Synchronize heaps with a completed snapshot when it is still current.
 		void restore_snapshot(const managed_heap_snapshot_t& snapshot);
 
 		// Reset all managed heap allocations

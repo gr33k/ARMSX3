@@ -31,6 +31,7 @@ namespace vk
 
 		bool notify_on_grow = false;
 		bool m_prefer_writethrough = false;
+		u64 m_generation = 0;
 
 		std::unique_ptr<buffer> shadow;
 		std::vector<VkBufferCopy> dirty_ranges;
@@ -52,6 +53,7 @@ namespace vk
 
 		void create(VkBufferUsageFlags usage, usz size, rsx::flags32_t flags, const char* name, usz guard = 0x10000, VkBool32 notify = VK_FALSE);
 		void destroy();
+		u64 generation() const { return m_generation; }
 
 		template <typename T = void>
 		T* map(usz offset, usz size)

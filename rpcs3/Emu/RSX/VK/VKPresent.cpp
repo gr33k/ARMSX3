@@ -400,8 +400,10 @@ void VKGSRender::frame_context_cleanup(vk::frame_context_t *ctx)
 {
 	ensure(ctx->swap_command_buffer);
 
-	// Perform hard swap here
-	if (ctx->swap_command_buffer->wait(FRAME_PRESENT_TIMEOUT) != VK_SUCCESS)
+	// Perform hard swap here. A timeout cannot authorize ring-memory reuse.
+	const bool command_buffer_complete =
+		ctx->swap_command_buffer->wait(FRAME_PRESENT_TIMEOUT) == VK_SUCCESS;
+	if (!command_buffer_complete)
 	{
 		// Lost surface/device, release swapchain
 		swapchain_unavailable = true;
@@ -431,7 +433,7 @@ void VKGSRender::frame_context_cleanup(vk::frame_context_t *ctx)
 
 		vk::reset_global_resources();
 
-		if (ctx->last_frame_sync_time > m_last_heap_sync_time)
+		if (command_buffer_complete && ctx->last_frame_sync_time > m_last_heap_sync_time)
 		{
 			m_last_heap_sync_time = ctx->last_frame_sync_time;
 
@@ -440,6 +442,7 @@ void VKGSRender::frame_context_cleanup(vk::frame_context_t *ctx)
 		}
 	}
 
+	ctx->reset_heap_ptrs();
 	ctx->swap_command_buffer = nullptr;
 
 	// Remove from queued list

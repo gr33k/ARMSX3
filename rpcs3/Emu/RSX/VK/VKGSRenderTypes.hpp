@@ -57,12 +57,23 @@ namespace vk
 		u64 eid_tag = 0;
 		u64 reset_id = 0;
 		shared_mutex guard_mutex;
+		data_heap_manager::managed_heap_snapshot_t heap_snapshot;
 
 		command_buffer_chunk() = default;
+
+		void retire_heap_snapshot()
+		{
+			if (heap_snapshot.id)
+			{
+				data_heap_manager::restore_snapshot(heap_snapshot);
+				heap_snapshot.clear();
+			}
+		}
 
 		inline void tag()
 		{
 			eid_tag = vk::get_event_id();
+			data_heap_manager::capture_snapshot(heap_snapshot);
 		}
 
 		void reset()
@@ -98,6 +109,7 @@ namespace vk
 				{
 					m_submit_fence->reset();
 					vk::on_event_completed(eid_tag);
+					retire_heap_snapshot();
 
 					is_pending = false;
 					eid_tag = 0;
@@ -124,6 +136,15 @@ namespace vk
 			{
 				m_submit_fence->reset();
 				vk::on_event_completed(eid_tag);
+				if (ret == VK_SUCCESS)
+				{
+					retire_heap_snapshot();
+				}
+				else
+				{
+					// A timeout does not prove GPU completion, so it cannot free ring memory.
+					heap_snapshot.clear();
+				}
 
 				is_pending = false;
 				eid_tag = 0;
@@ -206,11 +227,12 @@ namespace vk
 			acquire_signal_semaphore = other.acquire_signal_semaphore;
 			flags = other.flags;
 			heap_snapshot = other.heap_snapshot;
+			last_frame_sync_time = other.last_frame_sync_time;
 		}
 
 		void tag_frame_end()
 		{
-			heap_snapshot = data_heap_manager::get_heap_snapshot();
+			data_heap_manager::capture_snapshot(heap_snapshot);
 			last_frame_sync_time = rsx::get_shared_tag();
 		}
 
