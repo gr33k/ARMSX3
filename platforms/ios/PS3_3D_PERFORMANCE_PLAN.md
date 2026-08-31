@@ -41,6 +41,13 @@ restore V0.10/V0.11's repeated synchronized eviction loop. Once stable, the
 same profiler will determine the independent SPU and renderer gains; neither
 track is allowed to hide behind menu FPS.
 
+The V0.21 comparison is device-adaptive rather than A15-hardcoded. MoltenVK's
+soft pressure budget is 20% of reported unified memory, bounded to 1-3 GiB,
+while live process headroom retains fixed safety reserves. Test the exact same
+U1 scene first on iPhone14,3/A15/6 GiB and then iPad14,3/M2/8 GiB. Record the
+effective budget printed at renderer creation and never compare different
+resolution, title profile, cache state, or gameplay segments.
+
 Two symbolized v0.19 iOS resource reports also establish a CPU/JIT floor:
 
 - iOS measured 781 and 897 wakeups/sec against its reported 150/sec limit.

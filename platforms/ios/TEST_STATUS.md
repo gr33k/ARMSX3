@@ -1120,6 +1120,60 @@ V0.20 signed PS3 3D profiler artifact:
   a loader-only centering override; do not globally shift gameplay or every
   title's artwork in V0.21.
 
+V0.21 adaptive unified-memory recovery artifact:
+
+- Name: `ARMSX3-iOS-Core-Test-v0.21.ipa`
+- Source revision: `0fe4b6d0859fcd39b7cb9cbe9a0354c8ce1d54de`
+- Compressed size: `31,848,809` bytes
+- SHA-256:
+  `62fda2e11269d5851531bedb98973604d94cd2f484e9670628c485d1b9c55ed1`
+- FIX READY / ADAPTIVE VRAM: the MoltenVK soft pressure target now uses a
+  bounded 20% of reported unified memory rather than a fixed phone ceiling.
+  The policy targets approximately `1228 MiB` on a 6 GiB device, `1638 MiB`
+  on 8 GiB, `2457 MiB` on 12 GiB, and caps at `3072 MiB` on 16 GiB. The live
+  `os_proc_available_memory()` allowance remains authoritative, so installed
+  RAM cannot override current iOS process pressure.
+- FIX READY / EARLIER BOUNDED RECOVERY: process headroom now enters moderate,
+  severe, and fatal pressure at `2048`, `1536`, and `1280 MiB`, with 256 MiB
+  hysteresis. iOS no longer applies the desktop tracked-allocation downgrade
+  after MoltenVK exceeds its soft unified-memory budget. A fatal transition or
+  UIKit warning permits exactly one synchronized inactive-texture eviction;
+  repeated fatal requests use the non-destructive severe path until process
+  pressure recovers through the severe hysteresis band. This directly avoids
+  both V0.20's late `723-729 MiB` reaction and V0.10/V0.11's eviction loop.
+- DIAGNOSTIC READY: each iOS pressure transition now reports tracked system,
+  render-surface, texture, swapchain, and scratch pools beside process headroom
+  and MoltenVK allocator percentage. The next physical run can distinguish
+  cache growth from untracked driver/JIT/guest memory without another build.
+- PASS STATIC/BUILD: the complete bounded iOS contract suite, focused host/iOS
+  VRAM tests, focused pressure-state tests, and incremental two-worker arm64
+  `RPCS3Core` build pass. The app was rebuilt serially under the 8 GB Mac RAM
+  constraint.
+- PASS PACKAGE: archive integrity, version `0.21.0` build `20`, bundle ID
+  `com.thec0de.armsx3ios`, strict deep signature verification, TrollStore
+  JIT/unsigned-memory/extended-address-space/increased-memory entitlements,
+  arm64 app/core, iOS 15.0 minimum, ABI 33 valid build identity, and private
+  path/address scans pass against the packaged bytes.
+- PASS UNIVERSAL DEVICE CONTRACT: the package declares native device families
+  `1` and `2`, requires a full-screen Metal surface, and contains responsive
+  stage/controller geometry rather than iPhone compatibility mode. The paired
+  benchmark tablet is `iPad14,3`, iPad Pro 11-inch (4th generation, M2),
+  128 GB storage, iPadOS 26.3.1, with Developer Mode enabled.
+- PASS DISTRIBUTION: the exact repository artifact was copied to iCloud Drive
+  as `ARMSX3-iOS-Core-Test-v0.21.ipa`; destination SHA-256 readback matches the
+  package hash above. The earlier provisional iPhone-only v0.21 bytes were
+  overwritten and must not be used.
+- FAIL OBSERVED / REPORT PENDING: U3 terminated V0.20 on the iPhone after the
+  U1 runs. At report-collection time the USB hub exposed only the iPad to IOKit
+  and libimobiledevice, so the U3 report has not yet been copied or attributed.
+  Preserve it on the phone and capture it before another U3 launch.
+- REQUIRED PHYSICAL GATES: install these exact bytes on the iPhone and replay
+  warm U1 first, recording survival time, FPS, headroom, allocator percentage,
+  pool breakdown, destructive-reclaim count, audio, and visual result. Then run
+  the identical title/settings/scene on the M2 iPad to establish a hardware
+  comparison. A package, install, menu, or pre-rendered video remains
+  insufficient evidence.
+
 V0.2 artifact:
 
 - Name: `ARMSX3-iOS-Core-Test-v0.2.ipa`
