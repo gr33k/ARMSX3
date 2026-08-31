@@ -2707,3 +2707,37 @@ cache-reuse gates.
   Required proof is the exact V0.30 package log marker selecting
   `EBOOT.BIN.ORIG`, followed by progress beyond the corruption dialog, then
   Stop/relaunch and an unrelated-title launch to reject stale state.
+
+#### V0.30 audited package
+
+- SOURCE/BUILD: committed source `e5782041a9a3847a10c2c9e1296462fd8216b6d1`
+  compiled incrementally with two workers and linked successfully. The only
+  compile diagnostic was the pre-existing unused `this` lambda-capture warning
+  in `System.cpp`; the bounded contracts and diff check remained green.
+- PACKAGE: `ARMSX3-iOS-Core-Test-v0.30.ipa` is version `0.30.0`, build `29`,
+  `31,871,545` bytes, and SHA-256
+  `9f14512391bc5d50b3055287d52eddee6b918f211a39b69d4e78d27d2058adb4`.
+- INDEPENDENT READBACK: a fresh temporary extraction passed ZIP integrity,
+  nine-file inventory, absence of `__MACOSX`, strict deep app signature and
+  standalone core signature verification, and private-path scanning. App UUID
+  is `E6342429-CED6-3744-8D6A-468C7B8E09BD`; core UUID is
+  `76BBECC9-5EF0-3767-B56C-80562A89D964`. The unsigned core SHA-256 is
+  `41de14dfaa5f0bb95d4d4ee8f27e5cd2fd99eee49f9916aa4170f3b7287bcf6b`;
+  extracted signed-core SHA-256 is
+  `c7556bc8bdfc6da2fd8f96cce5be205c5643c025aa61b59dedffdf2e1d42ef52`.
+- TARGET/CONTRACT: app and core are arm64 Mach-O binaries targeting iOS 15.0.
+  Readback confirms ABI 34, NETISO boot and Stop exports, the exact preserved
+  EBOOT selector marker, GameController/Metal/UIKit linkage, and no iOS
+  17.4-only `os_sync` imports. Signature readback confirms `get-task-allow`,
+  JIT, unsigned executable memory, Extended Virtual Addressing, and increased
+  memory limit under `TROLLTROLL.com.thec0de.armsx3ios`.
+- TRANSFER: repository artifact, iCloud Drive copy, and NAS checkpoint at
+  `/Data/dockerprojects/armsx3-ios/checkpoints/ARMSX3-iOS-Core-Test-v0.30.ipa`
+  are byte-identical at the SHA above. V0.29 remains the immediate physical
+  failure reference; no rollback package or unfinished native-Metal file was
+  modified.
+- OPEN PHYSICAL GATE: package correctness is proven, GTA boot correctness is
+  not. Install this exact V0.30 through TrollStore and launch BLES01807 once
+  while capturing the selector marker and first outcome. Accept only progress
+  beyond the corruption dialog; then perform Stop/relaunch and an unrelated
+  title to reject stale session state.
