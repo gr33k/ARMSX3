@@ -2379,3 +2379,57 @@ cache-reuse gates.
   car/train and warm U1 scenes as regression controls. Reject on missing writes,
   new corruption, crash, log growth, or worse teardown. Source/build evidence
   is not a renderer-correctness or FPS result.
+
+## Serialized GTA child-handoff and Stop candidate (post-V0.27)
+
+- SOURCE: isolated commit `652f9f7af`. This supersedes the incomplete
+  `0fd9a4f3a` exitspawn attempt, which redirected guest `argv[0]` itself. The
+  corrected path keeps guest-visible argv under
+  `/dev_hdd0/game/PS3_GAME/...` while resolving only the host executable lookup
+  through `/dev_bdvd/PS3_GAME/...`; title wrappers therefore retain their
+  expected argument contract without requiring a copied disc tree.
+- SESSION OWNERSHIP: iOS guest lifetime is now an explicit generation-owned
+  state machine: `idle`, `active`, `stop_requested`, `cleanup_queued`, and
+  `cleanup_armed`. Initial boot, child exitspawn, Stop, cleanup dispatch, normal
+  handoff, and terminal failure all validate the same nonzero generation token.
+  This closes the launch gate until teardown is genuinely complete instead of
+  exposing a transient stopped state that permits overlapping guests.
+- CALLBACK/THREAD SAFETY: exitspawn callback publication and Stop cancellation
+  are serialized by the generation mutex. Emulator callbacks are mutated only
+  on the RPCS3 main thread. The embedding contract now requires a non-null
+  `main_thread_callback` that executes inline when already on that thread and
+  otherwise enqueues there; the shipped iOS app already satisfies this in
+  `ARMSX3CoreSession.mm`.
+- STOP/BOOT SAFETY: all four initial boot APIs (Big Picture, XMB, installed
+  title, and NETISO title) hold an in-flight boot claim and revalidate it before
+  and after boot. Stop cancels NETISO immediately but defers emulator/callback
+  mutation while inspection or `BootGame` is active. Cleanup queueing is
+  deduplicated; enqueue failure rolls back to retryable `stop_requested`,
+  including cleanup armed while a boot operation was still in flight.
+- TERMINAL CLEANUP: normal continuous-mode process exit preserves the pending
+  child handoff. A terminal crash instead clears Big Picture, continuous mode,
+  ForceBoot, feedback, NETISO, and session ownership before returning idle.
+  Repeated Stop requests cannot publish duplicate cleanup jobs or let stale
+  argv, environment, disc path, data path, KLIC, or HDD1 ownership survive into
+  a later generation.
+- PASS CONTRACT/BUILD/AUDIT: `git diff --check`, the complete bounded iOS
+  contract runner, and a two-worker arm64 iOS 15 core build pass. Focused
+  contracts cover generation wrap/ownership, phase transitions, duplicate
+  queue prevention, queue-failure rollback, terminal-versus-continuous release,
+  and boot-operation deferral. Independent final review reports no remaining
+  P0/P1/P2 finding. The resulting unsigned core is `77,520,344` bytes, SHA-256
+  `a6a54ecbd7d6eaf1bfe1097db84c0d31d580737882cbc83b55232b1fbb8b25f4`,
+  UUID `E670B5A0-2B71-3173-AF5D-F7001FC8710D`.
+- PACKAGE STATE: not packaged and not physically run. V0.27 remains the latest
+  independently audited signed IPA and immediate rollback. Source, contracts,
+  compilation, and review do not prove the GTA child executable reaches live
+  gameplay or that Stop timing is correct on a device.
+- REQUIRED PHYSICAL: capture the GTA V Duplex transition showing original
+  guest argv, redirected BDVD host lookup, and the actual GTA executable
+  progressing beyond the prior black `Loading` state. Then deliberately fail a
+  child launch and immediately scan/start another NETISO title. Exercise Stop
+  during NETISO inspection, PPU/module boot, and exitspawn; repeated Stop taps;
+  background then Stop; terminal child crash then clean relaunch; scheduling
+  failure followed by a retrying Stop; and a second local/NETISO title. Require
+  no stale mount, argv/environment/data/disc/KLIC/HDD1 state and preserve
+  fail-closed behavior. Device logs and gameplay are mandatory evidence.
