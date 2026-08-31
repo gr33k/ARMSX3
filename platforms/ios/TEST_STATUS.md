@@ -1746,3 +1746,34 @@ cache-reuse gates.
   immediate Vulkan rollback. Do not call the backend usable until controlled U1
   and RDR scenes pass visual, FPS, memory, thermals, audio, input, and repeated
   Stop/relaunch qualification on physical hardware.
+
+## ARM system-counter hot-path candidate (post-V0.24)
+
+- SOURCE: isolated commit `de7ba7711`. This change is not present in the
+  independently audited V0.24 IPA; preserve that package as the direct-Metal
+  probe baseline.
+- MEASURED BASIS: `perf_meter` eagerly called `utils::get_tsc()` even when
+  `perf_report` was disabled, although its destructor then discarded the
+  sample. On ARM64 this is an `mrs cntvct_el0` system-register read that does
+  not pipeline, paid once per guest PPU reservation and several SPU DMA/atomic
+  operations. Prior U1/RDR telemetry showed these CPU paths heavily loaded
+  while the Metal driver was also saturated.
+- FIX READY: a lazy `perf_meter(nullptr)` samples only when performance reports
+  are enabled. PPU LARX/STCX, SPU DMA, MFC list transfers, and PUTLLC use it.
+  The failed-LARX timing heuristic still takes a timestamp only when its address
+  window can match, preserving reservation behavior without the common-path
+  counter read.
+- SAFETY BOUNDARY: `STORE128` remains eagerly timed because its suspend-all path
+  consumes `perf0.get()`. GETLLAR and every other meter with an in-function
+  timestamp consumer are unchanged. With `perf_report` enabled, sampling and
+  reporting behavior remains unchanged.
+- PASS STATIC/BUILD: exact call-site review, `git show --check`, the complete
+  bounded iOS contract runner, and the incremental two-worker arm64 iOS 15 core
+  build pass. The resulting unsigned core has SHA-256
+  `d12e5f164f7a872fe4bf69bc2884b37310625c1ae0a916d2bca41507416fe134`
+  and UUID `8D3E9F93-699E-3BAC-84B5-191AE4B9D3DA`.
+- REQUIRED PHYSICAL: compare identical warm-cache U1 and RDR segments with
+  `perf_report` off. Require no reservation/atomic regressions or new crashes,
+  then compare CPU P/S, RSX/Metal pressure, frame pacing, FPS, audio, thermals,
+  and Stop/relaunch. The static removal of wasted reads is proven; a gameplay
+  or FPS gain is not yet claimed.
