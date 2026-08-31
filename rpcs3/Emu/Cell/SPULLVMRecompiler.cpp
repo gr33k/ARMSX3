@@ -8566,6 +8566,21 @@ public:
 		return eval(fpcast<f32[4]>(xr));
 	}
 
+#ifdef ARCH_ARM64
+	// AArch64 materializes FMS's negated addend; preserve NaN bits so SPU extended values
+	// do not acquire the opposite sign merely because the host cannot fold to vfmsub.
+	value_t<f32[4]> negate_fms_addend(value_t<f32[4]> c)
+	{
+		const auto c_known = get_known_fp_class<4>(c, llvm::FPClassTest::fcNan);
+		if (c_known.isKnownNeverNaN())
+		{
+			return eval(-c);
+		}
+
+		return eval(select(fcmp_uno(c != c), c, -c));
+	}
+#endif
+
 	template <typename T, typename U, typename V>
 	static llvm_calli<f32[4], T, U, V> fnms(T&& a, U&& b, V&& c)
 	{
@@ -8961,7 +8976,11 @@ public:
 				const auto a_clamp = clamp_smax(a, a_known);
 				const auto b_clamp = clamp_smax(b, b_known);
 
+#ifdef ARCH_ARM64
+				return fma32x4(a_clamp, b_clamp, negate_fms_addend(c), a_known, b_known);
+#else
 				return fma32x4(a_clamp, b_clamp, eval(-c), a_known, b_known);
+#endif
 			}
 			else
 			{
@@ -8972,7 +8991,11 @@ public:
 				}
 #endif
 
+#ifdef ARCH_ARM64
+				return fma32x4(a, b, negate_fms_addend(c));
+#else
 				return fma32x4(a, b, eval(-c));
+#endif
 			}
 		});
 
@@ -9195,7 +9218,17 @@ public:
 			}
 
 			r.value = m_ir->CreateFPToSI(a.value, get_type<s32[4]>());
+#if defined(ARCH_ARM64)
+			set_vr(op.rt, select(
+				fcmp_ord(a >= fsplat<f64[4]>(std::exp2(31.f))),
+				splat<s32[4]>(0x7fffffff),
+				select(
+					fcmp_ord(a < fsplat<f64[4]>(-std::exp2(31.f))),
+					splat<s32[4]>(0x80000000),
+					r)));
+#else
 			set_vr(op.rt, r ^ sext<s32[4]>(fcmp_ord(a >= fsplat<f64[4]>(std::exp2(31.f)))));
+#endif
 		}
 		else
 		{
@@ -9210,7 +9243,15 @@ public:
 
 			value_t<s32[4]> r;
 			r.value = m_ir->CreateFPToSI(a.value, get_type<s32[4]>());
+#if defined(ARCH_ARM64)
+			const auto sat_hi = bitcast<s32[4]>(a) > splat<s32[4]>(((31 + 127) << 23) - 1);
+			set_vr(op.rt, select(
+				sat_hi,
+				splat<s32[4]>(0x7fffffff),
+				select(fcmp_uno(a != a), splat<s32[4]>(0x80000000), r)));
+#else
 			set_vr(op.rt, r ^ sext<s32[4]>(bitcast<s32[4]>(a) > splat<s32[4]>(((31 + 127) << 23) - 1)));
+#endif
 		}
 	}
 
