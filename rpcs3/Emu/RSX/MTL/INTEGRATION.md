@@ -1,10 +1,12 @@
 # Native Metal RSX Skeleton
 
-`MTLGSRender` is an isolated, fail-closed renderer skeleton. It is not selected,
-compiled, or advertised by the current build, and it does not claim to render a
-game. It owns a real `CAMetalLayer`, `MTLDevice`, command queue, one command
-buffer per guest frame, late drawable acquisition, commit, and presentation.
-There is no probe triangle and no Vulkan or CPU rendering fallback.
+`MTLGSRender` is an isolated, fail-closed renderer skeleton. The iOS core
+compiles it as an API-drift gate, but it has no renderer enum, factory switch,
+or public selector and is dead-stripped from the linked core. It is not
+advertised and does not claim to render a game. It owns a real `CAMetalLayer`,
+`MTLDevice`, command queue, one command buffer per guest frame, late drawable
+acquisition, commit, and presentation. There is no probe triangle and no
+Vulkan or CPU rendering fallback.
 
 ## Implemented boundary
 
@@ -35,9 +37,8 @@ There is no probe triangle and no Vulkan or CPU rendering fallback.
 
 ## Existing files the integration lane must modify
 
-- `rpcs3/Emu/CMakeLists.txt`: add `MTL/MTLGSRender.h` and
-  `MTL/MTLGSRender.mm` only for the iOS frontend; compile the `.mm` file as
-  Objective-C++20 with ARC. Do not remove the Vulkan sources.
+- `rpcs3/Emu/CMakeLists.txt`: compile-only integration is complete for the iOS
+  frontend with ARC; do not remove the Vulkan sources.
 - `rpcs3/Emu/system_config_types.h`: add a distinct native-Metal renderer enum.
 - `rpcs3/Emu/system_config_types.cpp`: add its stable configuration string.
 - `rpcs3/ios/RPCS3IOS.cpp`: include the renderer, register a complete

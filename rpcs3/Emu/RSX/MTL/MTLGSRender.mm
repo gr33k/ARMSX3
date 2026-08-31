@@ -3,6 +3,7 @@
 #include "Emu/System.h"
 #include "Emu/RSX/NV47/HW/context_accessors.define.h"
 #include "Emu/RSX/rsx_methods.h"
+#include "Utilities/StrFmt.h"
 
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
@@ -10,7 +11,6 @@
 #include <algorithm>
 #include <atomic>
 #include <mutex>
-#include <stdexcept>
 #include <utility>
 
 namespace
@@ -91,8 +91,7 @@ MTLGSRender::~MTLGSRender()
 
 [[noreturn]] void MTLGSRender::fail_closed(std::string_view operation, std::string_view detail)
 {
-	throw std::runtime_error(
-		"Native Metal RSX " + std::string(operation) + " failed closed: " + std::string(detail));
+	fmt::throw_exception("Native Metal RSX %s failed closed: %s", operation, detail);
 }
 
 mtl::command_context MTLGSRender::current_command_context() const

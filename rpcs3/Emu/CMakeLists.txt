@@ -103,6 +103,8 @@ if(RPCS3_FRONTEND STREQUAL "IOS")
     target_sources(rpcs3_emu PRIVATE
         Io/IOS/IOSPadHandler.cpp
         Io/IOS/IOSPadHandler.h
+		RSX/MTL/MTLGSRender.h
+		RSX/MTL/MTLGSRender.mm
         ../../Utilities/JITArenaAllocator.h
         ../../Utilities/JITIOS.cpp
         ../../Utilities/JITIOS.h
@@ -123,6 +125,8 @@ if(RPCS3_FRONTEND STREQUAL "IOS")
         CPU/Backends/AArch64/AArch64JIT.cpp
         CPU/Backends/AArch64/AArch64Signal.cpp
     )
+	set_source_files_properties(RSX/MTL/MTLGSRender.mm PROPERTIES
+		COMPILE_OPTIONS -fobjc-arc)
 endif()
 
 target_include_directories(rpcs3_emu PUBLIC "${CMAKE_SOURCE_DIR}")

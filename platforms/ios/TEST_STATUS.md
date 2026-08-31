@@ -2996,6 +2996,14 @@ cache-reuse gates.
   distributed binary until the documented license boundaries are resolved or
   replaced compatibly. These gates still do not prove RSX command encoding,
   resource synchronization, presentation, or native-Metal gameplay.
+- NATIVE-METAL COMPILE INTEGRATION: the iOS core now compiles
+  `MTLGSRender.mm` with ARC as an API-drift gate. The first production compile
+  correctly rejected a raw C++ `throw` because RPCS3 builds with exceptions
+  disabled; it now uses RPCS3's established `fmt::throw_exception` bridge. The
+  two-worker iOS 15 arm64 core then compiled and linked successfully. No Metal
+  renderer enum, factory, selector, or guest backend is registered, and symbol
+  readback confirms the unreferenced renderer object is absent from the linked
+  core. This changes no V0.33 package or gameplay behavior.
 - ACCEPTED PACKAGE: `ARMSX3-iOS-Core-Test-v0.33.ipa` is `31,874,222` bytes,
   source revision `afdb39162afc96a4f038b306fb04e837b5b012c0`, core ABI `34`,
   and SHA-256
