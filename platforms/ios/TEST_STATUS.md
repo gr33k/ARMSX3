@@ -2871,9 +2871,10 @@ cache-reuse gates.
   source candidate separates GTA from RDR's shared demanding-3D profile and
   enables WCB only for GTA title IDs `BLES01807` and `BLUS31156`; resolution,
   shader workers, and multithreaded RSX remain unchanged. The complete iOS
-  contract suite, diff check, and iOS 15 arm64 two-worker core build pass. It
-  remains unpackaged and physically unqualified; accept only if the same scene
-  loses the flashes/purple traces without regressing FPS, memory, or stability.
+  contract suite, diff check, and iOS 15 arm64 two-worker core build pass. It is
+  packaged as the V0.32 candidate below but remains physically unqualified;
+  accept only if the same scene loses the flashes/purple traces without
+  regressing FPS, memory, or stability.
 - COMPLETE TRACE: `/private/tmp/armsx3-gta-v031-live.log`; capture continued
   through the terminal Stop result rather than inferring it from the UI.
 - PASS PHYSICAL / CONTROLLED STOP: the user requested Stop at 11:51:41 after
@@ -2909,10 +2910,12 @@ cache-reuse gates.
   memory, Extended Virtual Addressing, and increased-memory-limit entitlements
   under the TrollStore identity. App/core scans contain no private source paths
   or NAS addresses.
-- OPEN TRANSFER/PHYSICAL GATES: repository audit is complete; iCloud/NAS copies
-  and byte-identical readback remain open. Physical acceptance requires GTA
-  `BLES01807` to log WCB enabled, lose the flashing/purple target-obscuring
-  artifacts without worse FPS or memory, and preserve clean Stop/relaunch.
-  Local import and guest free-space acceptance separately require the device to
-  report important-usage capacity through the new policy and accept a title
-  that the old immediate-capacity preflight rejected.
+- PASS TRANSFER: repository artifact, iCloud Drive copy, and NAS checkpoint at
+  `/Data/dockerprojects/armsx3-ios/checkpoints/ARMSX3-iOS-Core-Test-v0.32.ipa`
+  are byte-identical at the accepted size and SHA above.
+- OPEN PHYSICAL GATES: GTA `BLES01807` must log WCB enabled, lose the
+  flashing/purple target-obscuring artifacts without worse FPS or memory, and
+  preserve clean Stop/relaunch. Local import and guest free-space acceptance
+  separately require the device to report important-usage capacity through the
+  new policy and accept a title that the old immediate-capacity preflight
+  rejected.
