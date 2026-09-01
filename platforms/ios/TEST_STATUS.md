@@ -3302,9 +3302,15 @@ cache-reuse gates.
   separated Select and Start controls visible. This closes the exact first
   landscape-to-portrait disappearance reproduced on V0.34. The requested
   repeated-cycle, every-button, dimming, Stop, and relaunch gates remain open.
-- README CAPTURES: the repository now owns public-safe real-device V0.35
+- README CAPTURES: the repository now owns real-device V0.35
   landscape and portrait gameplay PNGs. The landscape asset is 1920x888 and
-  the portrait crop is 808x370; NAS addresses and lower debug logs are absent
-  from the published portrait crop. The earlier horizontal XMB capture remains
-  available as collapsed secondary evidence. No generated mockup substitutes
-  for device evidence.
+  the portrait asset is the complete 808x1740 live-device frame rather than a
+  cropped gameplay strip. It intentionally shows the current pre-alpha
+  launcher, NETISO list, and diagnostics so readers can assess the actual state.
+  The earlier horizontal XMB capture remains available as collapsed secondary
+  evidence. No generated mockup substitutes for device evidence.
+- PUBLIC ICON: replaced the README's broken branch-local icon reference and the
+  temporary literal PS3 artwork with an original ARMSX3 X3/III processor-lane
+  mark. `docs/images/armsx3-app-icon.png` is the 1024px public source; the iOS
+  120px and 180px app variants are opaque RGB PNGs. This source update applies
+  to the next IPA build; the already-published V0.35 binary remains unchanged.
