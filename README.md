@@ -18,8 +18,23 @@
 </p>
 
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/4cba4930-c363-4c35-90a9-8e9c641e75cf" width="920" alt="ARMSX3 gameplay in landscape on iPhone">
+  <img src="docs/images/armsx3-v035-landscape-gameplay.png" width="920" alt="ARMSX3 V0.35 gameplay in landscape on iPhone">
 </p>
+
+<p align="center">
+  <img src="docs/images/armsx3-v035-portrait-gameplay.png" width="390" alt="ARMSX3 V0.35 gameplay and touch controls in portrait on iPhone">
+</p>
+
+<p align="center"><sub>Real V0.35 captures from an iPhone 13 Pro Max running iOS 15.3.</sub></p>
+
+<details>
+<summary>Additional device capture: XMB</summary>
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/4cba4930-c363-4c35-90a9-8e9c641e75cf" width="920" alt="ARMSX3 XMB in landscape on iPhone">
+</p>
+
+</details>
 
 > [!WARNING]
 > This is an early pre-alpha. Compatibility, graphics, performance, input, and stability vary by title. Do not interpret a successful boot or menu as confirmed gameplay support.
