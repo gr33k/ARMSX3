@@ -7,7 +7,9 @@
 #include "Emu/RSX/Common/surface_store.h"
 #include "Emu/RSX/Program/ProgramStateCache.h"
 #include "Emu/RSX/Program/SPIRVCommon.h"
+#include "Emu/RSX/color_utils.h"
 #include "Emu/RSX/rsx_methods.h"
+#include "Emu/RSX/rsx_utils.h"
 
 #import <Foundation/Foundation.h>
 #import <Metal/Metal.h>
@@ -107,6 +109,149 @@ namespace
 			return std::nullopt;
 		}
 	}
+
+	std::optional<MTLCompareFunction> compare_function_for(rsx::comparison_function function)
+	{
+		switch (function)
+		{
+		case rsx::comparison_function::never: return MTLCompareFunctionNever;
+		case rsx::comparison_function::less: return MTLCompareFunctionLess;
+		case rsx::comparison_function::equal: return MTLCompareFunctionEqual;
+		case rsx::comparison_function::less_or_equal: return MTLCompareFunctionLessEqual;
+		case rsx::comparison_function::greater: return MTLCompareFunctionGreater;
+		case rsx::comparison_function::not_equal: return MTLCompareFunctionNotEqual;
+		case rsx::comparison_function::greater_or_equal: return MTLCompareFunctionGreaterEqual;
+		case rsx::comparison_function::always: return MTLCompareFunctionAlways;
+		}
+		return std::nullopt;
+	}
+
+	std::optional<MTLStencilOperation> stencil_operation_for(rsx::stencil_op operation)
+	{
+		switch (operation)
+		{
+		case rsx::stencil_op::keep: return MTLStencilOperationKeep;
+		case rsx::stencil_op::zero: return MTLStencilOperationZero;
+		case rsx::stencil_op::replace: return MTLStencilOperationReplace;
+		case rsx::stencil_op::incr: return MTLStencilOperationIncrementClamp;
+		case rsx::stencil_op::decr: return MTLStencilOperationDecrementClamp;
+		case rsx::stencil_op::invert: return MTLStencilOperationInvert;
+		case rsx::stencil_op::incr_wrap: return MTLStencilOperationIncrementWrap;
+		case rsx::stencil_op::decr_wrap: return MTLStencilOperationDecrementWrap;
+		}
+		return std::nullopt;
+	}
+
+	std::optional<MTLBlendFactor> blend_factor_for(rsx::blend_factor factor)
+	{
+		switch (factor)
+		{
+		case rsx::blend_factor::zero: return MTLBlendFactorZero;
+		case rsx::blend_factor::one: return MTLBlendFactorOne;
+		case rsx::blend_factor::src_color: return MTLBlendFactorSourceColor;
+		case rsx::blend_factor::one_minus_src_color: return MTLBlendFactorOneMinusSourceColor;
+		case rsx::blend_factor::dst_color: return MTLBlendFactorDestinationColor;
+		case rsx::blend_factor::one_minus_dst_color: return MTLBlendFactorOneMinusDestinationColor;
+		case rsx::blend_factor::src_alpha: return MTLBlendFactorSourceAlpha;
+		case rsx::blend_factor::one_minus_src_alpha: return MTLBlendFactorOneMinusSourceAlpha;
+		case rsx::blend_factor::dst_alpha: return MTLBlendFactorDestinationAlpha;
+		case rsx::blend_factor::one_minus_dst_alpha: return MTLBlendFactorOneMinusDestinationAlpha;
+		case rsx::blend_factor::src_alpha_saturate: return MTLBlendFactorSourceAlphaSaturated;
+		case rsx::blend_factor::constant_color: return MTLBlendFactorBlendColor;
+		case rsx::blend_factor::one_minus_constant_color: return MTLBlendFactorOneMinusBlendColor;
+		case rsx::blend_factor::constant_alpha: return MTLBlendFactorBlendAlpha;
+		case rsx::blend_factor::one_minus_constant_alpha: return MTLBlendFactorOneMinusBlendAlpha;
+		}
+		return std::nullopt;
+	}
+
+	std::optional<MTLBlendOperation> blend_operation_for(rsx::blend_equation equation)
+	{
+		switch (equation)
+		{
+		case rsx::blend_equation::add: return MTLBlendOperationAdd;
+		case rsx::blend_equation::subtract:
+			return MTLBlendOperationSubtract;
+		case rsx::blend_equation::reverse_subtract: return MTLBlendOperationReverseSubtract;
+		case rsx::blend_equation::min:
+			return MTLBlendOperationMin;
+		case rsx::blend_equation::max:
+			return MTLBlendOperationMax;
+		case rsx::blend_equation::add_signed:
+		case rsx::blend_equation::reverse_subtract_signed:
+		case rsx::blend_equation::reverse_add_signed:
+			return std::nullopt;
+		}
+		return std::nullopt;
+	}
+
+	struct stencil_face_key
+	{
+		u8 compare = MTLCompareFunctionAlways;
+		u8 stencil_fail = MTLStencilOperationKeep;
+		u8 depth_fail = MTLStencilOperationKeep;
+		u8 depth_pass = MTLStencilOperationKeep;
+		u8 read_mask = 0xff;
+		u8 write_mask = 0xff;
+
+		friend bool operator==(const stencil_face_key&, const stencil_face_key&) = default;
+	};
+
+	struct depth_stencil_key
+	{
+		bool depth_test = false;
+		bool depth_write = false;
+		bool stencil_test = false;
+		u8 depth_compare = MTLCompareFunctionAlways;
+		stencil_face_key front{};
+		stencil_face_key back{};
+
+		friend bool operator==(const depth_stencil_key&, const depth_stencil_key&) = default;
+	};
+
+	struct depth_stencil_key_hash
+	{
+		usz operator()(const depth_stencil_key& key) const noexcept
+		{
+			usz result = 0xcbf29ce484222325ull;
+			auto mix = [&result](u64 value)
+			{
+				result ^= static_cast<usz>(value);
+				result *= 0x100000001b3ull;
+			};
+			mix(key.depth_test);
+			mix(key.depth_write);
+			mix(key.stencil_test);
+			mix(key.depth_compare);
+			for (const stencil_face_key* face : {&key.front, &key.back})
+			{
+				mix(face->compare);
+				mix(face->stencil_fail);
+				mix(face->depth_fail);
+				mix(face->depth_pass);
+				mix(face->read_mask);
+				mix(face->write_mask);
+			}
+			return result;
+		}
+	};
+
+	struct depth_stencil_entry
+	{
+		__strong id<MTLDepthStencilState> state = nil;
+		u64 last_used_frame = 0;
+	};
+
+	struct raster_state
+	{
+		MTLWinding winding = MTLWindingClockwise;
+		MTLCullMode cull = MTLCullModeNone;
+		MTLTriangleFillMode fill = MTLTriangleFillModeFill;
+		MTLDepthClipMode depth_clip = MTLDepthClipModeClip;
+		float depth_bias = 0.f;
+		float slope_scale = 0.f;
+		bool skip_draw = false;
+	};
 
 	std::string objc_string(NSString* value, std::string_view fallback)
 	{
@@ -626,6 +771,22 @@ namespace mtl
 				return false;
 			}
 
+			raster_state raster;
+			if (!raster_state_for(request, raster, error))
+			{
+				return false;
+			}
+			if (raster.skip_draw)
+			{
+				return true;
+			}
+
+			id<MTLDepthStencilState> depth_stencil_state = depth_stencil_state_for(error);
+			if (!depth_stencil_state)
+			{
+				return false;
+			}
+
 			rsx::mtl::rsx_shader_capabilities shader_capabilities{};
 			shader_capabilities.emulate_conditional_rendering = false;
 			const auto* vertex_program = get_or_compile_vertex_program(
@@ -691,7 +852,10 @@ namespace mtl
 				if (const color_target* target = m_active_colors[index])
 				{
 					attachment.pixel_format = static_cast<u64>(target->pixel_format);
-					attachment.write_mask = color_write_mask(static_cast<u32>(index));
+					if (!configure_color_attachment(static_cast<u32>(index), attachment, error))
+					{
+						return false;
+					}
 				}
 				else
 				{
@@ -807,6 +971,25 @@ namespace mtl
 						request.scissor.height,
 					}];
 					[encoder setRenderPipelineState:(__bridge id<MTLRenderPipelineState>)pipeline.value.native_pipeline_state()];
+					[encoder setDepthStencilState:depth_stencil_state];
+					[encoder setFrontFacingWinding:raster.winding];
+					[encoder setCullMode:raster.cull];
+					[encoder setTriangleFillMode:raster.fill];
+					[encoder setDepthClipMode:raster.depth_clip];
+					[encoder setDepthBias:raster.depth_bias slopeScale:raster.slope_scale clamp:0.f];
+					if (blend_enabled(0) || blend_enabled(1) || blend_enabled(2) || blend_enabled(3))
+					{
+						const auto color = rsx::get_constant_blend_colors();
+						[encoder setBlendColorRed:color[0] green:color[1] blue:color[2] alpha:color[3]];
+					}
+					if (rsx::method_registers.stencil_test_enabled())
+					{
+						const u32 front_reference = rsx::method_registers.stencil_func_ref();
+						const u32 back_reference = rsx::method_registers.two_sided_stencil_test_enabled()
+							? rsx::method_registers.back_stencil_func_ref()
+							: front_reference;
+						[encoder setStencilFrontReferenceValue:front_reference backReferenceValue:back_reference];
+					}
 					bind_vertex_resources(encoder, *vertex_shader.value.translation(), uploads);
 					bind_fragment_resources(encoder, *fragment_shader.value.translation(), uploads);
 					[encoder drawPrimitives:primitive->type vertexStart:0 vertexCount:request.count];
@@ -979,6 +1162,7 @@ namespace mtl
 			m_color_targets.clear();
 			m_depth_targets.clear();
 			m_present_pipelines.clear();
+			m_depth_stencil_states.clear();
 			m_vertex_spirv.clear();
 			m_fragment_spirv.clear();
 			m_shader_cache.reset();
@@ -1044,6 +1228,274 @@ namespace mtl
 			return &inserted->second;
 		}
 
+		bool blend_enabled(u32 index) const
+		{
+			switch (index)
+			{
+			case 0: return rsx::method_registers.blend_enabled();
+			case 1: return rsx::method_registers.blend_enabled_surface_1();
+			case 2: return rsx::method_registers.blend_enabled_surface_2();
+			case 3: return rsx::method_registers.blend_enabled_surface_3();
+			default: return false;
+			}
+		}
+
+		bool configure_color_attachment(
+			u32 index,
+			rsx::mtl::color_attachment_state& attachment,
+			std::string& error) const
+		{
+			attachment.write_mask = color_write_mask(index);
+			if (!blend_enabled(index))
+			{
+				return true;
+			}
+
+			const auto source_rgb = blend_factor_for(rsx::method_registers.blend_func_sfactor_rgb());
+			const auto source_alpha = blend_factor_for(rsx::method_registers.blend_func_sfactor_a());
+			const auto destination_rgb = blend_factor_for(rsx::method_registers.blend_func_dfactor_rgb());
+			const auto destination_alpha = blend_factor_for(rsx::method_registers.blend_func_dfactor_a());
+			const auto operation_rgb = blend_operation_for(rsx::method_registers.blend_equation_rgb());
+			const auto operation_alpha = blend_operation_for(rsx::method_registers.blend_equation_a());
+			if (!source_rgb || !source_alpha || !destination_rgb || !destination_alpha ||
+				!operation_rgb || !operation_alpha)
+			{
+				error = "RSX draw uses a blend factor or equation that native Metal cannot map";
+				return false;
+			}
+
+			attachment.blending_enabled = true;
+			attachment.source_rgb_blend_factor = *source_rgb;
+			attachment.source_alpha_blend_factor = *source_alpha;
+			attachment.destination_rgb_blend_factor = *destination_rgb;
+			attachment.destination_alpha_blend_factor = *destination_alpha;
+			attachment.rgb_blend_operation = *operation_rgb;
+			attachment.alpha_blend_operation = *operation_alpha;
+			return true;
+		}
+
+		bool populate_stencil_face(bool back, stencil_face_key& output, std::string& error) const
+		{
+			const auto compare = compare_function_for(back
+				? rsx::method_registers.back_stencil_func()
+				: rsx::method_registers.stencil_func());
+			const auto stencil_fail = stencil_operation_for(back
+				? rsx::method_registers.back_stencil_op_fail()
+				: rsx::method_registers.stencil_op_fail());
+			const auto depth_fail = stencil_operation_for(back
+				? rsx::method_registers.back_stencil_op_zfail()
+				: rsx::method_registers.stencil_op_zfail());
+			const auto depth_pass = stencil_operation_for(back
+				? rsx::method_registers.back_stencil_op_zpass()
+				: rsx::method_registers.stencil_op_zpass());
+			if (!compare || !stencil_fail || !depth_fail || !depth_pass)
+			{
+				error = "RSX draw uses a stencil comparison or operation that native Metal cannot map";
+				return false;
+			}
+
+			output.compare = static_cast<u8>(*compare);
+			output.stencil_fail = static_cast<u8>(*stencil_fail);
+			output.depth_fail = static_cast<u8>(*depth_fail);
+			output.depth_pass = static_cast<u8>(*depth_pass);
+			output.read_mask = back
+				? rsx::method_registers.back_stencil_func_mask()
+				: rsx::method_registers.stencil_func_mask();
+			output.write_mask = back
+				? rsx::method_registers.back_stencil_mask()
+				: rsx::method_registers.stencil_mask();
+			return true;
+		}
+
+		id<MTLDepthStencilState> depth_stencil_state_for(std::string& error)
+		{
+			depth_stencil_key key;
+			key.depth_test = rsx::method_registers.depth_test_enabled();
+			key.depth_write = key.depth_test && rsx::method_registers.depth_write_enabled();
+			key.stencil_test = rsx::method_registers.stencil_test_enabled();
+			if (key.depth_test)
+			{
+				const auto compare = compare_function_for(rsx::method_registers.depth_func());
+				if (!compare)
+				{
+					error = "RSX draw uses a depth comparison that native Metal cannot map";
+					return nil;
+				}
+				key.depth_compare = static_cast<u8>(*compare);
+			}
+			if (key.stencil_test)
+			{
+				if (!populate_stencil_face(false, key.front, error))
+				{
+					return nil;
+				}
+				if (rsx::method_registers.two_sided_stencil_test_enabled())
+				{
+					if (!populate_stencil_face(true, key.back, error))
+					{
+						return nil;
+					}
+				}
+				else
+				{
+					key.back = key.front;
+				}
+			}
+
+			if (auto found = m_depth_stencil_states.find(key); found != m_depth_stencil_states.end())
+			{
+				found->second->last_used_frame = m_frame_index;
+				return found->second->state;
+			}
+
+			MTLDepthStencilDescriptor* descriptor = [[MTLDepthStencilDescriptor alloc] init];
+			descriptor.label = @"ARMSX3 native RSX depth/stencil";
+			descriptor.depthCompareFunction = static_cast<MTLCompareFunction>(key.depth_compare);
+			descriptor.depthWriteEnabled = key.depth_write;
+			if (key.stencil_test)
+			{
+				auto make_face = [](const stencil_face_key& face)
+				{
+					MTLStencilDescriptor* value = [[MTLStencilDescriptor alloc] init];
+					value.stencilCompareFunction = static_cast<MTLCompareFunction>(face.compare);
+					value.stencilFailureOperation = static_cast<MTLStencilOperation>(face.stencil_fail);
+					value.depthFailureOperation = static_cast<MTLStencilOperation>(face.depth_fail);
+					value.depthStencilPassOperation = static_cast<MTLStencilOperation>(face.depth_pass);
+					value.readMask = face.read_mask;
+					value.writeMask = face.write_mask;
+					return value;
+				};
+				descriptor.frontFaceStencil = make_face(key.front);
+				descriptor.backFaceStencil = make_face(key.back);
+			}
+
+			id<MTLDepthStencilState> state = [m_device newDepthStencilStateWithDescriptor:descriptor];
+			if (!state)
+			{
+				error = "Metal could not create the RSX depth/stencil state";
+				return nil;
+			}
+
+			if (m_depth_stencil_states.size() >= 128)
+			{
+				auto oldest = m_depth_stencil_states.begin();
+				for (auto iterator = std::next(oldest); iterator != m_depth_stencil_states.end(); ++iterator)
+				{
+					if (iterator->second->last_used_frame < oldest->second->last_used_frame)
+					{
+						oldest = iterator;
+					}
+				}
+				m_depth_stencil_states.erase(oldest);
+			}
+
+			auto entry = std::make_unique<depth_stencil_entry>();
+			entry->state = state;
+			entry->last_used_frame = m_frame_index;
+			m_depth_stencil_states.emplace(key, std::move(entry));
+			return state;
+		}
+
+		bool raster_state_for(const draw_request& request, raster_state& output, std::string& error) const
+		{
+			if (rsx::method_registers.depth_clip_ignore_w())
+			{
+				error = "Metal cannot express RSX depth clipping that ignores W";
+				return false;
+			}
+
+			switch (rsx::method_registers.front_face_mode())
+			{
+			case rsx::front_face::cw: output.winding = MTLWindingClockwise; break;
+			case rsx::front_face::ccw: output.winding = MTLWindingCounterClockwise; break;
+			default:
+				error = "RSX draw uses an invalid front-face winding";
+				return false;
+			}
+
+			const bool triangle_primitive = request.primitive == rsx::primitive_type::triangles ||
+				request.primitive == rsx::primitive_type::triangle_strip;
+			bool show_back = false;
+			if (triangle_primitive && rsx::method_registers.cull_face_enabled())
+			{
+				switch (rsx::method_registers.cull_face_mode())
+				{
+				case rsx::cull_face::front:
+					output.cull = MTLCullModeFront;
+					show_back = true;
+					break;
+				case rsx::cull_face::back:
+					output.cull = MTLCullModeBack;
+					break;
+				case rsx::cull_face::front_and_back:
+					output.skip_draw = true;
+					return true;
+				default:
+					error = "RSX draw uses an invalid cull-face mode";
+					return false;
+				}
+			}
+
+			if (triangle_primitive)
+			{
+				const rsx::polygon_mode front_mode = rsx::method_registers.polygon_mode_front();
+				const rsx::polygon_mode back_mode = rsx::method_registers.polygon_mode_back();
+				if (!rsx::method_registers.cull_face_enabled() && front_mode != back_mode)
+				{
+					error = "Metal cannot express different front/back RSX polygon modes without culling";
+					return false;
+				}
+				switch (show_back ? back_mode : front_mode)
+				{
+				case rsx::polygon_mode::fill: output.fill = MTLTriangleFillModeFill; break;
+				case rsx::polygon_mode::line: output.fill = MTLTriangleFillModeLines; break;
+				case rsx::polygon_mode::point:
+					error = "Metal cannot rasterize RSX polygons in point mode";
+					return false;
+				default:
+					error = "RSX draw uses an invalid polygon mode";
+					return false;
+				}
+			}
+
+			if ((request.primitive == rsx::primitive_type::lines ||
+				 request.primitive == rsx::primitive_type::line_strip) &&
+				std::abs(rsx::method_registers.line_width() - 1.f) > .001f)
+			{
+				error = "Metal does not support the requested RSX wide-line width";
+				return false;
+			}
+
+			output.depth_clip = (rsx::method_registers.depth_clamp_enabled() ||
+				!rsx::method_registers.depth_clip_enabled())
+				? MTLDepthClipModeClamp
+				: MTLDepthClipModeClip;
+			if (request.primitive == rsx::primitive_type::points && rsx::method_registers.poly_offset_point_enabled())
+			{
+				error = "Native Metal RSX point depth bias is not implemented";
+				return false;
+			}
+			if ((request.primitive == rsx::primitive_type::lines || request.primitive == rsx::primitive_type::line_strip) &&
+				rsx::method_registers.poly_offset_line_enabled())
+			{
+				error = "Native Metal RSX line depth bias is not implemented";
+				return false;
+			}
+			if (triangle_primitive && output.fill == MTLTriangleFillModeLines &&
+				rsx::method_registers.poly_offset_line_enabled())
+			{
+				error = "Native Metal RSX line-mode polygon depth bias is not implemented";
+				return false;
+			}
+			if (triangle_primitive && output.fill == MTLTriangleFillModeFill &&
+				rsx::method_registers.poly_offset_fill_enabled())
+			{
+				output.depth_bias = rsx::method_registers.poly_offset_bias();
+				output.slope_scale = rsx::method_registers.poly_offset_scale();
+			}
+			return true;
+		}
+
 		bool validate_first_draw_state(const draw_request& request, std::string& error) const
 		{
 			if (!m_shader_cache || !m_uploads)
@@ -1062,24 +1514,6 @@ namespace mtl
 				error = "Native Metal instanced vertex constants are not implemented";
 				return false;
 			}
-			if (rsx::method_registers.blend_enabled() ||
-				rsx::method_registers.blend_enabled_surface_1() ||
-				rsx::method_registers.blend_enabled_surface_2() ||
-				rsx::method_registers.blend_enabled_surface_3())
-			{
-				error = "Native Metal RSX blending is not implemented";
-				return false;
-			}
-			if (rsx::method_registers.depth_test_enabled() || rsx::method_registers.stencil_test_enabled())
-			{
-				error = "Native Metal RSX depth/stencil testing is not implemented";
-				return false;
-			}
-			if (rsx::method_registers.cull_face_enabled())
-			{
-				error = "Native Metal RSX face culling is not implemented";
-				return false;
-			}
 			if (rsx::method_registers.logic_op_enabled())
 			{
 				error = "Native Metal RSX logic operations are not implemented";
@@ -1088,13 +1522,6 @@ namespace mtl
 			if (rsx::method_registers.depth_bounds_test_enabled())
 			{
 				error = "Native Metal RSX depth-bounds testing is not implemented";
-				return false;
-			}
-			if (rsx::method_registers.poly_offset_point_enabled() ||
-				rsx::method_registers.poly_offset_line_enabled() ||
-				rsx::method_registers.poly_offset_fill_enabled())
-			{
-				error = "Native Metal RSX polygon offset is not implemented";
 				return false;
 			}
 			if (rsx::method_registers.line_smooth_enabled() || rsx::method_registers.poly_smooth_enabled())
@@ -1107,16 +1534,40 @@ namespace mtl
 				error = "Native Metal RSX polygon stipple is not implemented";
 				return false;
 			}
+			if (m_framebuffer_samples > 1 && rsx::method_registers.msaa_enabled() &&
+				rsx::method_registers.msaa_sample_mask() != 0xffff)
+			{
+				error = "Native Metal non-full RSX multisample masks are not implemented";
+				return false;
+			}
 			return true;
 		}
 
 		u64 color_write_mask(u32 index) const
 		{
+			bool red = rsx::method_registers.color_mask_r(index);
+			bool green = rsx::method_registers.color_mask_g(index);
+			bool blue = rsx::method_registers.color_mask_b(index);
+			bool alpha = rsx::method_registers.color_mask_a(index);
+			const rsx::surface_color_format format = rsx::method_registers.surface_color();
+			switch (format)
+			{
+			case rsx::surface_color_format::b8:
+				rsx::get_b8_colormask(red, green, blue, alpha);
+				break;
+			case rsx::surface_color_format::g8b8:
+				rsx::get_g8b8_r8g8_colormask(red, green, blue, alpha);
+				break;
+			default:
+				break;
+			}
+
+			const auto host_mask = rsx::get_write_output_mask(format);
 			u64 result = MTLColorWriteMaskNone;
-			if (rsx::method_registers.color_mask_r(index)) result |= MTLColorWriteMaskRed;
-			if (rsx::method_registers.color_mask_g(index)) result |= MTLColorWriteMaskGreen;
-			if (rsx::method_registers.color_mask_b(index)) result |= MTLColorWriteMaskBlue;
-			if (rsx::method_registers.color_mask_a(index)) result |= MTLColorWriteMaskAlpha;
+			if (red && host_mask[0]) result |= MTLColorWriteMaskRed;
+			if (green && host_mask[1]) result |= MTLColorWriteMaskGreen;
+			if (blue && host_mask[2]) result |= MTLColorWriteMaskBlue;
+			if (alpha && host_mask[3]) result |= MTLColorWriteMaskAlpha;
 			return result;
 		}
 
@@ -1659,6 +2110,7 @@ namespace mtl
 		std::unordered_map<u32, std::unique_ptr<color_target>> m_color_targets;
 		std::unordered_map<u32, std::unique_ptr<depth_target>> m_depth_targets;
 		std::unordered_map<u64, std::unique_ptr<present_pipeline>> m_present_pipelines;
+		std::unordered_map<depth_stencil_key, std::unique_ptr<depth_stencil_entry>, depth_stencil_key_hash> m_depth_stencil_states;
 		vertex_spirv_cache m_vertex_spirv;
 		fragment_spirv_cache m_fragment_spirv;
 		std::unique_ptr<rsx::mtl::native_shader_cache> m_shader_cache;

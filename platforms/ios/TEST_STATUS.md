@@ -3156,3 +3156,49 @@ cache-reuse gates.
   reads `CFBundleShortVersionString` and therefore reports the actual packaged
   version on the next build. No replacement IPA has been created in this
   checkpoint.
+
+### Native-Metal draw-state checkpoint (2026-08-31)
+
+- TERMINOLOGY/BOUNDARY: this is a replacement of the MoltenVK gameplay-command
+  path with direct native Metal RSX encoding, not a port of MoltenVK. The
+  production shader compiler still reuses the exact pinned MoltenVK
+  SPIR-V-to-MSL converter ABI; native draw encoding does not create Vulkan
+  pipelines, render passes, images, command buffers, or synchronization.
+- IMPLEMENTED STATE: the first non-indexed draw subset now maps standard blend
+  factors/equations and per-target enable state, constant blend color,
+  packed-format/host color masks, depth test/write, one- and two-sided stencil
+  operations/masks/references, winding/culling, triangle fill/line mode,
+  depth clip/clamp, and filled-triangle depth bias. Depth/stencil state uses a
+  bounded 128-entry frame-aged cache. All dynamic state is rebound on each
+  fresh Metal render encoder.
+- STRICT REJECTIONS: signed blend equations, logic operations, depth bounds,
+  depth clipping that ignores W, point polygon mode, differing visible
+  front/back polygon modes, wide lines, point/line depth bias, smoothing,
+  stipple, and active non-full MSAA sample masks remain explicit fail-closed
+  errors. Indexed/inline/instanced/emulated topology, sampled textures,
+  auxiliary translator resources, and last-vertex-provoking semantics remain
+  outside this checkpoint.
+- COLOR CORRECTNESS: color-write masks now follow the Vulkan/GL reference path,
+  including host-format channel availability plus `B8` and `G8B8` remapping;
+  unsupported signed blend equations are rejected rather than approximated as
+  ordinary add/subtract operations.
+- PASS SERIAL BUILD: `cmake --build build-ios-core --target RPCS3Core -- -j1`
+  rebuilt `MTLGuestBackend.mm`, archived `librpcs3_emu.a`, and linked the arm64
+  iOS `libRPCS3Core.dylib`. Only the existing duplicate-zlib linker warning
+  remained; `git diff --check` also passes.
+- PASS CONTRACTS: the complete SPIRV-Cross dependency/runtime contract and the
+  native shader translation/key suites pass serially. Stable outputs remain
+  shader key `1f2f18f1ac03a9a9e0b7607d96b272783d378160ea3dde7f22f1abc3b75243e9`,
+  vertex MSL `5d57b51aa9249429ac76ce9e14a65f698eada20781ab7da9c7f13716bbcb459e`,
+  and fragment MSL
+  `0e75b103427a30f2e53e5f45261d64e9e2eb8d87d8f2832bab20334122bdcb78`.
+- NEXT HARD GATE: sampled guest textures must be prepared before shader
+  selection, uploaded with exact endian/deswizzle/decompression rules, and
+  bound through translated Metal texture/sampler slots. The first safe slice
+  will upload CPU-backed color textures per draw and reject any overlap with a
+  cached render target; address-only persistent caching would violate RSX
+  coherency. iOS 15 sampler/format limits remain explicit gates.
+- NO GAMEPLAY CLAIM: the native renderer factory/enum/selector remain
+  unregistered and this path is still dead-stripped from the selectable core.
+  No IPA was packaged and none of the V0.33 physical title observations were
+  produced by native Metal.

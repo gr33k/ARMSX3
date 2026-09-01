@@ -9,6 +9,12 @@ not claim to render a game. `MTLGSRender` owns a real `CAMetalLayer`,
 acquisition, commit, and presentation. There is no probe triangle and no
 Vulkan or CPU rendering fallback.
 
+This work replaces the MoltenVK gameplay-command path with direct RSX-to-Metal
+encoding; it is not a port of MoltenVK itself. The only retained MoltenVK
+component is its pinned SPIR-V-to-MSL converter ABI, reused to translate the
+existing RSX shader output. Native draws do not create Vulkan command buffers,
+pipelines, render passes, images, or synchronization objects.
+
 ## Implemented boundary
 
 - RSX `begin`/`end` and subdraw iteration follow the existing GL/Vulkan shape.
@@ -39,8 +45,15 @@ Vulkan or CPU rendering fallback.
   fragment constants/state; native MSL functions; cached render pipelines;
   and load/store render passes. The backend factory remains deliberately
   unregistered.
-- Indexed, inline, instanced, emulated-topology, textured, blended,
-  depth/stencil-tested, culled, logic-op, polygon-offset, smoothed, stippled,
+- Standard RSX blend factors/equations, per-target blending and packed-format
+  color masks, depth testing/writes, one- or two-sided stencil, culling,
+  winding, fill/line rasterization, depth clip/clamp, and filled-triangle depth
+  bias are mapped to native Metal state. Depth/stencil objects use a bounded
+  128-entry cache; encoder-dynamic state is rebound for every draw because each
+  draw owns a fresh render encoder.
+- Indexed, inline, instanced, emulated-topology, textured, logic-op, signed
+  blend-equation, depth-bounds, depth-clip-ignore-W, point-polygon, wide-line,
+  point/line-depth-bias, non-full-sample-mask, smoothed, stippled,
   auxiliary-SPIRV-Cross-resource, and last-vertex-provoking draws all return a
   specific fail-closed error rather than silently taking an incomplete path.
 - The existing RSX GLSL decompilers now accept explicit device-capability
@@ -66,9 +79,12 @@ Vulkan or CPU rendering fallback.
 
 ## Required new modules before selection
 
-1. Expand the first real array draw to sampled textures, depth/stencil, blend,
-   culling, logic operations, polygon state, provoking-vertex parity, and any
-   required translator auxiliary resources.
+1. Expand the first real array draw to sampled textures, logic operations,
+   remaining polygon/MSAA state, provoking-vertex parity, and any required
+   translator auxiliary resources. The first texture slice must upload
+   CPU-backed color textures per draw and reject render-target aliases until
+   coherency and invalidation are real; persistent address-only caching is not
+   correct.
 2. Add index uploads plus indexed, inline, instanced, restart, emulated
    topology, and multidraw handling on the existing bounded upload arena.
 3. Complete the current guest color/depth target cache with sampled texture
