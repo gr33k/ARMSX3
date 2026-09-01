@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/gr33k/ARMSX3/releases/tag/ios-prealpha-v0.34.0"><img alt="Release" src="https://img.shields.io/badge/release-v0.34.0-19b394"></a>
+  <a href="https://github.com/gr33k/ARMSX3/releases/tag/ios-prealpha-v0.35.0"><img alt="Release" src="https://img.shields.io/badge/release-v0.35.0-19b394"></a>
   <img alt="Status" src="https://img.shields.io/badge/status-pre--alpha-e7a43b">
   <img alt="iOS" src="https://img.shields.io/badge/iOS-15.0%2B-2f7cf6">
   <img alt="Architecture" src="https://img.shields.io/badge/architecture-arm64-607d8b">
@@ -36,7 +36,7 @@ The active gameplay renderer is currently **Vulkan through MoltenVK**. A direct 
 
 ## Install
 
-Download the current **TrollStore** IPA from the [V0.34 prerelease](https://github.com/gr33k/ARMSX3/releases/tag/ios-prealpha-v0.34.0), then open it in TrollStore.
+Download the current **TrollStore** IPA from the [V0.35 prerelease](https://github.com/gr33k/ARMSX3/releases/tag/ios-prealpha-v0.35.0), then open it in TrollStore.
 
 - The app requires arm64 and iOS/iPadOS 15.0 or later.
 - TrollStore officially supports iOS 14.0 beta 2 through 16.6.1, iOS 16.7 RC (`20H18`), and iOS 17.0. Because ARMSX3 requires iOS 15, its effective window starts at iOS 15.0. See [TrollStore's official compatibility statement](https://github.com/opa334/TrollStore#readme).
@@ -46,7 +46,7 @@ Download the current **TrollStore** IPA from the [V0.34 prerelease](https://gith
 
 ## Tested Status
 
-Physical observations below span development builds through V0.33 on an iPhone 13 Pro Max running iOS 15.3. V0.34 preserves the accepted V0.33 gameplay core and changes the app shell, versioning, portrait controls, and display-awake lifecycle. Results are scene-specific, not broad compatibility ratings.
+Physical observations below span development builds through V0.34 on an iPhone 13 Pro Max running iOS 15.3. V0.35 preserves the accepted V0.33 gameplay core and repairs the app-shell rotation lifecycle. Results are scene-specific, not broad compatibility ratings.
 
 | Class | Current examples |
 |---|---|
@@ -66,7 +66,7 @@ Physical observations below span development builds through V0.33 on an iPhone 1
 | Toy Story Mania | Holds about 30 FPS; initial scene presentation can be delayed. |
 | Ratatouille | Real 3D gameplay reached roughly 25-30 FPS. |
 | The Walking Dead | Loads and runs around 30 FPS in the tested section. |
-| LEGO Movie | User reports working gameplay on the pre-V0.34 installed build; long-run V0.34 retest pending. |
+| LEGO Movie | User reports working gameplay on V0.34; long-run V0.35 retest pending. |
 | Bound by Flame | Playable 3D baseline around 26-30 FPS with no initial visual corruption observed. |
 | Cars Race-O-Rama | Holds about 30 FPS, with intermittent purple artifacts. |
 | Lost Planet | Playable sections vary roughly 14-30 FPS; heavier combat dips. |

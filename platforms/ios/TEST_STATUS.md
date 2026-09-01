@@ -3258,3 +3258,38 @@ cache-reuse gates.
   control with multi-touch, verify no Start/Select overlap or display dimming,
   then Stop/relaunch one known-good title. Capture fresh portrait and landscape
   screenshots only from that installed build before replacing README imagery.
+
+### V0.35 rotation hotfix prerelease (2026-08-31)
+
+- FAIL PHYSICAL / V0.34: after TrollStore installation, the user repeatedly
+  observed all portrait digital controls disappear after rotating from
+  landscape back to portrait. The controls could reappear on a later rotation,
+  proving intermittent UIKit layout-state drift rather than missing assets.
+  V0.34 is superseded and must not be presented as the current build.
+- ROOT CAUSE/FIX: control visibility previously changed only when
+  `landscapeLayout` changed. Rotation callbacks can lay out once with stale
+  bounds, leaving the internal Boolean and hidden-view state inconsistent.
+  V0.35 derives and reapplies every portrait/landscape hidden state on every
+  layout pass, raises every portrait control above the Metal view, and requests
+  a final relayout from the transition coordinator after UIKit commits bounds.
+- IDENTITY: source commit
+  `3c32276503763879c888116c4d09dd74d790ebc6`, marketing version `0.35.0`,
+  bundle build `35`, asset
+  `ARMSX3-iOS-Pre-Alpha-v0.35.0-TrollStore.ipa`. The exact accepted V0.33 core
+  remains unchanged at SHA-256
+  `a8faeb02e8b2c87af85d4b77e54bbadf149d0bc33b263e63b0b6b694e3dd1794`.
+- PASS SERIAL BUILD/PACKAGE: the app shell compiled and linked serially for
+  arm64/iOS 15.0. The IPA is `31,876,603` bytes with SHA-256
+  `959cfee0825bba96ee35b309ac5edb3175cb94d86ae12bcc3933e05496a7d59d`.
+  Fresh extraction passed strict signatures, version/build, required
+  TrollStore entitlements, accepted-core identity, private-path scan, no
+  symlinks, and no `__MACOSX`. The iCloud copy is byte-identical.
+- PUBLIC RELEASE: GitHub prerelease
+  `https://github.com/gr33k/ARMSX3/releases/tag/ios-prealpha-v0.35.0` targets the
+  exact source commit and exposes the audited asset above. V0.34 remains only
+  as superseded historical evidence.
+- REQUIRED PHYSICAL: install exact V0.35, rotate portrait-landscape-portrait at
+  least five times while stopped and five times during a known-good game, and
+  require the correct controls after every transition. Then confirm action,
+  D-pad, analog, Start, Select, Menu, and Stop behavior plus no display dimming.
+  Only after this passes may V0.35 screenshots replace the README images.
