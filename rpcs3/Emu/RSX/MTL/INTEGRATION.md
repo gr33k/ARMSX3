@@ -33,8 +33,16 @@ Vulkan or CPU rendering fallback.
 - Packed 16-bit color targets are temporarily promoted to `BGRA8Unorm` for
   rendering. Guest-memory export and exact packed conversion remain missing
   and therefore must not be inferred from successful target allocation.
-- Shader/resource binding and every RSX draw still fail closed. The backend
-  factory is deliberately unregistered.
+- The first real draw subset is encoded end to end: native non-indexed RSX
+  array draws using points, lines, line strips, triangles, or triangle strips;
+  analyzed persistent/volatile vertex streams; draw parameters; vertex and
+  fragment constants/state; native MSL functions; cached render pipelines;
+  and load/store render passes. The backend factory remains deliberately
+  unregistered.
+- Indexed, inline, instanced, emulated-topology, textured, blended,
+  depth/stencil-tested, culled, logic-op, polygon-offset, smoothed, stippled,
+  auxiliary-SPIRV-Cross-resource, and last-vertex-provoking draws all return a
+  specific fail-closed error rather than silently taking an incomplete path.
 - The existing RSX GLSL decompilers now accept explicit device-capability
   records. Their normal Vulkan entry points preserve the prior live Vulkan
   queries, while `MTLRSXShaderProgram` supplies deterministic Metal choices,
@@ -44,30 +52,40 @@ Vulkan or CPU rendering fallback.
   collision-checked Metal buffer/texture/sampler slots while reserving the
   translator's auxiliary buffer indices. Unsupported resource classes or an
   exhausted binding namespace fail closed before MSL translation.
+- Production translation uses MoltenVK v1.4.2's already-linked
+  `SPIRVToMSLConverter` ABI with the exact pinned converter header and the
+  matching `MVK_spirv_cross` namespace. Native Metal shader/function/pipeline
+  objects are retained in one-device bounded caches; RSX-to-SPIR-V programs
+  are separately capped at 512 vertex and 512 fragment entries.
+- An independently implemented shared/write-combined upload arena allocates
+  lazy 4 MiB pages, retires them from command-buffer completion handlers,
+  never waits for the GPU, limits a single allocation to 16 MiB, and hard-caps
+  retained upload memory at 64 MiB. Abandoned frames reclaim their pages.
 - Memory coherency, tiled-resource invalidation, scaled blits, host labels,
   semaphores, and occlusion queries deliberately fail closed until implemented.
 
 ## Required new modules before selection
 
-1. Connect the compile-checked RSX-to-SPIR-V adapter to the existing MSL shader
-   translator and persistent pipeline cache, then add RSX precision, swizzle,
-   specialization, depth/stencil, blend, and provoking-vertex parity.
-2. Unified-memory vertex/index/constants upload rings with bounded in-flight
-   retirement and indexed, inline, instanced, restart, and multidraw handling.
+1. Expand the first real array draw to sampled textures, depth/stencil, blend,
+   culling, logic operations, polygon state, provoking-vertex parity, and any
+   required translator auxiliary resources.
+2. Add index uploads plus indexed, inline, instanced, restart, emulated
+   topology, and multidraw handling on the existing bounded upload arena.
 3. Complete the current guest color/depth target cache with sampled texture
    resources, tiling, exact memory-format conversion, invalidation, barriers,
    and fault recovery.
 4. Blit/copy/resolve, MSAA, conditional/occlusion query, GCM label, and guest
    semaphore implementations.
-5. A presentation pass that resolves the selected RSX display buffer into the
-   drawable with aspect, stereo, gamma, and output-scaling parity.
+5. Complete the existing aspect-preserving presentation pass with stereo,
+   gamma, exact guest-format conversion, and output-scaling parity.
 
 ## Existing files the integration lane must modify
 
 - `rpcs3/Emu/CMakeLists.txt`: compile-only integration is complete for the iOS
-  frontend with ARC for `MTLGSRender.mm` and `MTLGuestBackend.mm`, plus the
-  backend-independent RSX-to-SPIR-V adapter and shader metadata validation; do
-  not remove the Vulkan sources.
+  frontend with ARC for the Metal Objective-C++ modules, the independently
+  implemented upload arena, exact MoltenVK converter bridge, native cache,
+  backend-independent RSX-to-SPIR-V adapter, and metadata validation; do not
+  remove the Vulkan sources.
 - `rpcs3/Emu/system_config_types.h`: add a distinct native-Metal renderer enum.
 - `rpcs3/Emu/system_config_types.cpp`: add its stable configuration string.
 - `rpcs3/ios/RPCS3IOS.cpp`: include the renderer, register a complete
@@ -93,8 +111,9 @@ comparisons pass. A successful compile or clear is not gameplay evidence.
 
 `MTLRuntime.h` and `MTLRuntime.mm` retain GPL-3.0-or-later provenance from the
 ARMSX2 command-lifetime and upload-ring architecture. Most RPCS3 source is
-GPL-2.0-only. Do not link that runtime into a distributed RPCS3/ARMSX3 binary
-unless project counsel or the relevant copyright holders approve a compatible
-boundary; otherwise replace it with an independently implemented runtime under
-a compatible license. The separate Apache-2.0 SPIRV-Cross distribution concern
-is documented in `rpcs3/ios/SPIRVCrossDependency.md` and must also be resolved.
+GPL-2.0-only. They remain excluded from the production core path; the linked
+upload arena is an independent implementation. Do not link the GPL-3 runtime
+into a distributed RPCS3/ARMSX3 binary unless project counsel or the relevant
+copyright holders approve a compatible boundary. MoltenVK/SPIRV-Cross
+provenance and exact-version requirements are documented in
+`rpcs3/ios/SPIRVCrossDependency.md`.

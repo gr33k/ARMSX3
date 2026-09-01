@@ -107,10 +107,15 @@ if(RPCS3_FRONTEND STREQUAL "IOS")
 		RSX/MTL/MTLGSRender.mm
 		RSX/MTL/MTLGuestBackend.h
 		RSX/MTL/MTLGuestBackend.mm
+		RSX/MTL/MTLMoltenVKSpirvCompiler.cpp
+		RSX/MTL/MTLNativeShaderCache.h
+		RSX/MTL/MTLNativeShaderCache.mm
 		RSX/MTL/MTLRSXShaderProgram.h
 		RSX/MTL/MTLRSXShaderProgram.cpp
 		RSX/MTL/MTLShaderTypes.h
 		RSX/MTL/MTLShaderTypes.cpp
+		RSX/MTL/MTLUploadArena.h
+		RSX/MTL/MTLUploadArena.mm
         ../../Utilities/JITArenaAllocator.h
         ../../Utilities/JITIOS.cpp
         ../../Utilities/JITIOS.h
@@ -131,7 +136,15 @@ if(RPCS3_FRONTEND STREQUAL "IOS")
         CPU/Backends/AArch64/AArch64JIT.cpp
         CPU/Backends/AArch64/AArch64Signal.cpp
     )
-	set_source_files_properties(RSX/MTL/MTLGSRender.mm RSX/MTL/MTLGuestBackend.mm PROPERTIES
+	if(NOT RPCS3_SPIRV_CROSS_ROOT OR
+	   NOT EXISTS "${RPCS3_SPIRV_CROSS_ROOT}/MoltenVKShaderConverter/SPIRVToMSLConverter.h" OR
+	   NOT EXISTS "${RPCS3_SPIRV_CROSS_ROOT}/spirv_msl.hpp")
+		message(FATAL_ERROR "RPCS3_SPIRV_CROSS_ROOT must contain the pinned MoltenVK 1.4.2 converter ABI and SPIRV-Cross headers")
+	endif()
+	target_include_directories(rpcs3_emu SYSTEM PRIVATE "${RPCS3_SPIRV_CROSS_ROOT}")
+	set_source_files_properties(RSX/MTL/MTLMoltenVKSpirvCompiler.cpp PROPERTIES
+		COMPILE_DEFINITIONS "SPIRV_CROSS_NAMESPACE_OVERRIDE=MVK_spirv_cross")
+	set_source_files_properties(RSX/MTL/MTLGSRender.mm RSX/MTL/MTLGuestBackend.mm RSX/MTL/MTLNativeShaderCache.mm RSX/MTL/MTLUploadArena.mm PROPERTIES
 		COMPILE_OPTIONS -fobjc-arc)
 endif()
 

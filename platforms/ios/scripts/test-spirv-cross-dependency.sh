@@ -41,6 +41,7 @@ first_source="$(ARMSX3_DEPS_ROOT="$good_deps" "$FETCH_SCRIPT")"
 second_source="$(ARMSX3_DEPS_ROOT="$good_deps" "$FETCH_SCRIPT")"
 [[ "$first_source" == "$second_source" ]]
 [[ -f "$first_source/LICENSE" ]]
+[[ -f "$first_source/MoltenVKShaderConverter/SPIRVToMSLConverter.h" ]]
 
 cmake \
     -DARMSX3_DEPS_ROOT="$good_deps" \
@@ -64,6 +65,6 @@ cmake \
 
 cmake --build "$TEMP_ROOT/cmake-build" \
     --target ARMSX3IOSMetalShaderCompiler ARMSX3IOSMetalRuntimeScaffold \
-    --parallel 2
+    --parallel 1
 
 printf 'SPIRV-Cross dependency and iOS Metal runtime/compiler contracts passed.\n'

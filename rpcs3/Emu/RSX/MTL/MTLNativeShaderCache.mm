@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <atomic>
 #include <condition_variable>
-#include <exception>
 #include <limits>
 #include <mutex>
 #include <unordered_map>
@@ -129,7 +128,7 @@ namespace rsx::mtl
 					init_error = "Native Metal cache limits must be nonzero";
 					return;
 				}
-				device = (id<MTLDevice>)candidate;
+				device = static_cast<id<MTLDevice>>(candidate);
 				registry_id = device.registryID;
 			}
 		}
@@ -175,19 +174,7 @@ namespace rsx::mtl
 			entry->error.clear();
 			entry_lock.unlock();
 
-			std::shared_ptr<const State> built;
-			try
-			{
-				built = builder(error);
-			}
-			catch (const std::exception& exception)
-			{
-				error = exception.what();
-			}
-			catch (...)
-			{
-				error = "Unknown native Metal cache build failure";
-			}
+				std::shared_ptr<const State> built = builder(error);
 
 			entry_lock.lock();
 			entry->value = built;

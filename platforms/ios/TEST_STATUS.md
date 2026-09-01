@@ -3059,14 +3059,44 @@ cache-reuse gates.
   `make_native_guest_backend` plus framebuffer, clear, draw, and presentation
   methods. `git diff --check` passes. The build emitted only unrelated existing
   unused-lambda-capture warnings and the existing duplicate-zlib linker warning.
-- PHYSICAL BIOSHOCK RESULT: after the preserved modified-executable fallback
-  advanced BioShock Infinite beyond its DUPLEX intro, the game repeatedly
-  displayed `There has been a disc read error. The game cannot continue. Please
-  quit and restart the game.` This proves the intro handoff is no longer the
-  first blocker, but it does not identify whether the remaining fault is source
-  content, NETISO random-read delivery, or guest filesystem handling. The
-  iPhone was not visible to CoreDevice when this result was recorded, so no
-  matching live device trace was captured and no fix is claimed.
+- PHYSICAL BIOSHOCK RESULT: after the preserved modified-executable fallback,
+  BioShock Infinite completed its DUPLEX intro, proceeded into module loading,
+  and then repeatedly displayed `There has been a disc read error. The game
+  cannot continue. Please quit and restart the game.` This proves the intro
+  handoff is no longer the first blocker, but it does not identify whether the
+  remaining fault is source content, NETISO random-read delivery, or guest
+  filesystem handling. The iPhone was not visible to CoreDevice when this
+  result was recorded, so no matching live device trace was captured and no fix
+  is claimed. This title-specific gate is parked while native-Metal work remains
+  the primary performance/stability lane.
+- PASS PHYSICAL / WALKING DEAD BASELINE: the user reports that `The Walking
+  Dead` now loads and runs well at approximately `30 FPS`. Preserve this title
+  as a known-good comparison workload for the native-Metal canary; the report
+  does not by itself qualify Stop/relaunch, long-run memory, audio, or every
+  input path.
+- FAIL PHYSICAL / KINGDOM HEARTS RUNTIME: the title reached its
+  version-selection menu on the iPhone, but after a version was selected the
+  session remained at `0 FPS`. Restarting the core and retrying produced the
+  same result, so a cache-warmed relaunch did not clear the stall. A second of
+  the three offered launch versions independently reached the same `0 FPS`
+  result; the third was not tested. This is a repeatable runtime result, not yet
+  a diagnosed root cause or fix.
+- FAIL PHYSICAL / WOLFENSTEIN LAUNCH: the user reports that Wolfenstein did not
+  load on the V0.33 iPhone test build. No matching trace or exact terminal state
+  was captured with the report, so the root cause remains open.
+- FAIL PHYSICAL / DIABLO III STABILITY: Diablo III reached gameplay on the
+  iPhone and initially held approximately `28-30 FPS`, but visible rendering
+  glitches remained and the session eventually hung. Preserve the initial
+  frame-rate result as a useful throughput comparison, not as graphics or
+  long-run compatibility qualification.
+- PROMISING PHYSICAL / BOUND BY FLAME BASELINE: Bound by Flame reached real
+  gameplay on the V0.33 iPhone test build and initially held approximately
+  `26 FPS` average, intermittently reached `30 FPS`, and showed no visible
+  rendering glitches. The user reports that it feels very playable and is
+  materially better than the slower heavy-3D titles. Long-run stability,
+  Stop/relaunch, audio, and later-scene behavior remain open, so this is the
+  strongest current heavier-3D comparison workload rather than a completed
+  compatibility result.
 - RSX SHADER SEAM: Vulkan vertex/fragment decompilers now accept explicit
   capability records; their existing entry points still derive the same values
   from the active Vulkan renderer. The unregistered `MTLRSXShaderProgram`
@@ -3084,5 +3114,45 @@ cache-reuse gates.
   `5d57b51aa9249429ac76ce9e14a65f698eada20781ab7da9c7f13716bbcb459e`,
   and fragment MSL hash
   `0e75b103427a30f2e53e5f45261d64e9e2eb8d87d8f2832bab20334122bdcb78`.
-  No real game shader has traversed this new seam yet; the MSL converter is not
-  linked into the selectable core and no draw or gameplay claim is made.
+  No real game shader has traversed this new seam yet and no native-Metal
+  gameplay claim is made.
+
+### Exact converter, bounded uploads, and first draw checkpoint (2026-08-31)
+
+- EXACT PRODUCTION BRIDGE: the iOS core now compiles the exact MoltenVK v1.4.2
+  `SPIRVToMSLConverter` header at SHA-256
+  `124e571b7327c76ca0e340fc786deb53f114361dee3a1ae6d98c3d657a2878dc`
+  against MoltenVK's already-linked `MVK_spirv_cross` ABI. It does not link a
+  second production SPIRV-Cross copy. Unsupported inline uniform blocks,
+  argument-buffer device storage, and non-four-component fragment output
+  overrides fail closed.
+- BOUNDED UPLOAD LIFETIME: the independently implemented upload arena uses
+  lazy 4 MiB shared/write-combined pages, a 16 MiB single-allocation ceiling,
+  and a hard 64 MiB retained ceiling. Pages become reusable only from the
+  matching `MTLCommandBuffer` completion handler; frame abandon and shutdown
+  have explicit safe retirement paths, and allocation never waits for the GPU.
+- FIRST REAL DRAW SUBSET: `encode_draw` now uploads analyzed RSX persistent and
+  volatile vertex streams plus draw parameters and shader constants/state,
+  translates and caches native vertex/fragment functions, builds a matching
+  render pipeline, binds active resources, and encodes native non-indexed array
+  point/line/triangle draws. RSX-to-SPIR-V programs are bounded at 512 vertex
+  and 512 fragment entries. Unchanged framebuffer layouts are reattached to
+  each new backend frame instead of leaving cleared attachment pointers.
+- EXPLICIT REMAINING DRAW GATES: indexed, inline, instanced,
+  emulated-topology, textured, blended, depth/stencil-tested, culled, logic-op,
+  polygon-offset, smoothed, stippled, auxiliary-resource, and
+  last-vertex-provoking draws still reject with specific errors. The backend
+  factory, renderer enum, and frontend selector remain unregistered; this code
+  is dead-stripped from the selectable dylib and changes no V0.33 behavior.
+- PASS SERIAL BUILD/CONTRACTS: shell syntax, exact dependency metadata, the
+  complete SPIRV-Cross dependency/runtime contract, and native shader key/MSL
+  translation suites pass. A serial `RPCS3Core` build compiled the renderer,
+  guest backend, converter, cache, and upload arena and linked the arm64 iOS
+  dylib; only the existing duplicate-zlib linker warning remained. Archive
+  readback contains `encode_draw`, `translate_spirv_to_msl`, native
+  shader/pipeline-cache entry points, upload begin/allocate/finish/abandon,
+  and `make_native_guest_backend`. This is source/build evidence only.
+- BUILD LABEL FIX: the app subtitle no longer hardcodes `Core Test v0.26`; it
+  reads `CFBundleShortVersionString` and therefore reports the actual packaged
+  version on the next build. No replacement IPA has been created in this
+  checkpoint.

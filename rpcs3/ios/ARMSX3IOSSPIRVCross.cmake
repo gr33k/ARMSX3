@@ -7,6 +7,7 @@ set(ARMSX3_IOS_SPIRV_CROSS_MOLTENVK_VERSION "1.4.2")
 set(ARMSX3_IOS_SPIRV_CROSS_MOLTENVK_TAG_COMMIT "db66022459ffb663aa2b50f6b018bc2e124f5edf")
 set(ARMSX3_IOS_SPIRV_CROSS_REVISION "6c09849fe88c48eaed08413aa022aaa136a3a057")
 set(ARMSX3_IOS_SPIRV_CROSS_ARCHIVE_SHA256 "b81b9956289950570953738e666a031ca32ff64e4fc925eba89f227c42109518")
+set(ARMSX3_IOS_MOLTENVK_CONVERTER_SHA256 "124e571b7327c76ca0e340fc786deb53f114361dee3a1ae6d98c3d657a2878dc")
 set(ARMSX3_IOS_SPIRV_CROSS_LICENSE_ID "Apache-2.0")
 set(ARMSX3_IOS_SPIRV_CROSS_MINIMUM_IOS "15.0")
 set(ARMSX3_IOS_SPIRV_CROSS_ARCHITECTURE "arm64")
@@ -31,6 +32,8 @@ set(ARMSX3_IOS_SPIRV_CROSS_SOURCE_DIR
     "${ARMSX3_DEPS_ROOT}/SPIRV-Cross-${ARMSX3_IOS_SPIRV_CROSS_REVISION}")
 set(ARMSX3_IOS_SPIRV_CROSS_LICENSE_FILE
     "${ARMSX3_IOS_SPIRV_CROSS_SOURCE_DIR}/LICENSE")
+set(ARMSX3_IOS_MOLTENVK_CONVERTER_HEADER
+    "${ARMSX3_IOS_SPIRV_CROSS_SOURCE_DIR}/MoltenVKShaderConverter/SPIRVToMSLConverter.h")
 set(ARMSX3_IOS_SPIRV_CROSS_FETCH_SCRIPT
     "${ARMSX3_IOS_SPIRV_CROSS_REPO_ROOT}/platforms/ios/scripts/fetch-spirv-cross.sh")
 set(ARMSX3_IOS_SPIRV_CROSS_ATTRIBUTION
@@ -57,6 +60,7 @@ function(armsx3_ios_validate_spirv_cross)
         LICENSE
         spirv_cross.hpp
         spirv_msl.hpp
+        MoltenVKShaderConverter/SPIRVToMSLConverter.h
         .armsx3-spirv-cross-dependency)
         if(NOT EXISTS "${ARMSX3_IOS_SPIRV_CROSS_SOURCE_DIR}/${required_file}")
             message(FATAL_ERROR
@@ -70,6 +74,7 @@ function(armsx3_ios_validate_spirv_cross)
     foreach(expected_line IN ITEMS
         "revision=${ARMSX3_IOS_SPIRV_CROSS_REVISION}"
         "archive_sha256=${ARMSX3_IOS_SPIRV_CROSS_ARCHIVE_SHA256}"
+        "moltenvk_converter_sha256=${ARMSX3_IOS_MOLTENVK_CONVERTER_SHA256}"
         "moltenvk_version=${ARMSX3_IOS_SPIRV_CROSS_MOLTENVK_VERSION}"
         "moltenvk_tag_commit=${ARMSX3_IOS_SPIRV_CROSS_MOLTENVK_TAG_COMMIT}")
         list(FIND dependency_stamp "${expected_line}" line_index)

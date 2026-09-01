@@ -303,7 +303,15 @@ bool MTLGSRender::prepare_framebuffer(rsx::framebuffer_creation_context context)
 	{
 		update_viewport();
 		update_scissor(context == rsx::framebuffer_creation_context::context_draw);
-		return m_graphics_state.test(rsx::rtt_config_valid);
+		ensure_frame();
+
+		std::string error;
+		if (!m_impl->guest->prepare_framebuffer(
+				current_command_context(), context, m_framebuffer_layout, error))
+		{
+			fail_closed("framebuffer preparation", error.empty() ? "unspecified backend error" : error);
+		}
+		return true;
 	}
 
 	m_graphics_state.clear(
@@ -410,12 +418,17 @@ void MTLGSRender::emit_geometry(u32 subdraw_index)
 		: draw.execute_pipeline_dependencies(m_ctx);
 	const auto& range = draw.get_range();
 
+	GRAPH_frontend().analyse_inputs_interleaved(m_vertex_layout, current_vp_metadata);
+	const auto required_vertex_bytes = calculate_memory_requirements(
+		m_vertex_layout, range.first, range.count);
+
 	const mtl::draw_request request
 	{
 		.renderer = this,
 		.vertex_program = &current_vertex_program,
 		.fragment_program = &current_fragment_program,
 		.framebuffer = &m_framebuffer_layout,
+		.vertex_layout = &m_vertex_layout,
 		.primitive = draw.primitive,
 		.command = draw.command,
 		.subdraw_index = subdraw_index,
@@ -423,6 +436,8 @@ void MTLGSRender::emit_geometry(u32 subdraw_index)
 		.first = range.first,
 		.count = range.count,
 		.instance_count = draw.is_trivial_instanced_draw ? draw.pass_count() : 1u,
+		.persistent_vertex_bytes = required_vertex_bytes.first,
+		.volatile_vertex_bytes = required_vertex_bytes.second,
 		.indexed = draw.command == rsx::draw_command::indexed,
 		.inline_vertices = draw.command == rsx::draw_command::inlined_array,
 		.viewport_state = m_viewport,

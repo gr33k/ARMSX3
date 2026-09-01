@@ -13,12 +13,17 @@ readonly EXPECTED_SHA256="b81b9956289950570953738e666a031ca32ff64e4fc925eba89f22
 readonly ARCHIVE_NAME="SPIRV-Cross-$REVISION.tar.gz"
 readonly SOURCE_ROOT_NAME="SPIRV-Cross-$REVISION"
 readonly URL="https://codeload.github.com/KhronosGroup/SPIRV-Cross/tar.gz/$REVISION"
+readonly MOLTENVK_CONVERTER_NAME="SPIRVToMSLConverter-$MOLTENVK_VERSION.h"
+readonly MOLTENVK_CONVERTER_URL="https://raw.githubusercontent.com/KhronosGroup/MoltenVK/v$MOLTENVK_VERSION/MoltenVKShaderConverter/MoltenVKShaderConverter/SPIRVToMSLConverter.h"
+readonly MOLTENVK_CONVERTER_SHA256="124e571b7327c76ca0e340fc786deb53f114361dee3a1ae6d98c3d657a2878dc"
 
 DEPS_ROOT="${ARMSX3_DEPS_ROOT:-$REPO_ROOT/.deps}"
 ARCHIVE=""
 DESTINATION=""
 STAGING_DIR=""
 PARTIAL_ARCHIVE=""
+CONVERTER_HEADER=""
+PARTIAL_CONVERTER_HEADER=""
 
 usage() {
     printf 'usage: %s [--print-metadata]\n' "$0" >&2
@@ -32,6 +37,9 @@ fail() {
 cleanup() {
     if [[ -n "$PARTIAL_ARCHIVE" && -e "$PARTIAL_ARCHIVE" ]]; then
         find "$PARTIAL_ARCHIVE" -depth -delete
+    fi
+    if [[ -n "$PARTIAL_CONVERTER_HEADER" && -e "$PARTIAL_CONVERTER_HEADER" ]]; then
+        find "$PARTIAL_CONVERTER_HEADER" -depth -delete
     fi
     if [[ -n "$STAGING_DIR" && -e "$STAGING_DIR" ]]; then
         find "$STAGING_DIR" -depth -delete
@@ -49,6 +57,8 @@ if [[ "${1:-}" == "--print-metadata" ]]; then
     printf 'revision=%s\n' "$REVISION"
     printf 'archive_sha256=%s\n' "$EXPECTED_SHA256"
     printf 'archive_url=%s\n' "$URL"
+    printf 'moltenvk_converter_sha256=%s\n' "$MOLTENVK_CONVERTER_SHA256"
+    printf 'moltenvk_converter_url=%s\n' "$MOLTENVK_CONVERTER_URL"
     printf 'license=Apache-2.0\n'
     exit 0
 elif (( $# == 1 )); then
@@ -56,7 +66,7 @@ elif (( $# == 1 )); then
     exit 64
 fi
 
-for command_name in awk curl find grep mkdir mktemp mv shasum tar; do
+for command_name in awk cp curl find grep mkdir mktemp mv shasum tar; do
     command -v "$command_name" >/dev/null || fail "required command not found: $command_name" 69
 done
 
@@ -73,10 +83,12 @@ if [[ "$DEPS_ROOT" == "$REPO_ROOT" ||
 fi
 
 ARCHIVE="$DEPS_ROOT/downloads/$ARCHIVE_NAME"
+CONVERTER_HEADER="$DEPS_ROOT/downloads/$MOLTENVK_CONVERTER_NAME"
 DESTINATION="$DEPS_ROOT/$SOURCE_ROOT_NAME"
 readonly STAMP_NAME=".armsx3-spirv-cross-dependency"
 readonly STAMP_REVISION="revision=$REVISION"
 readonly STAMP_SHA256="archive_sha256=$EXPECTED_SHA256"
+readonly STAMP_CONVERTER_SHA256="moltenvk_converter_sha256=$MOLTENVK_CONVERTER_SHA256"
 
 trap cleanup EXIT
 trap 'exit 130' HUP INT TERM
@@ -95,13 +107,28 @@ if [[ "$actual_sha256" != "$EXPECTED_SHA256" ]]; then
     fail "archive hash mismatch for $ARCHIVE: expected $EXPECTED_SHA256, got $actual_sha256" 66
 fi
 
+if [[ ! -f "$CONVERTER_HEADER" ]]; then
+    PARTIAL_CONVERTER_HEADER="$CONVERTER_HEADER.partial.$$"
+    curl --proto '=https' --tlsv1.2 -fL --retry 3 --retry-all-errors \
+        --connect-timeout 15 --output "$PARTIAL_CONVERTER_HEADER" "$MOLTENVK_CONVERTER_URL"
+    mv "$PARTIAL_CONVERTER_HEADER" "$CONVERTER_HEADER"
+    PARTIAL_CONVERTER_HEADER=""
+fi
+
+converter_sha256="$(shasum -a 256 "$CONVERTER_HEADER" | awk '{print $1}')"
+if [[ "$converter_sha256" != "$MOLTENVK_CONVERTER_SHA256" ]]; then
+    fail "converter header hash mismatch for $CONVERTER_HEADER: expected $MOLTENVK_CONVERTER_SHA256, got $converter_sha256" 66
+fi
+
 if [[ -f "$DESTINATION/$STAMP_NAME" &&
       -f "$DESTINATION/CMakeLists.txt" &&
       -f "$DESTINATION/LICENSE" &&
       -f "$DESTINATION/spirv_cross.hpp" &&
-      -f "$DESTINATION/spirv_msl.hpp" ]] &&
+      -f "$DESTINATION/spirv_msl.hpp" &&
+      -f "$DESTINATION/MoltenVKShaderConverter/SPIRVToMSLConverter.h" ]] &&
    grep -Fqx "$STAMP_REVISION" "$DESTINATION/$STAMP_NAME" &&
-   grep -Fqx "$STAMP_SHA256" "$DESTINATION/$STAMP_NAME"; then
+   grep -Fqx "$STAMP_SHA256" "$DESTINATION/$STAMP_NAME" &&
+   grep -Fqx "$STAMP_CONVERTER_SHA256" "$DESTINATION/$STAMP_NAME"; then
     printf '%s\n' "$DESTINATION"
     exit 0
 fi
@@ -114,10 +141,13 @@ for required_file in CMakeLists.txt LICENSE spirv_cross.hpp spirv_msl.hpp; do
     [[ -f "$staged_source/$required_file" ]] || fail "archive is missing $required_file" 65
 done
 grep -Fq "Apache License" "$staged_source/LICENSE" || fail "unexpected SPIRV-Cross license payload" 65
+mkdir -p "$staged_source/MoltenVKShaderConverter"
+cp "$CONVERTER_HEADER" "$staged_source/MoltenVKShaderConverter/SPIRVToMSLConverter.h"
 
-printf '%s\n%s\n%s\n%s\n' \
+printf '%s\n%s\n%s\n%s\n%s\n' \
     "$STAMP_REVISION" \
     "$STAMP_SHA256" \
+    "$STAMP_CONVERTER_SHA256" \
     "moltenvk_version=$MOLTENVK_VERSION" \
     "moltenvk_tag_commit=$MOLTENVK_TAG_COMMIT" \
     > "$staged_source/$STAMP_NAME"

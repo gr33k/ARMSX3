@@ -297,7 +297,12 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
     [scroll addSubview:stack];
 
     UILabel* title = [[UILabel alloc] init];
-    title.text = @"ARMSX3 iOS Core Test v0.26";
+    NSString* app_version = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
+    if (![app_version isKindOfClass:NSString.class] || app_version.length == 0)
+    {
+        app_version = @"unknown";
+    }
+    title.text = [NSString stringWithFormat:@"ARMSX3 iOS Core Test v%@", app_version];
     title.textColor = UIColor.whiteColor;
     title.font = [UIFont systemFontOfSize:24.0 weight:UIFontWeightBlack];
     [stack addArrangedSubview:title];

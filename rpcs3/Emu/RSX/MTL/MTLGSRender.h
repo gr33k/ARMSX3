@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Emu/RSX/GSRender.h"
+#include "Emu/RSX/Core/RSXVertexTypes.h"
 
 #include <array>
 #include <memory>
@@ -78,6 +79,7 @@ namespace mtl
 		const RSXVertexProgram* vertex_program = nullptr;
 		const RSXFragmentProgram* fragment_program = nullptr;
 		const rsx::framebuffer_layout* framebuffer = nullptr;
+		const rsx::vertex_input_layout* vertex_layout = nullptr;
 
 		rsx::primitive_type primitive{};
 		rsx::draw_command command{};
@@ -86,6 +88,8 @@ namespace mtl
 		u32 first = 0;
 		u32 count = 0;
 		u32 instance_count = 1;
+		u32 persistent_vertex_bytes = 0;
+		u32 volatile_vertex_bytes = 0;
 		bool indexed = false;
 		bool inline_vertices = false;
 		viewport viewport_state{};
@@ -193,6 +197,7 @@ private:
 
 	mtl::viewport m_viewport{};
 	mtl::scissor_rect m_scissor{};
+	rsx::vertex_input_layout m_vertex_layout{};
 	bool m_framebuffer_prepared = false;
 
 	void ensure_frame();

@@ -17,6 +17,9 @@ assert_equal("${ARMSX3_IOS_SPIRV_CROSS_REVISION}"
 assert_equal("${ARMSX3_IOS_SPIRV_CROSS_ARCHIVE_SHA256}"
     "b81b9956289950570953738e666a031ca32ff64e4fc925eba89f227c42109518"
     "SPIRV-Cross archive SHA-256")
+assert_equal("${ARMSX3_IOS_MOLTENVK_CONVERTER_SHA256}"
+    "124e571b7327c76ca0e340fc786deb53f114361dee3a1ae6d98c3d657a2878dc"
+    "MoltenVK converter header SHA-256")
 assert_equal("${ARMSX3_IOS_SPIRV_CROSS_LICENSE_ID}" "Apache-2.0" "license")
 assert_equal("${ARMSX3_IOS_SPIRV_CROSS_MINIMUM_IOS}" "15.0" "minimum iOS")
 assert_equal("${ARMSX3_IOS_SPIRV_CROSS_ARCHITECTURE}" "arm64" "architecture")
@@ -41,6 +44,7 @@ foreach(expected_line IN ITEMS
     "moltenvk_tag_commit=${ARMSX3_IOS_SPIRV_CROSS_MOLTENVK_TAG_COMMIT}"
     "revision=${ARMSX3_IOS_SPIRV_CROSS_REVISION}"
     "archive_sha256=${ARMSX3_IOS_SPIRV_CROSS_ARCHIVE_SHA256}"
+    "moltenvk_converter_sha256=${ARMSX3_IOS_MOLTENVK_CONVERTER_SHA256}"
     "license=${ARMSX3_IOS_SPIRV_CROSS_LICENSE_ID}")
     string(FIND "${metadata}" "${expected_line}" line_index)
     if(line_index EQUAL -1)
@@ -49,6 +53,10 @@ foreach(expected_line IN ITEMS
 endforeach()
 
 armsx3_ios_validate_spirv_cross()
+
+if(NOT EXISTS "${ARMSX3_IOS_MOLTENVK_CONVERTER_HEADER}")
+    message(FATAL_ERROR "pinned MoltenVK converter header is missing")
+endif()
 
 file(READ "${ARMSX3_IOS_SPIRV_CROSS_LICENSE_FILE}" license_text LIMIT 256)
 string(FIND "${license_text}" "Apache License" license_index)

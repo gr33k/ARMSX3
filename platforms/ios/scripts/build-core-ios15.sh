@@ -20,6 +20,7 @@ fi
 
 "$SCRIPT_DIR/init-submodules.sh"
 MOLTENVK_ROOT="$("$SCRIPT_DIR/fetch-moltenvk.sh")"
+SPIRV_CROSS_ROOT="$("$SCRIPT_DIR/fetch-spirv-cross.sh")"
 LLVM_ROOT="$("$SCRIPT_DIR/fetch-llvm-ios15.sh")"
 FFMPEG_ROOT="$("$SCRIPT_DIR/build-ffmpeg-ios15.sh")"
 SDKROOT="$(xcrun --sdk iphoneos --show-sdk-path)"
@@ -41,6 +42,7 @@ cmake \
     "-DCMAKE_OBJCXX_FLAGS=$PREFIX_MAP_FLAGS" \
     -DRPCS3_FRONTEND=IOS \
     -DRPCS3_MOLTENVK_ROOT="$MOLTENVK_ROOT" \
+    -DRPCS3_SPIRV_CROSS_ROOT="$SPIRV_CROSS_ROOT" \
     -DRPCS3_FFMPEG_ROOT="$FFMPEG_ROOT" \
     -DWITH_LLVM=ON \
     -DBUILD_LLVM=OFF \

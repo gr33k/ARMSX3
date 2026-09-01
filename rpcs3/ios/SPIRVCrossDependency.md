@@ -11,6 +11,8 @@ does not alter or automatically link the existing RPCS3 renderer.
 - SPIRV-Cross revision: `6c09849fe88c48eaed08413aa022aaa136a3a057`
 - Archive URL: `https://codeload.github.com/KhronosGroup/SPIRV-Cross/tar.gz/6c09849fe88c48eaed08413aa022aaa136a3a057`
 - Archive SHA-256: `b81b9956289950570953738e666a031ca32ff64e4fc925eba89f227c42109518`
+- MoltenVK converter header: `MoltenVKShaderConverter/SPIRVToMSLConverter.h`
+- Converter header SHA-256: `124e571b7327c76ca0e340fc786deb53f114361dee3a1ae6d98c3d657a2878dc`
 - Upstream license: Apache-2.0
 
 The fetcher downloads and extracts only into the ignored repository-level
@@ -37,6 +39,12 @@ The helper requires `CMAKE_SYSTEM_NAME=iOS`, deployment target 15.0 or newer,
 and `CMAKE_OSX_ARCHITECTURES=arm64`. It mirrors MoltenVK's bounded SPIRV-Cross
 feature set and exposes `MVK_spirv_cross` as the C++ namespace.
 
+The production iOS core does not link a second SPIRV-Cross copy. Its private
+bridge calls the converter already exported by the exact MoltenVK `v1.4.2`
+binary and compiles against the hash-pinned matching converter header. A
+version, namespace, header, or symbol mismatch must fail configuration or link
+rather than falling back to a different translator.
+
 ## Attribution and distribution gate
 
 The verified archive retains its complete `LICENSE`. The helper exports its
@@ -58,6 +66,6 @@ platforms/ios/scripts/test-spirv-cross-dependency.sh
 The test rejects a deliberately corrupted archive, fetches and verifies the
 pinned archive in a disposable `.deps`, validates provenance and attribution,
 configures the iOS 15 arm64 targets, and compiles the ARMSX3 shader metadata and
-SPIR-V-to-MSL translator against the pinned MSL library with two workers and
+SPIR-V-to-MSL translator against the pinned MSL library with one worker and
 warnings treated as errors. It does not select the renderer or run the full
 application build.
