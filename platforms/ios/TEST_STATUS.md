@@ -3328,6 +3328,10 @@ cache-reuse gates.
   operation; do not list it as gameplay-working.
 - TEST IN PROGRESS / DEAD OR ALIVE 5: the title reached loading. Gameplay,
   graphics, input, audio, Stop, and relaunch results remain unreported.
+- PARTIAL PASS PHYSICAL / THE LEGO MOVIE VIDEOGAME: V0.35 reached interactive
+  gameplay and is currently running at approximately 26 FPS. This is a positive
+  gameplay baseline for Vulkan-vs-Metal comparison; sustained play, graphics,
+  input, audio, Stop, relaunch, and cache-reuse qualification remain open.
 - NEXT IPA: include the committed ARMSX3 icon assets. Keep the renderer default
   on the physically accepted MoltenVK lane until native Metal is selectable and
   real gameplay is proven. The Metal implementation must remain source- and
