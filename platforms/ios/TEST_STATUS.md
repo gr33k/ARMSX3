@@ -3326,8 +3326,11 @@ cache-reuse gates.
   missing scene. Restarting the app/title did not restore correct rendering.
   This is a graphics-correctness failure despite successful boot and menu
   operation; do not list it as gameplay-working.
-- TEST IN PROGRESS / DEAD OR ALIVE 5: the title reached loading. Gameplay,
-  graphics, input, audio, Stop, and relaunch results remain unreported.
+- PARTIAL PASS PHYSICAL / DEAD OR ALIVE 5: the title boots through its menu and
+  reaches an actual fight. The menu holds approximately 60 FPS; fighting varies
+  from roughly 10 to 30 FPS with clearly noticeable slowdown. Longer stability,
+  graphics correctness, input, audio, Stop, relaunch, and cache reuse remain
+  open, so this is gameplay evidence but not full-speed qualification.
 - PARTIAL PASS PHYSICAL / THE LEGO MOVIE VIDEOGAME: V0.35 reached interactive
   gameplay and is currently running at approximately 26 FPS. This is a positive
   gameplay baseline for Vulkan-vs-Metal comparison; sustained play, graphics,
