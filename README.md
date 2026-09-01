@@ -20,12 +20,19 @@ STATUS
 --------
 * 2D Games working at full speed - i.e. Bejeweled 3, and Duck Tales Remastered
 * 3D Games vary - Ratatouille, Bound by Flame, The Walking Dead and some other games work full speed
-* Games NOT working Full Speed Uncharted,1,2,3, Red Dead Redemption...GTA5 works in the 20's currently.
-(There are probably a lot of games not working right at this moment - will improve over time!)
 
-I am working on porting MoltenVK to Metal so we can get better performance on major 3D games.
+Tested games NOT working at full speed: 
+* Uncharted 1,2,3 
+* Red Dead Redemption
+* GTA5 (20FPS currently with minimal graphics glitches)
+* Diablo 3
+* There are probably a lot of games not working right at this moment - will improve over time!
 
-Support for PS3NETServ. Point to your extracted or ISO games and connect. No need to install the ISO locally. Some games will create install files, but much more efficient over network. You can import ISO games locally but limited virtual HD space at this time.
+I am working on replacing MoltenVK to Metal so we can get better performance on major 3D games.
+
+Support for PS3NetServ (NETISO). 
+Point to your extracted folders or ISO games and connect. No need to install the ISO locally. Some games will create install files, but much more efficient over network. 
+You can import ISO games locally but limited virtual HD space at this time.
 
 Very much a Pre-Beta right now...but hopefully you can enjoy it. Tested on iPhone 13 Pro Max - iOS 15.3 - installed via TrollStore.
 
