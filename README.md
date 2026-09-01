@@ -1,7 +1,11 @@
 ARMSX3
 ======
 
+<img width="2778" height="1284" alt="ARMSX3_Screenshot2" src="https://github.com/user-attachments/assets/4cba4930-c363-4c35-90a9-8e9c641e75cf" />
+
+
 <img width="1284" height="2778" alt="ARMSX3_Screenshot" src="https://github.com/user-attachments/assets/de857097-3456-4644-afc6-8b62b14bb17c" />
+
 
 
 An iOS port (made with AI) that works on iOS 15+. Requires JIT and currently limited to devices supporting TrollStore. 
