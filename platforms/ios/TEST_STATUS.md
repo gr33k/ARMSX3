@@ -3314,3 +3314,22 @@ cache-reuse gates.
   mark. `docs/images/armsx3-app-icon.png` is the 1024px public source; the iOS
   120px and 180px app variants are opaque RGB PNGs. This source update applies
   to the next IPA build; the already-published V0.35 binary remains unchanged.
+
+### V0.35 additional title observations (2026-08-31)
+
+- FAIL PHYSICAL / THIEF: the title terminates with `ERROR: HDD boot game is
+  corrupted. The application will now terminate.` The launch source and title
+  data integrity are not yet isolated, so this is a reproducible observation,
+  not proof that the emulator or game dump alone is at fault.
+- FAIL PHYSICAL / SAINTS ROW IV THE FULL PACKAGE: the title loads and its menus
+  and audio operate, but entering gameplay produces a predominantly black or
+  missing scene. Restarting the app/title did not restore correct rendering.
+  This is a graphics-correctness failure despite successful boot and menu
+  operation; do not list it as gameplay-working.
+- TEST IN PROGRESS / DEAD OR ALIVE 5: the title reached loading. Gameplay,
+  graphics, input, audio, Stop, and relaunch results remain unreported.
+- NEXT IPA: include the committed ARMSX3 icon assets. Keep the renderer default
+  on the physically accepted MoltenVK lane until native Metal is selectable and
+  real gameplay is proven. The Metal implementation must remain source- and
+  runtime-compatible with newer iOS sideload/JIT lanes; TrollStore-specific
+  installation behavior must not be embedded in the renderer itself.
