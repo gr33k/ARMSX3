@@ -577,6 +577,20 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
     [self attachDisplay];
 }
 
+- (void)viewWillTransitionToSize:(CGSize)size
+       withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator
+{
+    [super viewWillTransitionToSize:size withTransitionCoordinator:coordinator];
+    __weak ARMSX3ViewController* weak_self = self;
+    [coordinator animateAlongsideTransition:nil completion:^(__unused id<UIViewControllerTransitionCoordinatorContext> context) {
+        ARMSX3ViewController* strong_self = weak_self;
+        if (!strong_self)
+            return;
+        [strong_self.view setNeedsLayout];
+        [strong_self.view layoutIfNeeded];
+    }];
+}
+
 - (void)attachDisplay
 {
     if (self.displayUpdateScheduled)
@@ -608,35 +622,41 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
 - (void)updateLayoutMode
 {
     const BOOL landscape = self.view.bounds.size.width > self.view.bounds.size.height;
-    if (self.landscapeLayout != landscape)
+    const BOOL layout_changed = self.landscapeLayout != landscape;
+    self.landscapeLayout = landscape;
+
+    // Reapply visibility on every layout pass. Rotation callbacks can arrive
+    // while UIKit still reports the previous bounds, so a transition-only
+    // toggle can otherwise leave portrait controls hidden behind the display.
+    for (UIView* view in self.debugChromeViews)
+        view.hidden = landscape;
+    for (UIButton* button in self.touchControls)
     {
-        self.landscapeLayout = landscape;
-        for (UIView* view in self.debugChromeViews)
-            view.hidden = landscape;
-        for (UIButton* button in self.touchControls)
-            button.hidden = landscape;
-        for (UIView* control in self.landscapeControls)
-            control.hidden = !landscape;
-        self.leftControllerSkin.hidden = !landscape;
-        self.rightControllerSkin.hidden = !landscape;
-        self.landscapeRuntimeLabel.hidden = !landscape;
+        button.hidden = landscape;
         if (!landscape)
-            self.inputTelemetryLabel.hidden = YES;
-        self.rootScroll.alwaysBounceVertical = !landscape;
-        self.rootScroll.scrollEnabled = !landscape;
-        self.rootScroll.contentInsetAdjustmentBehavior = landscape
-            ? UIScrollViewContentInsetAdjustmentNever
-            : UIScrollViewContentInsetAdjustmentAutomatic;
-        self.contentStack.spacing = landscape ? 0.0 : 9.0;
-        self.stackTopConstraint.constant = landscape ? 0.0 : 12.0;
-        self.stackLeadingConstraint.constant = landscape ? 0.0 : 12.0;
-        self.stackTrailingConstraint.constant = landscape ? 0.0 : -12.0;
-        self.stackBottomConstraint.constant = landscape ? 0.0 : -16.0;
-        self.stackWidthConstraint.constant = landscape ? 0.0 : -24.0;
-        self.playerStage.layer.cornerRadius = landscape ? 0.0 : 12.0;
-        if (landscape)
-            self.rootScroll.contentOffset = CGPointZero;
+            [self.playerStage bringSubviewToFront:button];
     }
+    for (UIView* control in self.landscapeControls)
+        control.hidden = !landscape;
+    self.leftControllerSkin.hidden = !landscape;
+    self.rightControllerSkin.hidden = !landscape;
+    self.landscapeRuntimeLabel.hidden = !landscape;
+    if (!landscape)
+        self.inputTelemetryLabel.hidden = YES;
+    self.rootScroll.alwaysBounceVertical = !landscape;
+    self.rootScroll.scrollEnabled = !landscape;
+    self.rootScroll.contentInsetAdjustmentBehavior = landscape
+        ? UIScrollViewContentInsetAdjustmentNever
+        : UIScrollViewContentInsetAdjustmentAutomatic;
+    self.contentStack.spacing = landscape ? 0.0 : 9.0;
+    self.stackTopConstraint.constant = landscape ? 0.0 : 12.0;
+    self.stackLeadingConstraint.constant = landscape ? 0.0 : 12.0;
+    self.stackTrailingConstraint.constant = landscape ? 0.0 : -12.0;
+    self.stackBottomConstraint.constant = landscape ? 0.0 : -16.0;
+    self.stackWidthConstraint.constant = landscape ? 0.0 : -24.0;
+    self.playerStage.layer.cornerRadius = landscape ? 0.0 : 12.0;
+    if (layout_changed && landscape)
+        self.rootScroll.contentOffset = CGPointZero;
 
     const CGRect safe_frame = self.view.safeAreaLayoutGuide.layoutFrame;
     const CGFloat portrait_width = self.contentStack.bounds.size.width > 1.0
