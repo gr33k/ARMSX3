@@ -748,4 +748,22 @@ static void netiso_game_enumeration_callback(void* user_context, const rpcs3_ios
     return result;
 }
 
+- (BOOL)isEmulationActive
+{
+    if (!self.isReady)
+        return NO;
+
+    switch (rpcs3_ios_get_emulation_state())
+    {
+    case RPCS3_IOS_EMULATION_STATE_LOADING:
+    case RPCS3_IOS_EMULATION_STATE_STARTING:
+    case RPCS3_IOS_EMULATION_STATE_RUNNING:
+    case RPCS3_IOS_EMULATION_STATE_PAUSED:
+    case RPCS3_IOS_EMULATION_STATE_STOPPING:
+        return YES;
+    default:
+        return NO;
+    }
+}
+
 @end

@@ -998,6 +998,8 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
 
 - (void)updateRuntimeStatus
 {
+    UIApplication.sharedApplication.idleTimerDisabled =
+        !self.appInactive && self.core.isEmulationActive;
     if (self.core.isReady)
     {
         NSString* runtime = [self.core runtimeStatus];
@@ -1075,30 +1077,45 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
 - (void)installTouchControls
 {
     NSArray<NSDictionary*>* controls = @[
-        @{ @"title": @"U", @"bit": @(RPCS3_IOS_PAD_BUTTON_DPAD_UP) },
-        @{ @"title": @"D", @"bit": @(RPCS3_IOS_PAD_BUTTON_DPAD_DOWN) },
-        @{ @"title": @"L", @"bit": @(RPCS3_IOS_PAD_BUTTON_DPAD_LEFT) },
-        @{ @"title": @"R", @"bit": @(RPCS3_IOS_PAD_BUTTON_DPAD_RIGHT) },
-        @{ @"title": @"T", @"bit": @(RPCS3_IOS_PAD_BUTTON_TRIANGLE) },
-        @{ @"title": @"X", @"bit": @(RPCS3_IOS_PAD_BUTTON_CROSS) },
-        @{ @"title": @"S", @"bit": @(RPCS3_IOS_PAD_BUTTON_SQUARE) },
-        @{ @"title": @"O", @"bit": @(RPCS3_IOS_PAD_BUTTON_CIRCLE) },
-        @{ @"title": @"SEL", @"bit": @(RPCS3_IOS_PAD_BUTTON_SELECT) },
-        @{ @"title": @"START", @"bit": @(RPCS3_IOS_PAD_BUTTON_START) },
+        @{ @"title": @"▲", @"label": @"D-pad up", @"bit": @(RPCS3_IOS_PAD_BUTTON_DPAD_UP), @"tint": @0 },
+        @{ @"title": @"▼", @"label": @"D-pad down", @"bit": @(RPCS3_IOS_PAD_BUTTON_DPAD_DOWN), @"tint": @0 },
+        @{ @"title": @"◀", @"label": @"D-pad left", @"bit": @(RPCS3_IOS_PAD_BUTTON_DPAD_LEFT), @"tint": @0 },
+        @{ @"title": @"▶", @"label": @"D-pad right", @"bit": @(RPCS3_IOS_PAD_BUTTON_DPAD_RIGHT), @"tint": @0 },
+        @{ @"title": @"△", @"label": @"Triangle", @"bit": @(RPCS3_IOS_PAD_BUTTON_TRIANGLE), @"tint": @1 },
+        @{ @"title": @"×", @"label": @"Cross", @"bit": @(RPCS3_IOS_PAD_BUTTON_CROSS), @"tint": @2 },
+        @{ @"title": @"□", @"label": @"Square", @"bit": @(RPCS3_IOS_PAD_BUTTON_SQUARE), @"tint": @3 },
+        @{ @"title": @"○", @"label": @"Circle", @"bit": @(RPCS3_IOS_PAD_BUTTON_CIRCLE), @"tint": @4 },
+        @{ @"title": @"SELECT", @"label": @"Select", @"bit": @(RPCS3_IOS_PAD_BUTTON_SELECT), @"tint": @0 },
+        @{ @"title": @"START", @"label": @"Start", @"bit": @(RPCS3_IOS_PAD_BUTTON_START), @"tint": @0 },
     ];
     for (NSDictionary* spec in controls)
     {
-        UIButton* button = [UIButton buttonWithType:UIButtonTypeSystem];
+        ARMSX3ArtworkButton* button = [ARMSX3ArtworkButton buttonWithType:UIButtonTypeCustom];
         button.tag = [spec[@"bit"] unsignedLongLongValue];
-        button.backgroundColor = [UIColor colorWithWhite:0.08 alpha:0.78];
-        button.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.58].CGColor;
-        button.layer.borderWidth = 1.0;
+        button.circularHitArea = self.touchControls.count < 8;
+        button.accessibilityLabel = spec[@"label"];
+        button.backgroundColor = [UIColor colorWithRed:0.025 green:0.040 blue:0.070 alpha:0.88];
+        NSArray<UIColor*>* colors = @[
+            [UIColor colorWithRed:0.76 green:0.82 blue:0.90 alpha:1.0],
+            [UIColor colorWithRed:0.30 green:0.92 blue:0.60 alpha:1.0],
+            [UIColor colorWithRed:0.38 green:0.72 blue:1.00 alpha:1.0],
+            [UIColor colorWithRed:0.96 green:0.46 blue:0.76 alpha:1.0],
+            [UIColor colorWithRed:1.00 green:0.48 blue:0.50 alpha:1.0],
+        ];
+        UIColor* tint = colors[[spec[@"tint"] unsignedIntegerValue]];
+        button.layer.borderColor = tint.CGColor;
+        button.layer.borderWidth = 1.5;
+        button.layer.shadowColor = tint.CGColor;
+        button.layer.shadowOpacity = 0.22;
+        button.layer.shadowRadius = 4.0;
+        button.layer.shadowOffset = CGSizeZero;
         button.layer.cornerRadius = 18.0;
         button.multipleTouchEnabled = YES;
         button.exclusiveTouch = NO;
-        button.titleLabel.font = [UIFont systemFontOfSize:11.0 weight:UIFontWeightBlack];
+        button.titleLabel.font = [UIFont systemFontOfSize:self.touchControls.count < 8 ? 19.0 : 10.0
+            weight:UIFontWeightBlack];
         [button setTitle:spec[@"title"] forState:UIControlStateNormal];
-        [button setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
+        [button setTitleColor:tint forState:UIControlStateNormal];
         [button addTarget:self action:@selector(touchDown:) forControlEvents:UIControlEventTouchDown | UIControlEventTouchDragEnter];
         [button addTarget:self action:@selector(touchUp:) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside | UIControlEventTouchCancel | UIControlEventTouchDragExit];
         [self.playerStage addSubview:button];
@@ -1232,6 +1249,9 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
     const CGFloat left_x = MAX(width * 0.15, size * 1.45);
     const CGFloat right_x = MIN(width * 0.85, width - size * 1.45);
     const CGFloat center_y = MIN(height - size * 1.45, MAX(size * 1.45, height * 0.62));
+    const CGFloat special_width = size * 1.35;
+    const CGFloat special_gap = MAX(8.0, size * 0.18);
+    const CGFloat special_offset = (special_width + special_gap) * 0.5;
     NSArray<NSValue*>* centers = @[
         [NSValue valueWithCGPoint:CGPointMake(left_x, center_y - size * 0.90)],
         [NSValue valueWithCGPoint:CGPointMake(left_x, center_y + size * 0.90)],
@@ -1241,11 +1261,11 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
         [NSValue valueWithCGPoint:CGPointMake(right_x, center_y + size * 0.90)],
         [NSValue valueWithCGPoint:CGPointMake(right_x - size * 0.90, center_y)],
         [NSValue valueWithCGPoint:CGPointMake(right_x + size * 0.90, center_y)],
-        [NSValue valueWithCGPoint:CGPointMake(width * 0.45, height - size * 0.55)],
-        [NSValue valueWithCGPoint:CGPointMake(width * 0.57, height - size * 0.55)],
+        [NSValue valueWithCGPoint:CGPointMake(width * 0.5 - special_offset, height - size * 0.55)],
+        [NSValue valueWithCGPoint:CGPointMake(width * 0.5 + special_offset, height - size * 0.55)],
     ];
     [self.touchControls enumerateObjectsUsingBlock:^(UIButton* button, NSUInteger index, BOOL*) {
-        const CGFloat button_width = index >= 8 ? size * 1.45 : size;
+        const CGFloat button_width = index >= 8 ? special_width : size;
         button.bounds = CGRectMake(0, 0, button_width, size);
         CGPoint center = centers[index].CGPointValue;
         center.x += self.metalView.frame.origin.x;
@@ -1398,6 +1418,7 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
     if (self.appInactive)
         return;
     self.appInactive = YES;
+    UIApplication.sharedApplication.idleTimerDisabled = NO;
     self.touchButtons = 0;
     self.touchLeftX = 0.0f;
     self.touchLeftY = 0.0f;
@@ -1414,6 +1435,7 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
         return;
     self.appInactive = NO;
     [self.core resumeFromBackground];
+    UIApplication.sharedApplication.idleTimerDisabled = self.core.isEmulationActive;
 }
 
 - (void)didReceiveMemoryWarning
@@ -1424,6 +1446,7 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
 
 - (void)dealloc
 {
+    UIApplication.sharedApplication.idleTimerDisabled = NO;
     [self.statusTimer invalidate];
     [NSNotificationCenter.defaultCenter removeObserver:self];
 }

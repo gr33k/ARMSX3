@@ -10,6 +10,7 @@ typedef void (^ARMSX3CoreCompletion)(BOOL succeeded, NSString* message);
 
 @property(atomic, readonly, getter=isReady) BOOL ready;
 @property(atomic, readonly, getter=hasFatalError) BOOL fatalError;
+@property(atomic, readonly, getter=isEmulationActive) BOOL emulationActive;
 @property(atomic, copy, readonly) NSArray<NSDictionary<NSString*, id>*>* games;
 @property(atomic, copy, readonly) NSArray<NSDictionary<NSString*, id>*>* netISOGames;
 
