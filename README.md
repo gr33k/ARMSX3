@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="platforms/ios/app/AppIcons/AppIcon60x60@3x.png" width="104" alt="ARMSX3 app icon">
+  <img src="docs/images/armsx3-app-icon.png" width="120" alt="ARMSX3 app icon">
 </p>
 
 <h1 align="center">ARMSX3 for iOS</h1>
