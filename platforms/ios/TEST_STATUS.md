@@ -3202,3 +3202,59 @@ cache-reuse gates.
   unregistered and this path is still dead-stripped from the selectable core.
   No IPA was packaged and none of the V0.33 physical title observations were
   produced by native Metal.
+
+### V0.34 public TrollStore prerelease and shell checkpoint (2026-08-31)
+
+- VERSION CONSISTENCY: source commit `18497ec1f3fa39619a93f7e06e959f2d7952ba44`
+  sets marketing version `0.34.0`, bundle build `34`, and the dynamic in-app
+  version subtitle to the same value. The public asset is named
+  `ARMSX3-iOS-Pre-Alpha-v0.34.0-TrollStore.ipa`; no V0.35 label is used.
+- RUNTIME BOUNDARY: V0.34 deliberately carries forward the exact accepted
+  V0.33 signed core SHA-256
+  `a8faeb02e8b2c87af85d4b77e54bbadf149d0bc33b263e63b0b6b694e3dd1794`.
+  Only the UIKit shell changed. The selectable renderer remains MoltenVK; the
+  unfinished native-Metal texture work stayed uncommitted, un-staged, and out
+  of this IPA.
+- PORTRAIT INPUT FIX: Start and Select now use width-derived capsule centers
+  with an explicit 8-point-or-18%-of-button gap. Independent geometry checks
+  pass at 320x180, 375x211, and 430x242 point stages with gaps of 8.00, 9.12,
+  and 9.72 points. All eight directional/action controls use exact circular hit
+  masks; Start and Select use exact rounded-capsule hit masks. PlayStation-style
+  symbols, accessible labels, color cues, and pressed-state feedback replace
+  the temporary letter-only controls. Landscape artwork and normalized hit
+  geometry are unchanged.
+- DISPLAY-AWAKE FIX: `UIApplication.idleTimerDisabled` now follows actual core
+  lifecycle state. It is enabled only during loading, starting, running,
+  paused, or stopping sessions while the app is active, and is explicitly
+  restored on background and controller teardown. This addresses user reports
+  of apparent display dimming during Bound by Flame without globally disabling
+  normal iOS Auto-Lock.
+- PASS SERIAL SHELL BUILD: the iOS 15 arm64 UIKit app compiled and packaged
+  serially against the accepted V0.33 core. The connected iOS 15.3 phone still
+  cannot mount the current Xcode developer image; that known device-preparation
+  warning did not alter the successful device-SDK build or package.
+- ACCEPTED PACKAGE: size `31,875,996` bytes; SHA-256
+  `37964f0f9a028314e8cd30661e2ab316a7499e580a34c11c54907b9e60f611fc`.
+  A fresh extraction passed ZIP integrity, strict deep app signing, standalone
+  core signing, version `0.34.0 (34)`, arm64/iOS 15.0 app and core targets,
+  iPhone+iPad families, all five required TrollStore JIT/memory entitlements,
+  nine regular files, zero symlinks, zero `__MACOSX`, and zero private source
+  paths or NAS addresses. The repository and iCloud copies are byte-identical.
+- PUBLIC RELEASE: GitHub prerelease
+  `https://github.com/gr33k/ARMSX3/releases/tag/ios-prealpha-v0.34.0` exposes the
+  exact asset above. GitHub readback reports the same size and SHA-256 digest.
+  Release notes state the app's iOS 15.0 minimum and the official TrollStore
+  window: through 16.6.1, 16.7 RC build `20H18`, and 17.0.
+- SOURCE SYNC: local `ios-core` and `origin/ios-core` were exactly even before
+  the V0.34 commit and the new commit is pushed. Newer `origin/master` changes
+  are Android/mainline and README work with hundreds of unrelated divergent
+  commits; no missing iOS fix was found and no broad merge was attempted.
+- TESTED-LIST UPDATE: the repository README now preserves the complete physical
+  title observations in a collapsed matrix. The user reports LEGO Movie
+  gameplay working on the pre-V0.34 installed build; this is recorded as a
+  promising baseline, not a V0.34 or long-run qualification.
+- OPEN PHYSICAL GATE: install the exact public V0.34 IPA through TrollStore,
+  confirm the in-app `0.34.0` label, exercise every portrait and landscape
+  control with multi-touch, verify no Start/Select overlap or display dimming,
+  then Stop/relaunch one known-good title. Capture fresh portrait and landscape
+  screenshots only from that installed build before replacing README imagery.
