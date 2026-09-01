@@ -6,7 +6,8 @@ ARMSX3 for iOS
 
 <img width="1284" height="2778" alt="ARMSX3_Screenshot" src="https://github.com/user-attachments/assets/de857097-3456-4644-afc6-8b62b14bb17c" />
 
-(Vertical View is temporary)
+(Vertical View is temporary!)
+
 --------
 An iOS port (made with AI) that works on iOS 15+. Requires JIT and currently limited to devices supporting TrollStore. 
 This is due to limitations with free dev accounts when sideloading newer devices for the time being.
