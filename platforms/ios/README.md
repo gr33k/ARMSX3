@@ -42,14 +42,14 @@ content from Files or enter a NETISO host and port after installing the app.
 through NETISO and do not copy the full game. No server address is compiled into
 the binary.
 
-Streamed titles use a split-storage contract that EmuHub's own ISO service must
-preserve: immutable disc/game payloads are read through the active remote
+Streamed titles use a provider-independent split-storage contract:
+immutable disc/game payloads are read through the active remote
 virtual device, while firmware, caches, patches, saves, trophies, and small
 writable title metadata remain in the app container. Title-specific guest-path
 compatibility mounts must be read-only in effect, owned by the active session
 generation, fail closed for every other title/source, and be removed before the
 remote device is cancelled. This contract is independent of whether the bytes
-come from standard `ps3netsrv` or a future EmuHub streaming backend.
+come from standard `ps3netsrv` or another authenticated streaming provider.
 
 For local firmware/game writes and guest free-space queries, iOS capacity is
 the greater of immediate `statfs` availability and Foundation's
@@ -69,24 +69,25 @@ from mounting a second remote game over a running guest.
 Portrait retains the compact transparent test controls. Landscape uses the
 accepted true-alpha EmuHub PlayStation controller rails at their native aspect,
 eight exact D-pad sectors, continuous dual analog sticks, the documented
-artwork hit geometry, pressed-state feedback, and an in-game EmuHub menu. The
+artwork hit geometry, pressed-state feedback, and an in-game ARMSX3 menu. The
 landscape stage is edge-to-edge; the game surface is aspect-fit in the complete
 center slot and neither video nor controller artwork is stretched.
 
-Landscape displays transient `PAD OK`/`PAD REJECT` telemetry with digital and
-analog values, plus compact runtime/last-operation state. The EmuHub menu can
+Settings can enable transient `PAD OK`/`PAD REJECT` telemetry with digital and
+analog values, plus compact runtime/last-operation state. The ARMSX3 menu can
 show the complete current diagnostic summary. Each run also writes
 `ARMSX3-last-session.log` to the app's file-sharing Documents directory so a
 launch failure remains inspectable after disconnecting the device.
 
-The standalone app remains a maintained iPhone emulator surface. EmuHub will
-consume this same public core ABI after physical feasibility passes; it must not
-fork the emulator, filesystem, or title-boot behavior.
+The standalone app and reusable native ABI are maintained here. Consumer-app
+integration, authentication, server/admin code and deployment configuration live
+in the consuming application's repository, never in this one. Shared controller
+media retains its attribution. See the repository AGENTS.md ownership rules.
+No browser/WebAssembly runtime is claimed; real device qualification is required.
 
-PlayStation 3 is an official EmuHub Beta lane. Native iPhone and desktop clients
-are the supported targets; no browser/WebAssembly runtime is claimed. The iOS
-harness remains fail-closed and must qualify real device gameplay before a title
-or feature is promoted beyond Beta.
+V0.37 adds a lower-right ARMSX3-branded PS control and separates portrait
+Select/Start/PS into a footer below the unchanged 16:9 video. Exact geometry,
+input semantics and physical verification gates are in [CONTROLLER_LAYOUT.md](CONTROLLER_LAYOUT.md).
 
 ## Reproducible build
 

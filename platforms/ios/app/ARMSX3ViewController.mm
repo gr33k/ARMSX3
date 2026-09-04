@@ -3,6 +3,7 @@
 #import "ARMSX3CoreSession.h"
 #import "ARMSX3MetalView.h"
 #import "ARMSX3SettingsViewController.h"
+#include "ARMSX3ControllerLayout.h"
 
 #import <GameController/GameController.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
@@ -36,6 +37,71 @@ typedef void (^ARMSX3StickHandler)(float x, float y);
     UIBezierPath* path = [UIBezierPath bezierPathWithRoundedRect:self.bounds
         cornerRadius:self.layer.cornerRadius];
     return [path containsPoint:point];
+}
+
+@end
+
+
+@interface ARMSX3SystemButton : ARMSX3ArtworkButton
+@end
+
+@implementation ARMSX3SystemButton
+{
+    UIImageView* _brand;
+    UILabel* _caption;
+    CAGradientLayer* _finish;
+}
+
+- (instancetype)initWithFrame:(CGRect)frame
+{
+    self = [super initWithFrame:frame];
+    if (self)
+    {
+        self.backgroundColor = [UIColor colorWithWhite:0.075 alpha:1.0];
+        self.layer.cornerRadius = 8.0;
+        self.layer.masksToBounds = YES;
+        self.layer.borderWidth = 1.0;
+        self.layer.borderColor = [UIColor colorWithWhite:0.55 alpha:1.0].CGColor;
+        _finish = [CAGradientLayer layer];
+        _finish.colors = @[(id)[UIColor colorWithWhite:0.25 alpha:1.0].CGColor,
+            (id)[UIColor colorWithWhite:0.06 alpha:1.0].CGColor];
+        [self.layer addSublayer:_finish];
+        _brand = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"AppIcon60x60@3x.png"]];
+        _brand.contentMode = UIViewContentModeScaleAspectFit;
+        _brand.userInteractionEnabled = NO;
+        [self addSubview:_brand];
+        _caption = [[UILabel alloc] init];
+        _caption.text = @"PS";
+        _caption.font = [UIFont systemFontOfSize:15 weight:UIFontWeightBold];
+        _caption.textColor = [UIColor colorWithWhite:0.93 alpha:1.0];
+        _caption.textAlignment = NSTextAlignmentCenter;
+        [self addSubview:_caption];
+        self.accessibilityLabel = @"PlayStation button";
+        self.accessibilityHint = @"Press and hold for the guest PS button. App settings are in Menu.";
+        self.accessibilityIdentifier = @"armsx3.playstation-button";
+    }
+    return self;
+}
+
+- (void)layoutSubviews
+{
+    [super layoutSubviews];
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    _finish.frame = self.bounds;
+    [CATransaction commit];
+    const CGFloat side = MIN(self.bounds.size.height - 8, self.bounds.size.width - 34);
+    _brand.frame = CGRectMake(4, (self.bounds.size.height - side) * 0.5, side, side);
+    _caption.frame = CGRectMake(side + 6, 0, self.bounds.size.width - side - 10, self.bounds.size.height);
+}
+
+- (void)setHighlighted:(BOOL)highlighted
+{
+    [super setHighlighted:highlighted];
+    // Animate only the face, never shrink the opaque branding plate or its hit area.
+    _finish.opacity = highlighted ? 0.45 : 1.0;
+    _brand.alpha = highlighted ? 0.75 : 1.0;
+    _caption.alpha = highlighted ? 0.75 : 1.0;
 }
 
 @end
@@ -241,6 +307,7 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
 @property(nonatomic, strong) ARMSX3VirtualStick* leftVirtualStick;
 @property(nonatomic, strong) ARMSX3VirtualStick* rightVirtualStick;
 @property(nonatomic, strong) UIButton* landscapeMenuButton;
+@property(nonatomic, strong) ARMSX3SystemButton* playStationButton;
 @property(nonatomic, strong) UILabel* landscapeRuntimeLabel;
 @property(nonatomic, strong) UILabel* inputTelemetryLabel;
 @property(nonatomic, copy) NSArray<UIView*>* debugChromeViews;
@@ -642,6 +709,8 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
     for (UIView* control in self.landscapeControls)
         control.hidden = !landscape || !touch;
     self.landscapeMenuButton.hidden = !landscape;
+    self.playStationButton.hidden = !touch;
+    [self.playerStage bringSubviewToFront:self.playStationButton];
     self.leftControllerSkin.hidden = !landscape || !touch;
     self.rightControllerSkin.hidden = !landscape || !touch;
     self.landscapeRuntimeLabel.hidden = !landscape || ![defaults boolForKey:ARMSX3ShowRuntimeOverlay];
@@ -668,7 +737,7 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
         : MAX(1.0, safe_frame.size.width - 24.0);
     const CGFloat target_height = landscape
         ? MAX(1.0, self.view.bounds.size.height)
-        : floor(portrait_width * 9.0 / 16.0);
+        : floor(portrait_width * 9.0 / 16.0) + (touch ? armsx3::controls::portrait_footer_height : 0);
     if (fabs(self.playerStageHeightConstraint.constant - target_height) >= 0.5)
         self.playerStageHeightConstraint.constant = target_height;
 }
@@ -701,7 +770,9 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
 
     if (!self.landscapeLayout)
     {
-        self.metalView.frame = bounds;
+        const BOOL touch = [NSUserDefaults.standardUserDefaults boolForKey:ARMSX3ShowTouchControls];
+        self.metalView.frame = armsx3::controls::portrait_video_frame(bounds, touch);
+        self.playStationButton.frame = armsx3::controls::portrait_footer_button(self.metalView.frame, 2);
         return;
     }
 
@@ -766,6 +837,7 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
         self.rightVirtualStick.bounds.size.height) * 0.5;
     [self setLandscapeButton:RPCS3_IOS_PAD_BUTTON_START
         frame:normalized_rect(right_rail, 0.1470, 0.8480, 0.2880, 0.0760) circular:NO];
+    self.playStationButton.frame = armsx3::controls::landscape_ps_frame(right_rail);
 
     [self.landscapeMenuButton setTitle:touch ? @"" : @"Menu" forState:UIControlStateNormal];
     self.landscapeMenuButton.backgroundColor = touch ? UIColor.clearColor : [UIColor colorWithWhite:0 alpha:0.65];
@@ -1212,6 +1284,16 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
     [self landscapePadButton:@"Select" bit:RPCS3_IOS_PAD_BUTTON_SELECT];
     [self landscapePadButton:@"Start" bit:RPCS3_IOS_PAD_BUTTON_START];
 
+    self.playStationButton = [[ARMSX3SystemButton alloc] initWithFrame:CGRectZero];
+    self.playStationButton.tag = RPCS3_IOS_PAD_BUTTON_PS;
+    self.playStationButton.exclusiveTouch = NO;
+    [self.playStationButton addTarget:self action:@selector(touchDown:)
+        forControlEvents:UIControlEventTouchDown | UIControlEventTouchDragEnter];
+    [self.playStationButton addTarget:self action:@selector(touchUp:)
+        forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside
+            | UIControlEventTouchCancel | UIControlEventTouchDragExit];
+    [self.playerStage addSubview:self.playStationButton];
+
     [self addLandscapeDPadSector:@"D-pad right"
         bit:RPCS3_IOS_PAD_BUTTON_DPAD_RIGHT angle:0.0];
     [self addLandscapeDPadSector:@"D-pad down right"
@@ -1262,7 +1344,7 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
     menu_button.circularHitArea = YES;
     self.landscapeMenuButton = menu_button;
     self.landscapeMenuButton.hidden = YES;
-    self.landscapeMenuButton.accessibilityLabel = @"EmuHub game menu";
+    self.landscapeMenuButton.accessibilityLabel = @"ARMSX3 game menu";
     [self.landscapeMenuButton addTarget:self action:@selector(menuTouchDown:)
         forControlEvents:UIControlEventTouchDown | UIControlEventTouchDragEnter];
     [self.landscapeMenuButton addTarget:self action:@selector(showGameMenu:)
@@ -1285,9 +1367,6 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
     const CGFloat left_x = MAX(width * 0.15, size * 1.45);
     const CGFloat right_x = MIN(width * 0.85, width - size * 1.45);
     const CGFloat center_y = MIN(height - size * 1.45, MAX(size * 1.45, height * 0.62));
-    const CGFloat special_width = size * 1.35;
-    const CGFloat special_gap = MAX(8.0, size * 0.18);
-    const CGFloat special_offset = (special_width + special_gap) * 0.5;
     NSArray<NSValue*>* centers = @[
         [NSValue valueWithCGPoint:CGPointMake(left_x, center_y - size * 0.90)],
         [NSValue valueWithCGPoint:CGPointMake(left_x, center_y + size * 0.90)],
@@ -1297,12 +1376,15 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
         [NSValue valueWithCGPoint:CGPointMake(right_x, center_y + size * 0.90)],
         [NSValue valueWithCGPoint:CGPointMake(right_x - size * 0.90, center_y)],
         [NSValue valueWithCGPoint:CGPointMake(right_x + size * 0.90, center_y)],
-        [NSValue valueWithCGPoint:CGPointMake(width * 0.5 - special_offset, height - size * 0.55)],
-        [NSValue valueWithCGPoint:CGPointMake(width * 0.5 + special_offset, height - size * 0.55)],
     ];
     [self.touchControls enumerateObjectsUsingBlock:^(UIButton* button, NSUInteger index, BOOL*) {
-        const CGFloat button_width = index >= 8 ? special_width : size;
-        button.bounds = CGRectMake(0, 0, button_width, size);
+        if (index >= 8)
+        {
+            button.frame = armsx3::controls::portrait_footer_button(self.metalView.frame, (unsigned)index - 8);
+            button.layer.cornerRadius = 12;
+            return;
+        }
+        button.bounds = CGRectMake(0, 0, size, size);
         CGPoint center = centers[index].CGPointValue;
         center.x += self.metalView.frame.origin.x;
         center.y += self.metalView.frame.origin.y;
@@ -1322,7 +1404,8 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
     sender.backgroundColor = landscape_button
         ? [UIColor colorWithWhite:1.0 alpha:dpad_sector ? 0.0 : 0.15]
         : sender.backgroundColor;
-    const CGFloat scale = dpad_sector ? 1.0 : (landscape_button ? 0.96 : 0.90);
+    const CGFloat scale = dpad_sector || sender == self.playStationButton
+        ? 1.0 : (landscape_button ? 0.96 : 0.90);
     sender.transform = CGAffineTransformMakeScale(scale, scale);
     [self pushTouchPad];
 }
@@ -1384,7 +1467,7 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
 - (void)showGameMenu:(UIButton*)sender
 {
     [self menuTouchCancelled:sender];
-    UIAlertController* menu = [UIAlertController alertControllerWithTitle:@"EmuHub"
+    UIAlertController* menu = [UIAlertController alertControllerWithTitle:@"ARMSX3"
         message:@"PS3 session controls" preferredStyle:UIAlertControllerStyleAlert];
     __weak ARMSX3ViewController* weak_self = self;
     [menu addAction:[UIAlertAction actionWithTitle:@"Settings"

@@ -1,11 +1,45 @@
 # ARMSX3 iOS test status
 
+## 2026-09-03 V0.37 standalone ownership and PS control candidate
+
+- Repository ownership is now explicit in root AGENTS.md: reusable PS3 core,
+  standalone UI and generic source contracts here; consuming-app adapters,
+  authentication, library/server/admin/Docker code in the consuming app's repo.
+  Shared media and historical attribution are allowed. No history was rewritten.
+  Integration planning was moved out of the current standalone docs and retained
+  in EmuHub clients/ios/SEPTEMBER_2026_FOLLOWUP.md. No integration code was copied.
+- Add the existing original ARMSX3 icon to an opaque lower-right native PS plate;
+  it covers the old shared-media wordmark without resampling either 853x1844 PNG.
+  All 14 accepted rail rectangles, dual analog sticks and face buttons stay put.
+  Runtime menu/accessibility branding is ARMSX3. Historical screenshots remain
+  labeled V0.35; no synthetic screenshot is presented as a new device capture.
+- PS uses ABI bit 16 through normal touch down/up/cancel/drag input, not app Menu.
+  At least 44-point button height; rounded-rectangle hit test matches visible
+  plate. Press feedback changes its face, not its frame or occlusion footprint.
+  Portrait Select/Start/PS occupy a 56-point footer below the unchanged 16:9 video.
+  Hidden-controls mode hides PS with the rails and retains the separate app Menu.
+- L3/R3: physical thumbstick clicks already map to bits 12/13, and the core maps
+  PS/L3/R3 into the guest handler. Recommended touchscreen follow-up is a short
+  center tap then second-tap-and-hold, with steering retained and release/cancel
+  clearing the click. Do not use pressure or plain long-press. This gesture is
+  a proposal, NOT implemented by V0.37; no extra L3/R3 buttons were added.
+- PASS STATIC/PACKAGE: 5 settings checks, 5 standalone-boundary checks and the
+  compiled production geometry/input test (10 landscape and 10 portrait sizes).
+  A too-small branding inset was caught and corrected before packaging. Serial
+  iOS 15 arm64 shell build, strict signing and ZIP gates passed. V0.37 core SHA
+  remains `a8faeb02e8b2c87af85d4b77e54bbadf149d0bc33b263e63b0b6b694e3dd1794`.
+  IPA `ARMSX3-iOS-Pre-Alpha-v0.37.0-TrollStore.ipa` SHA-256:
+  `b6c6bff4817245b962ed3ee4ebdb94bad1bed3c2ea1733e6ec7d68729868c33d`.
+  No renderer, JIT, NETISO or guest timing change is included. Metal remains open.
+- Required physical: installed version, logo/PS rendering in both landscape
+  directions and portrait, repeated rotation, PS tap/hold/release/cancel while
+  steering, external L3/R3, touch-controls setting, background/Stop/second launch.
+
 ## 2026-09-03 source-provider clarification and modern-iOS investigation
 
-- Owner requires both EmuHub-mounted extracted folders and ISO files, served
-  through EmuHub itself. NETISO is mainly standalone and an optional provider
-  configured through Docker/admin; standalone should support either source.
-  This corrects any NETISO-only interpretation of embedded EmuHub support.
+- Standalone retains ISO and extracted-folder NETISO support. Future source
+  providers should preserve the same native virtual-disc/file semantics.
+  Consuming-app configuration planning belongs in that app's own repository.
 - MODERN_IOS_INSTALLATION.md records refreshed primary sources, the existing
   Universal-JIT implementation, current 24-GiB VM layout and prior M2 profile
   failure. A compact-memory free-account path remains research, not a fix.
@@ -50,11 +84,8 @@
   rotation with each diagnostic setting, external-controller fullscreen, Menu,
   cache-rebuild safety, Stop/relaunch, and actual device checks. Native Metal
   remains unfinished and must not be claimed complete because its probe worked.
-- EMUHUB FOLLOW-UP REQUEST: integrate the same accepted ABI/NETISO implementation
-  as a sideload-only native PS3 beta, retaining standalone use. Also investigate
-  Dreamcast speed/audio, Dolphin stop crashes, Sega/Wii D-pad sizes, mismatched
-  controller themes, Wii Nunchuk/motion requirements and PS2 analog routing.
-  These are tracked requests, not fixed/qualified results.
+- Consumer-app follow-ups are maintained in the consumer repository, not here.
+  This shell candidate is not evidence of an embedded integration.
 
 ## 2026-08-29 real-core IPA checkpoint
 

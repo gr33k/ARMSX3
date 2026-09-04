@@ -16,5 +16,5 @@ if [[ "$ACTUAL_SHA" != "$EXPECTED_CORE_SHA" ]]; then
 fi
 
 CORE_LIBRARY="$STAGING/libRPCS3Core.dylib" \
-OUTPUT_IPA="${OUTPUT_IPA:-$ROOT/artifacts/ARMSX3-iOS-Pre-Alpha-v0.36.0-TrollStore.ipa}" \
+OUTPUT_IPA="${OUTPUT_IPA:-$ROOT/artifacts/ARMSX3-iOS-Pre-Alpha-v0.37.0-TrollStore.ipa}" \
     zsh "$ROOT/platforms/ios/scripts/build-core-ipa.sh"

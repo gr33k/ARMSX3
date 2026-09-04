@@ -6,7 +6,7 @@
 
 <p align="center">
   Experimental ARM64/JIT PlayStation 3 emulation for iPhone and iPad.<br>
-  A standalone feasibility build created for future EmuHub integration.
+  Standalone app and reusable native core. Pre-alpha, with per-game test results below.
 </p>
 
 <p align="center">

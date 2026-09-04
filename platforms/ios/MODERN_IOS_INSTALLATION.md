@@ -67,15 +67,6 @@ capability checks can show a useful setup screen instead of a pre-UI abort.
 Only after these gates pass, test a known-working game, rotation, background/
 resume, Stop and second launch. Do not use a Metal triangle as this evidence.
 
-## PS3 content direction
-
-EmuHub must serve both its mounted ISO files and extracted game folders. NETISO
-is chiefly standalone and optional in EmuHub; standalone should support both
-an authenticated EmuHub source and standard NETISO. Admin/Docker source config
-may generate connection settings, but must not require public NETISO exposure,
-admin credentials in exports or privileged host mounting. Source-specific byte
-transport should reuse the same native virtual-disc/file semantics.
-
 ## Primary references checked
 
 - [Apple Personal Team limits](https://developer.apple.com/help/account/basics/about-your-developer-account)

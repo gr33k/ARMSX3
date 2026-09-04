@@ -35,10 +35,10 @@ class SettingsContract(unittest.TestCase):
     def test_versions_agree(self):
         info = plistlib.loads((ROOT / "app/Info.plist.in").read_bytes())
         cmake = (ROOT / "CMakeLists.txt").read_text()
-        self.assertEqual(info["CFBundleShortVersionString"], "0.36.0")
-        self.assertEqual(info["CFBundleVersion"], "36")
-        self.assertIn('XCODE_ATTRIBUTE_MARKETING_VERSION "0.36.0"', cmake)
-        self.assertIn("XCODE_ATTRIBUTE_CURRENT_PROJECT_VERSION 36", cmake)
+        self.assertEqual(info["CFBundleShortVersionString"], "0.37.0")
+        self.assertEqual(info["CFBundleVersion"], "37")
+        self.assertIn('XCODE_ATTRIBUTE_MARKETING_VERSION "0.37.0"', cmake)
+        self.assertIn("XCODE_ATTRIBUTE_CURRENT_PROJECT_VERSION 37", cmake)
 
     def test_renderer_and_jit_safety_are_not_changed(self):
         self.assertIn("Native Metal gameplay remains under development", SETTINGS)
