@@ -1,5 +1,31 @@
 # ARMSX3 iOS test status
 
+## 2026-09-04 modern iPad V0.37 installation, runtime gate still open
+
+- PHYSICAL INSTALL PASS: M2 iPad Pro 11-inch fourth generation, iPad14,3,
+  iPadOS 26.3.1. Updated the existing free-development-signed V0.21 app in place
+  with the already-built V0.37 core/shell package; no emulator rebuild. Backed up
+  Documents/Library first. Retained bundle identity, app data and SideStore.
+- Independent installed-app readback confirms version 0.37.0 and authorized
+  get-task-allow=true. Fresh Personal Team profile has neither Extended Virtual
+  Addressing nor increased-memory entitlement. Do not forge those capabilities.
+- Development artifact passed deep/strict signature verification, ZIP validation
+  and physical InstallComplete readback. Its SHA-256 is
+  2c01c019d08afd24c7e3e440a640db0fd4dab357472d553b738c1bc9a6454b75.
+  This is a PRIVATE device-provisioned package, not a public release replacement;
+  original TrollStore artifact is untouched. Signing changes binary signatures,
+  so whole-file binary hashes from the TrollStore package do not carry over.
+- StikDebug could not fit alongside three free-profile apps. No app was removed;
+  use existing wired LLDB/Universal-JIT helper for the first controlled proof.
+  LLDB currently reports "Device needs to be unlocked." No new PS3 startup,
+  executable-memory, graphics, gameplay or performance result is claimed.
+- The historical V0.21 result remains: Universal-JIT preparation succeeded but
+  24-GiB VM reservation failed without EVA. Newly installed V0.37 does not resolve
+  that gate. Measure exact available aligned virtual span before considering a
+  compact layout; this is not a request to allocate 24 GiB physical RAM.
+- Native Metal, performance, controls, lifecycle and NETISO work remain open.
+  No renderer/runtime code or unrelated dirty Metal files changed in this test.
+
 ## 2026-09-03 project-family clarification
 
 - ARMSX3 remains an EmuHub-affiliated standalone/core repository with its own

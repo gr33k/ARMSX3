@@ -1,6 +1,6 @@
 # Modern iOS installation investigation
 
-Updated 2026-09-03. Research and source inspection, not a newly qualified build.
+Updated 2026-09-04. Installation verified; modern-iOS gameplay is not qualified.
 Retain native Metal, CPU/PPU/SPU, audio, controls, lifecycle and game-loading work.
 
 ## Separate the gates
@@ -27,9 +27,12 @@ Retain native Metal, CPU/PPU/SPU, audio, controls, lifecycle and game-loading wo
   and prepared all 28 x 16-MiB Universal-JIT regions through LLDB/debugserver.
   Startup then failed the VM reservation. The installed profile lacked EVA;
   manually adding unsupported memory entitlements caused profile rejection.
-- These are historical physical results in TEST_STATUS.md, not a fresh test of
-  V0.35/V0.36 or the latest OS. The previously paired iPad was not found by this
-  turn's device-info query. No new installation, signing or account purchase ran.
+- These are historical V0.21 runtime results in TEST_STATUS.md, not fresh JIT
+  or gameplay proof. On September 4 the same M2/iPadOS 26.3.1 device was reached
+  by USB and updated in place to development-signed V0.37. Installed readback
+  confirms 0.37.0/get-task-allow=true, with neither EVA nor increased-memory
+  rights. Backup and SideStore retained; no paid account used. The debugger
+  currently requires the owner to unlock the device, so runtime remains open.
 - Apple's capability table currently marks Extended Virtual Addressing for ADP
   and ADEP, with the free Apple Developer column empty. The raw HTML row was
   checked because the text-only table omitted its checkmark icons.
