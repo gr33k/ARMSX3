@@ -114,11 +114,16 @@ expected to reject it.
 
 ## Modern iOS development lane
 
-Current iOS requires two independent capabilities before the core can boot:
+See [the current installation investigation](MODERN_IOS_INSTALLATION.md) for
+free versus eligible-development-team routes, exact historical device evidence,
+current upstream references and the separate virtual-address-space gate.
 
-- The installed provisioning profile must grant Extended Virtual Addressing
-  and the increased-memory limit. RPCS3 reserves a 24-GiB virtual direct-map;
-  adding these keys only to a code signature is invalid and iOS rejects it.
+The current core has two independently qualified startup gates on modern iOS:
+
+- RPCS3 must reserve its 24-GiB virtual layout. The tested M2/free-profile lane
+  cannot do so without Extended Virtual Addressing. An eligible profile must
+  authorize requested memory entitlements; adding them only to the signature
+  is invalid. Increased physical-memory headroom is a separate device limit.
 - The process must receive Universal-JIT page preparation. LocalDevVPN provides
   transport for compatible sideload/JIT tools but does not grant EVA by itself.
 

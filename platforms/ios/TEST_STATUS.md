@@ -1,5 +1,18 @@
 # ARMSX3 iOS test status
 
+## 2026-09-03 source-provider clarification and modern-iOS investigation
+
+- Owner requires both EmuHub-mounted extracted folders and ISO files, served
+  through EmuHub itself. NETISO is mainly standalone and an optional provider
+  configured through Docker/admin; standalone should support either source.
+  This corrects any NETISO-only interpretation of embedded EmuHub support.
+- MODERN_IOS_INSTALLATION.md records refreshed primary sources, the existing
+  Universal-JIT implementation, current 24-GiB VM layout and prior M2 profile
+  failure. A compact-memory free-account path remains research, not a fix.
+- No renderer or core code changed; no installation or new compatibility claim.
+  Metal and all performance/control/stability goals remain open. The previously
+  paired iPad was not found during this turn's device-info query.
+
 ## 2026-09-03 owner gameplay batch and V0.36 shell candidate
 
 - EVIDENCE BOUNDARY: the following are owner-reported physical iPhone results
