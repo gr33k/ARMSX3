@@ -3,7 +3,9 @@
 - This repository owns the standalone ARMSX3 application, reusable PS3 core,
   public native ABI, renderer, JIT, NETISO transport, tests and standalone docs.
 - EmuHub application adapters, authentication, library/scanner integration,
-  server/admin UI and Docker configuration belong only in the EmuHub repository.
+  server/admin UI and Docker configuration belong only in their EmuHub client or
+  server repositories. Clients share EmuHub umbrella branding; ARMSX3 is an
+  affiliated core with independent runtime branding.
   Do not copy those modules here, add a reverse dependency, or bulk-sync trees.
 - Shared controller media is explicitly allowed by the owner. Preserve source
   attribution and native dimensions. Standalone runtime branding is ARMSX3;

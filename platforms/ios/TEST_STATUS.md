@@ -1,5 +1,16 @@
 # ARMSX3 iOS test status
 
+## 2026-09-03 project-family clarification
+
+- ARMSX3 remains an EmuHub-affiliated standalone/core repository with its own
+  branding. The affiliation is documented, not an import of EmuHub client/server
+  code. EmuHub clients will have their own repositories under the umbrella.
+- Android cleanup audit: no first-party Gradle wrapper/application or APK/AAB is
+  tracked in this branch. The one Android-named first-party source is
+  rpcs3/Emu/RSX/VK/vkutils/swapchain_android.hpp; it is reusable renderer support
+  and deliberately preserved for the requested future Android port. BUILDING.md
+  now distinguishes this fork's iOS build from inherited desktop instructions.
+
 ## 2026-09-03 V0.37 standalone ownership and PS control candidate
 
 - Repository ownership is now explicit in root AGENTS.md: reusable PS3 core,

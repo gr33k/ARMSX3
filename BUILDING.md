@@ -1,5 +1,21 @@
 # Building
 
+## ARMSX3 iOS fork
+
+For this fork's standalone iPhone/iPad application, start with
+[platforms/ios/README.md](platforms/ios/README.md). Shell-only changes use its
+accepted-core packaging script; native Metal remains a separate development
+lane. Do not treat the upstream desktop instructions below as iOS requirements.
+
+Android is a planned next standalone client, not a currently shipped APK in
+this branch. Keep reusable ARM64/JIT, Vulkan/Android swapchain and input support;
+do not remove platform primitives merely to tidy iOS presentation. There is no
+Gradle application or APK/AAB tracked outside third-party dependencies here.
+Future Android UI belongs under its own platform directory and must not import
+EmuHub application code. Affiliation does not create a runtime dependency.
+
+## Upstream desktop reference
+
 Only Windows and Linux are officially supported for building. However, various other platforms are capable of building RPCS3.
 Other instructions may be found [here](https://wiki.rpcs3.net/index.php?title=Building).
 

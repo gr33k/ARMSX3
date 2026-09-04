@@ -6,7 +6,8 @@
 
 <p align="center">
   Experimental ARM64/JIT PlayStation 3 emulation for iPhone and iPad.<br>
-  Standalone app and reusable native core. Pre-alpha, with per-game test results below.
+  An EmuHub-affiliated standalone app and reusable native core, with independent ARMSX3 branding.
+  Pre-alpha, with per-game test results below.
 </p>
 
 <p align="center">
