@@ -1,5 +1,53 @@
 # ARMSX3 iOS test status
 
+## 2026-09-04 V0.37 modern iPad: JIT executes, VM startup still fails
+
+- Same M2 iPad14,3/iPadOS 26.3.1, installed 0.37.0 (37), free development
+  profile with get-task-allow but no EVA/increased-memory entitlement. This
+  supersedes the earlier locked-device runtime gate below, not the VM blocker.
+- PHYSICAL UNTETHERED FAIL: copied (kept on device) today's 07:28:19 and 07:53:21
+  ARMSX3iOS crash reports. Both identify 0.37.0/build 37 and abort before UI in
+  asmjit::get_global_runtime()::custom_runtime(), called from the PPUThread
+  static initializer. This is JIT arena initialization, not a title/Metal fault.
+- PHYSICAL WIRED JIT PASS: start-stopped app, LLDB device attach, existing
+  lldb_universal_jit.py. All 28 x 16-MiB regions prepared (448 MiB); protocol
+  breakpoint hit count 28. Stopped at _GLOBAL__sub_I_vm.cpp before VM setup.
+- EXECUTION PROOF, NOT ONLY PAGE PREPARATION: allocated eight bytes using the
+  core's own rpcs3::ios::jit::allocate(true,8,16), obtained its writable alias,
+  wrote AArch64 MOV W0,#42 / RET (0x52800540, 0xd65f03c0), called the core flush
+  routine, then invoked the RX address. Result was exactly 42. Released the
+  allocation through release_allocation. Code and writable addresses differed.
+  This proves this core's Universal-JIT arena can execute generated code under
+  the wired debugger on this tablet. It does NOT prove a PS3 VM/game can boot,
+  StikDebug automation, untethered persistence or all modern devices.
+- PHYSICAL VM FAIL: independent pre-VM probes used MAP_PRIVATE|MAP_ANON|
+  MAP_NORESERVE, never MAP_FIXED and never touched GiBs of resident pages:
+  - mmap 8 GiB at 12 GiB: MAP_FAILED/ENOMEM (12), both PROT_NONE and RW.
+  - mmap 8 GiB at 8 GiB: MAP_FAILED/ENOMEM with PROT_NONE.
+  - mmap 4 GiB, no fixed hint: success at 12 GiB; munmap returned 0.
+  - vm_allocate and mach_vm_allocate 8 GiB, anywhere from 12 GiB: KERN_NO_SPACE
+    (3). vm_allocate 4 GiB: success at 12 GiB; vm_deallocate returned 0.
+  - Small 16-KiB PROT_NONE probes succeeded. A 20-GiB hint was relocated to a
+    low address, not honored; all successful probes were unmapped immediately.
+  - LLDB memory-region gaps do NOT establish mmap admission limits: it reported
+    a large unmapped span while the real allocation APIs rejected the request.
+    Do not infer an exact process VA ceiling from that display or from RAM size.
+- CONTINUE FAIL VERIFIED: after the successful JIT smoke and cleaned-up probes,
+  continuing the real initializer reached abort through _GLOBAL__sub_I_vm.cpp
+  +352, fmt::raw_throw_exception, thread_ctrl::emergency_exit and
+  report_fatal_error. This separately confirms the VM gate in the actual build.
+  The 24-GiB direct-map consists of 8/12/4-GiB reservations; its first 8-GiB
+  request already fails here. This is address reservation, not disk capacity.
+- CLEANUP: killed only the agent's pre-UI diagnostic process at the abort
+  breakpoint (exit 9), then quit LLDB. No game was running, no saves/cache/app
+  data removed, no source/renderer change, no build/reinstall. Private reports
+  remain local and on the device. Mac memory-pressure free metric stayed above
+  50%; no simulator, Docker job or broad cleanup was started.
+- NEXT: independently qualify a smaller/segmented VM design within measured
+  address constraints for the free-profile route, or an actually EVA-authorized
+  profile. Do not repeat signing/StikDebug installs, weaken allocation failures,
+  return unreserved pointers, or label a launch shell as PS3 compatibility.
+
 ## 2026-09-04 modern iPad V0.37 installation, runtime gate still open
 
 - PHYSICAL INSTALL PASS: M2 iPad Pro 11-inch fourth generation, iPad14,3,
