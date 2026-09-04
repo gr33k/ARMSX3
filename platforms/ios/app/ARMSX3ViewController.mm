@@ -2,6 +2,7 @@
 
 #import "ARMSX3CoreSession.h"
 #import "ARMSX3MetalView.h"
+#import "ARMSX3SettingsViewController.h"
 
 #import <GameController/GameController.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
@@ -267,6 +268,7 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
 - (void)viewDidLoad
 {
     [super viewDidLoad];
+    [ARMSX3SettingsViewController registerDefaults];
     self.view.backgroundColor = [UIColor colorWithRed:0.018 green:0.027 blue:0.045 alpha:1.0];
     self.games = @[];
     self.touchControls = [NSMutableArray array];
@@ -302,7 +304,7 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
     {
         app_version = @"unknown";
     }
-    title.text = [NSString stringWithFormat:@"ARMSX3 iOS Core Test v%@", app_version];
+    title.text = [NSString stringWithFormat:@"ARMSX3 · Pre-Alpha %@", app_version];
     title.textColor = UIColor.whiteColor;
     title.font = [UIFont systemFontOfSize:24.0 weight:UIFontWeightBlack];
     [stack addArrangedSubview:title];
@@ -378,15 +380,13 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
 
     UIStackView* second_row = [self buttonRow:@[
         [self button:@"Refresh" action:@selector(refreshGames)],
-        [self button:@"JIT Test" action:@selector(runJITTest)],
-        [self button:@"Metal Probe" action:@selector(runMetalProbe)],
         [self button:@"Open XMB" action:@selector(openXMB)],
+        [self button:@"Settings" action:@selector(showSettings)],
     ]];
     [stack addArrangedSubview:second_row];
 
     UIStackView* third_row = [self buttonRow:@[
         [self button:@"Stop Emulation" action:@selector(stopGame)],
-        [self button:@"Rebuild Graphics Caches" action:@selector(confirmRebuildGraphicsCaches)],
     ]];
     [stack addArrangedSubview:third_row];
 
@@ -622,6 +622,8 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
 - (void)updateLayoutMode
 {
     const BOOL landscape = self.view.bounds.size.width > self.view.bounds.size.height;
+    NSUserDefaults* defaults = NSUserDefaults.standardUserDefaults;
+    const BOOL touch = [defaults boolForKey:ARMSX3ShowTouchControls];
     const BOOL layout_changed = self.landscapeLayout != landscape;
     self.landscapeLayout = landscape;
 
@@ -630,18 +632,20 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
     // toggle can otherwise leave portrait controls hidden behind the display.
     for (UIView* view in self.debugChromeViews)
         view.hidden = landscape;
+    self.logView.hidden = landscape || ![defaults boolForKey:ARMSX3ShowDebugLog];
     for (UIButton* button in self.touchControls)
     {
-        button.hidden = landscape;
+        button.hidden = landscape || !touch;
         if (!landscape)
             [self.playerStage bringSubviewToFront:button];
     }
     for (UIView* control in self.landscapeControls)
-        control.hidden = !landscape;
-    self.leftControllerSkin.hidden = !landscape;
-    self.rightControllerSkin.hidden = !landscape;
-    self.landscapeRuntimeLabel.hidden = !landscape;
-    if (!landscape)
+        control.hidden = !landscape || !touch;
+    self.landscapeMenuButton.hidden = !landscape;
+    self.leftControllerSkin.hidden = !landscape || !touch;
+    self.rightControllerSkin.hidden = !landscape || !touch;
+    self.landscapeRuntimeLabel.hidden = !landscape || ![defaults boolForKey:ARMSX3ShowRuntimeOverlay];
+    if (!landscape || ![defaults boolForKey:ARMSX3ShowInputDiagnostics])
         self.inputTelemetryLabel.hidden = YES;
     self.rootScroll.alwaysBounceVertical = !landscape;
     self.rootScroll.scrollEnabled = !landscape;
@@ -702,7 +706,8 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
     }
 
     static const CGFloat artwork_aspect = 853.0 / 1844.0;
-    const CGFloat rail_width = bounds.size.height * artwork_aspect;
+    const BOOL touch = [NSUserDefaults.standardUserDefaults boolForKey:ARMSX3ShowTouchControls];
+    const CGFloat rail_width = touch ? bounds.size.height * artwork_aspect : 0.0;
     const CGRect left_rail = CGRectMake(0, 0, rail_width, bounds.size.height);
     const CGRect right_rail = CGRectMake(bounds.size.width - rail_width, 0, rail_width, bounds.size.height);
     self.leftControllerSkin.frame = left_rail;
@@ -761,6 +766,16 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
         self.rightVirtualStick.bounds.size.height) * 0.5;
     [self setLandscapeButton:RPCS3_IOS_PAD_BUTTON_START
         frame:normalized_rect(right_rail, 0.1470, 0.8480, 0.2880, 0.0760) circular:NO];
+
+    [self.landscapeMenuButton setTitle:touch ? @"" : @"Menu" forState:UIControlStateNormal];
+    self.landscapeMenuButton.backgroundColor = touch ? UIColor.clearColor : [UIColor colorWithWhite:0 alpha:0.65];
+    if (!touch)
+    {
+        self.landscapeMenuButton.frame = CGRectMake(MAX(12.0, self.view.safeAreaInsets.left + 8.0),
+            MAX(12.0, self.view.safeAreaInsets.top + 8.0), 64.0, 44.0);
+        self.landscapeMenuButton.layer.cornerRadius = 12.0;
+    }
+    [self.playerStage bringSubviewToFront:self.landscapeMenuButton];
 
     const CGRect display_inset = CGRectInset(self.metalView.frame, 8.0, 8.0);
     self.landscapeRuntimeLabel.frame = CGRectMake(display_inset.origin.x,
@@ -1019,7 +1034,8 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
 - (void)updateRuntimeStatus
 {
     UIApplication.sharedApplication.idleTimerDisabled =
-        !self.appInactive && self.core.isEmulationActive;
+        !self.appInactive && self.core.isEmulationActive &&
+        [NSUserDefaults.standardUserDefaults boolForKey:ARMSX3KeepScreenAwake];
     if (self.core.isReady)
     {
         NSString* runtime = [self.core runtimeStatus];
@@ -1371,6 +1387,10 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
     UIAlertController* menu = [UIAlertController alertControllerWithTitle:@"EmuHub"
         message:@"PS3 session controls" preferredStyle:UIAlertControllerStyleAlert];
     __weak ARMSX3ViewController* weak_self = self;
+    [menu addAction:[UIAlertAction actionWithTitle:@"Settings"
+        style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction* action) {
+            [weak_self showSettings];
+        }]];
     [menu addAction:[UIAlertAction actionWithTitle:@"Press PS Button"
         style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction* action) {
             [weak_self pulsePadButton:RPCS3_IOS_PAD_BUTTON_PS];
@@ -1408,7 +1428,7 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
         rightX:self.touchRightX rightY:self.touchRightY
         leftTrigger:(self.touchButtons & RPCS3_IOS_PAD_BUTTON_L2) ? 1.0f : 0.0f
         rightTrigger:(self.touchButtons & RPCS3_IOS_PAD_BUTTON_R2) ? 1.0f : 0.0f];
-    if (!self.landscapeLayout)
+    if (!self.landscapeLayout || ![NSUserDefaults.standardUserDefaults boolForKey:ARMSX3ShowInputDiagnostics])
         return;
 
     NSMutableString* directions = [NSMutableString string];
@@ -1455,7 +1475,35 @@ static CGRect normalized_rect(CGRect container, CGFloat x, CGFloat y, CGFloat wi
         return;
     self.appInactive = NO;
     [self.core resumeFromBackground];
-    UIApplication.sharedApplication.idleTimerDisabled = self.core.isEmulationActive;
+    UIApplication.sharedApplication.idleTimerDisabled = self.core.isEmulationActive &&
+        [NSUserDefaults.standardUserDefaults boolForKey:ARMSX3KeepScreenAwake];
+}
+
+- (void)showSettings
+{
+    ARMSX3SettingsViewController* settings = [[ARMSX3SettingsViewController alloc] init];
+    __weak ARMSX3ViewController* weak_self = self;
+    settings.settingsChanged = ^{
+        ARMSX3ViewController* strong_self = weak_self;
+        if (!strong_self)
+            return;
+        if (![NSUserDefaults.standardUserDefaults boolForKey:ARMSX3ShowTouchControls])
+        {
+            [strong_self.touchReleaseTokens removeAllObjects];
+            [strong_self.touchPressStarted removeAllObjects];
+            strong_self.touchButtons = 0;
+            [strong_self.leftVirtualStick resetTracking];
+            [strong_self.rightVirtualStick resetTracking];
+            [strong_self pushTouchPad];
+        }
+        [strong_self updateRuntimeStatus];
+        [strong_self.view setNeedsLayout];
+    };
+    settings.rebuildGraphicsCaches = ^{ [weak_self confirmRebuildGraphicsCaches]; };
+    UINavigationController* navigation = [[UINavigationController alloc] initWithRootViewController:settings];
+    navigation.modalPresentationStyle = UIModalPresentationPageSheet;
+    navigation.overrideUserInterfaceStyle = UIUserInterfaceStyleDark;
+    [self presentViewController:navigation animated:YES completion:nil];
 }
 
 - (void)didReceiveMemoryWarning

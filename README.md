@@ -61,12 +61,12 @@ Download the current **TrollStore** IPA from the [V0.35 prerelease](https://gith
 
 ## Tested Status
 
-Physical observations below span development builds through V0.34 on an iPhone 13 Pro Max running iOS 15.3. V0.35 preserves the accepted V0.33 gameplay core and repairs the app-shell rotation lifecycle. Results are scene-specific, not broad compatibility ratings.
+Physical observations below span development builds through V0.35 on an iPhone 13 Pro Max running iOS 15.3, including owner reports from September 2-3. V0.35 preserves the accepted V0.33 gameplay core and repairs the app-shell rotation lifecycle. Results are scene-specific, not broad compatibility ratings; reported FPS is not an instrumented benchmark.
 
 | Class | Current examples |
 |---|---|
 | Strong baselines | Bejeweled 3, Zuma, DuckTales Remastered, Toy Story Mania, Ratatouille, The Walking Dead |
-| Promising / playable | LEGO Movie, Bound by Flame, Cars Race-O-Rama, Lost Planet |
+| Promising / playable | Devil May Cry 4, Just Cause 2, Fallout: New Vegas, LEGO Movie, Bound by Flame, Cars Race-O-Rama, Lost Planet |
 | Runs with major issues | GTA V, Diablo III, LittleBigPlanet, Red Dead Redemption, Uncharted 1-3 |
 | Boot/runtime blocked | BioShock Infinite, Kingdom Hearts, Sonic Generations, God of War, several encrypted or modified titles |
 
@@ -81,7 +81,16 @@ Physical observations below span development builds through V0.34 on an iPhone 1
 | Toy Story Mania | Holds about 30 FPS; initial scene presentation can be delayed. |
 | Ratatouille | Real 3D gameplay reached roughly 25-30 FPS. |
 | The Walking Dead | Loads and runs around 30 FPS in the tested section. |
-| LEGO Movie | User reports working gameplay on V0.34; long-run V0.35 retest pending. |
+| LEGO Movie | V0.35 interactive gameplay around 26 FPS; long-run qualification pending. |
+| Devil May Cry 4 | Installation works; highly playable fighting/gameplay around 28-30 FPS, cutscenes observed up to 60 FPS, minimal glitches reported. |
+| Just Cause 2 | Loads and reaches playable gameplay around 30 FPS in the tested section. |
+| Fallout: New Vegas | First install stalled; restart completed it. Gameplay around 30 FPS with minor facial, scarf and hand artifacts. |
+| Dead or Alive 5 | Menus around 60 FPS; actual fighting varies 10-30 FPS with noticeable slowdown. Nearly playable, not full speed. |
+| Saints Row: Gat out of Hell | Loads and works so far; gameplay duration, frame rate and rendering not yet qualified. |
+| Cars 2 | Game loads; gameplay performance not yet reported. |
+| Saints Row IV: The Full Package | Menus/audio work, but gameplay is mostly black or missing even after restart. |
+| Thief | Terminates with an HDD boot-game corruption error; root cause not isolated. |
+| The Godfather: The Don's Edition | Did not load in the reported attempt; error cause not yet isolated. |
 | Bound by Flame | Playable 3D baseline around 26-30 FPS with no initial visual corruption observed. |
 | Cars Race-O-Rama | Holds about 30 FPS, with intermittent purple artifacts. |
 | Lost Planet | Playable sections vary roughly 14-30 FPS; heavier combat dips. |
@@ -94,6 +103,7 @@ Physical observations below span development builds through V0.34 on an iPhone 1
 | Uncharted 3 | Reaches gameplay but retains block artifacts, visual corruption, low FPS, and crashes. |
 | BioShock Infinite | Passes the modified intro and module load, then reports a disc-read error. |
 | Kingdom Hearts collection | Reaches version selection; tested choices stall at 0 FPS. |
+| Kingdom Hearts HD 2.5 Remix | Latest reported launch did not load. |
 | Hasbro Family Game Night | Reaches logos/menu after repeated boots, then black-screens or hangs. |
 | Sonic Generations | Repeated runtime PPU compilation/0-FPS loop; no gameplay. |
 | Sonic Unleashed | Did not reach gameplay. |

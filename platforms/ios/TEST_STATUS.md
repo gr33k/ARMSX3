@@ -1,5 +1,48 @@
 # ARMSX3 iOS test status
 
+## 2026-09-03 owner gameplay batch and V0.36 shell candidate
+
+- EVIDENCE BOUNDARY: the following are owner-reported physical iPhone results
+  during the V0.35 test period, not agent-observed traces or native-Metal results.
+  No fresh installed-build readback accompanied this batch. Preserve V0.35's
+  accepted core SHA-256 `a8faeb02e8b2c87af85d4b77e54bbadf149d0bc33b263e63b0b6b694e3dd1794`.
+- DEVIL MAY CRY 4: installation succeeds; actual gameplay is highly playable at
+  approximately 28-30 FPS, minimal glitches. Cutscenes observed up to 60 FPS.
+- JUST CAUSE 2: loads and reaches playable gameplay around 30 FPS.
+- FALLOUT NEW VEGAS: initial game-data install stalled; restart completed it.
+  Gameplay is approximately 30 FPS with small facial/scarf/hand rendering
+  defects. Do not omit the first-install failure from the positive result.
+- DEAD OR ALIVE 5: retain menu 60 FPS versus fight 10-30 FPS; noticeable slowdown,
+  almost-playable rating only. This does not replace earlier detailed evidence.
+- SAINTS ROW GAT OUT OF HELL: loads and works so far; sustained gameplay/FPS open.
+- CARS 2: loads the game; no gameplay speed/stability claim yet.
+- NO LOAD: Kingdom Hearts HD 2.5 Remix, Sonic Unleashed, Sonic the Hedgehog,
+  The Godfather: The Don's Edition. Exact error/log/source diagnosis remains open.
+- V0.36 SHELL SCOPE: remove manual JIT/Metal-probe buttons from the launcher;
+  add persisted Settings for debug log, runtime overlay, input diagnostics,
+  touch controls and screen-awake behavior. Move graphics-cache maintenance
+  there. Preserve the accepted V0.35 core and controller geometry. Turning off
+  touch controls removes landscape rails, keeps aspect-fit video and a reachable
+  Menu button. Hidden logs remain recorded; mandatory JIT checks stay enabled.
+- PASS STATIC/PACKAGE: five settings source-contract checks, serial iOS 15 arm64
+  shell compile, strict deep signing and ZIP checks. Fresh archive readback has
+  version `0.36.0 (36)`, actual core ABI `34`, and the exact accepted core hash
+  above. Artifact `ARMSX3-iOS-Pre-Alpha-v0.36.0-TrollStore.ipa` SHA-256:
+  `28d235ed2d2b8e455d676a95930aa35372304cfcfeef723adf06e9a30846994f`.
+  The updated original ARMSX3 icon is included. V0.35 remains untouched.
+- DELIVERY: the V0.36 IPA is in the iCloud Drive root next to V0.35; readback
+  matches the SHA above. Only the iPad14,3 was connected during this work, so
+  the iPhone was not remotely installed, restarted or claimed verified.
+- OPEN PHYSICAL: settings persistence, repeated
+  rotation with each diagnostic setting, external-controller fullscreen, Menu,
+  cache-rebuild safety, Stop/relaunch, and actual device checks. Native Metal
+  remains unfinished and must not be claimed complete because its probe worked.
+- EMUHUB FOLLOW-UP REQUEST: integrate the same accepted ABI/NETISO implementation
+  as a sideload-only native PS3 beta, retaining standalone use. Also investigate
+  Dreamcast speed/audio, Dolphin stop crashes, Sega/Wii D-pad sizes, mismatched
+  controller themes, Wii Nunchuk/motion requirements and PS2 analog routing.
+  These are tracked requests, not fixed/qualified results.
+
 ## 2026-08-29 real-core IPA checkpoint
 
 Source:
