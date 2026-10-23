@@ -115,7 +115,7 @@ Physical observations below span development builds through V0.34 on an iPhone 1
 
 ## Project Status
 
-The immediate engineering priority is replacing runtime Vulkan command translation with a direct Metal RSX path while preserving the proven ARM64/JIT, NETISO, cache, input, and lifecycle work. Build success is not treated as gameplay proof; releases separate static/package verification from physical title qualification.
+The immediate engineering priority is replacing runtime Vulkan command translation with a direct Metal RSX path while preserving the proven ARM64/JIT, NETISO, cache, input, and lifecycle work. Build success is not treated as gameplay proof; releases separate static/package verification from physical title qualification. This is going to be part of the EmuHub project, but I plan to maintain it as a standalone as well.
 
 Detailed iOS evidence and open gates are maintained in [TEST_STATUS.md](platforms/ios/TEST_STATUS.md). Network-disc design is documented in [PS3_NETWORK_DISC_DESIGN.md](platforms/ios/PS3_NETWORK_DISC_DESIGN.md).
 
